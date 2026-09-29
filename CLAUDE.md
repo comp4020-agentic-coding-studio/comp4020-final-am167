@@ -82,9 +82,18 @@ what isn't logged as we go is lost to the write-up. After each meaningful chunk
 of work (a feature, a fix, a design decision, a review and what it found),
 append a short entry saying what was done and why, with the commit hash once
 there is one. Do it as we go, not reconstructed at the end. Log generously;
-`PROCESS.md` is the write-up. Save screenshots (e.g. the visual verification
-above) under `notes/` and reference them from the entry when they show
-something worth citing, such as a before/after or a bug found.
+`PROCESS.md` is the write-up.
+
+**Screenshots in the log are the exception, not the default.** Add one only
+when it is necessary evidence you'd want to cite in `PROCESS.md`: a bug found
+or fixed, a before/after of a real design change, or a UX decision the text
+can't convey. Routine verification passes, unchanged pages and "it looks fine"
+checks get a line of text, not an image. Aim for a handful across the whole
+project, not one per entry. When you do keep one, save it under
+`notes/screenshots/` with a descriptive, dated name (e.g.
+`2026-09-29-board-mobile-overflow.png`), embed it in the entry with a caption
+saying what it shows and why it matters (`![caption](screenshots/<file>.png)`),
+and commit it with that entry. If unsure, don't add it.
 
 ## Adversarial review
 
