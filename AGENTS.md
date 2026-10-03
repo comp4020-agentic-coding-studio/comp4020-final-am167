@@ -13,6 +13,14 @@ before you plan or build. The
 [course website](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/)
 has the rest.
 
+## The plan
+
+The app is **Kessler** (working title): a shared orbit where people launch
+satellites to be seen and collisions cascade into debris. `PLAN.md` holds the
+agreed decisions, status, next steps and open questions; read it, then
+`notes/log.md`, before planning or building. Update its status section when a
+step is done or a decision changes.
+
 ## The checks
 
 `pnpm check` (typecheck + the spec suite) is what CI runs before it deploys.
