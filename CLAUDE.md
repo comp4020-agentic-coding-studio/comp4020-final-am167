@@ -21,6 +21,11 @@ agreed decisions, status, next steps and open questions; read it, then
 `notes/log.md`, before planning or building. Update its status section when a
 step is done or a decision changes.
 
+Decisions live in `doc/adr/`, one numbered file each (Nygard format: status,
+context, options, decision, consequences). Read them before changing the
+stack, storage or data model. An accepted record is never edited; to change
+one, write a new record that supersedes it.
+
 ## The checks
 
 `pnpm check` (typecheck + the spec suite) is what CI runs before it deploys.

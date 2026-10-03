@@ -8,16 +8,17 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 _Last updated 2026-10-03._
 
-- **Done:** idea chosen; the decisions below agreed with Advay. No code yet;
+- **Done:** idea chosen; the decisions below agreed with Advay; person,
+  persistence and real-time settled ("Foundations"), each with a decision
+  record in `doc/adr/` (0001–0004; 0002, the person, is still proposed). No code yet;
   the repo is still the placeholder (the Astro stack was set up then reverted,
   see `git log`).
 - **Next, in order:**
   1. Resolve the open questions at the bottom of this file, one at a time
-     with Advay (the week 8 lecture suggests the agent quiz the student: what
-     counts as a person, what persists, how a change reaches everyone).
-  2. Write the stack ADR (`doc/adr/0001-...`, Nygard format: title, status,
-     context, options, decision, consequences) and set up the stack
-     (`/comp4020:stack` installs the Astro default).
+     with Advay, including whether to trim the C8 slice to launch, orbit,
+     beacon and persist (moving collisions to C9).
+  2. Set up the stack (`/comp4020:stack` installs the Astro default), per
+     `doc/adr/0001-astro-and-sqlite-stack.md`.
   3. Draft the first `README.md` (400–600 words; Advay drafts it, since
      writing that reads like agent output is marked down) and publish it at
      `/readme/`.
@@ -74,26 +75,89 @@ Exact bands and decay rates are still open.
   dodge, so being absent makes you vulnerable. (Precedent: ESA moving Aeolus
   for a Starlink satellite in 2019.)
 
-## The four marked decisions (first answers)
+## Foundations: person, persistence, real-time
 
-- **Who counts as a person:** an anonymous cookie with a callsign, one active
-  satellite each. Opening more browsers gets you more satellites; that needs
-  its own decision record.
-- **What expires:** everything, through orbital decay, at rates set by altitude.
-- **History:** a public catalogue of every object. Each fragment traces back to
-  the collision that made it and who launched what was involved.
-- **What we chose not to build:** debris cleanup, a reset, any channel to talk
-  to other operators beyond beacons and alerts.
+Agreed 2026-10-03, answering the week 8 lecture's three questions. Each is a
+decision record in `doc/adr/` (index: `doc/adr/README.md`); this section is the
+summary, the records are the source of truth.
+
+| Question | Decision | Record |
+|---|---|---|
+| Stack | Astro on Node, SQLite via Drizzle on `/data` | `0001-astro-and-sqlite-stack.md` |
+| What counts as a person | An anonymous cookie, one active satellite each (**proposed**, may change) | `0002-a-person-is-an-anonymous-cookie.md` |
+| What persists | The sky decays, every object's record stays forever | `0003-the-sky-decays-the-record-stays.md` |
+| How a change reaches everyone | SSE events; the server's clock is the only clock | `0004-server-sent-events-and-one-clock.md` |
+
+### What counts as a person
+
+_Proposed, not final: the working assumption for C8, likely to be revisited._
+
+**An anonymous browser cookie, plus the callsign you pick at launch.**
+
+- A random id in a long-lived, `httpOnly` cookie, set on first visit. No
+  sign-up, so a stranger can launch within seconds.
+- One active satellite per cookie. The callsign is chosen per launch.
+- Accepted cost: a new browser or cleared cookies makes a new person, so one
+  human can hold several satellites and loses control of the old one. This
+  loophole is deliberate for now; the logs (C10) will show whether it's abused.
+  Rejected: a recovery code (extra step, still doesn't stop extra browsers) and
+  real accounts (friction kills a stranger's first try; holds personal data).
+
+### What persists
+
+**The sky decays, the record stays.**
+
+- Live objects (satellites and debris) leave the sky through orbital decay,
+  deorbiting or collisions.
+- Every object's row is kept forever as the catalogue: launch time, owner
+  cookie, callsign, beacon, band, fate (`live`, `decayed`, `deorbited`,
+  `destroyed`) and, for debris, the collision it came from. The sky heals; the
+  history (and the blame) doesn't.
+- The server stores the last time it simulated up to, so it can replay the gap
+  after the machine has been stopped.
+- Rejected: deleting decayed objects (no lineage, nothing for C10) and keeping
+  only counts (loses "who caused this", which is the argument).
+- Open: beacon text is kept forever, so it needs a rule (length, moderation,
+  whether a decayed satellite's beacon is still shown).
+
+### How a change reaches everyone
+
+**Server-sent events, with the server's clock as the only clock.**
+
+- Actions go up as ordinary `POST`s (forms that work without JavaScript).
+- Events come down one SSE stream: launch, deorbit, collision, decay, and
+  later conjunction alerts. Positions are never sent: each client draws them
+  from the stored orbits and the server time, after measuring its clock offset
+  when the stream connects.
+- On reconnect, the client catches up from a snapshot of the live sky.
+- Rejected: WebSockets (two-way isn't needed; traffic is almost all
+  server-to-client) and polling (wasteful, and on the edge of "about a
+  second").
+
+### Expiry, history and visibility
+
+- **What expires:** everything in the sky, through orbital decay at rates set
+  by altitude.
+- **History:** the public catalogue above. Each fragment traces back to the
+  collision that made it and who launched what was involved.
+- **Visibility:** open. Whether the catalogue shows owners' callsigns next to
+  the debris they caused is a decision to make.
+- **What we chose not to build:** debris cleanup, a reset, accounts, and any
+  channel to talk to other operators beyond beacons and alerts.
 
 ## Technical shape
 
-- Stack per CLAUDE.md: server-rendered Astro, SQLite via Drizzle, SSE.
+- Stack (ADR 0001): server-rendered Astro on Node, SQLite on `/data` via
+  Drizzle with migrations run at boot. SSE for every change (ADR 0004).
 - Orbits are stored as elements plus a start time, so any object's position at
   any moment is a pure function of time.
-- Collision checks run on the server. Fly can stop an idle machine, so on boot
+- Collision checks run on the server. Fly stops an idle machine, so on boot
   the server replays the time it missed in fixed steps and applies any
   collisions that fell in the gap. A restart and an uninterrupted run produce
   the same sky.
+- The event fan-out is in memory in the one Node process (fine on one machine).
+- The server keeps live objects in memory for collision checks, so 256 MB caps
+  the sky's size.
 - The canvas is the spectacle. Every action (launch, dodge, deorbit) is also a
   normal form control, and the catalogue is a real table.
 
