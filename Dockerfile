@@ -21,4 +21,6 @@ COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/dist dist
 COPY --from=build /app/README.md README.md
 COPY drizzle/ drizzle/
-CMD ["node", "dist/server/entry.mjs"]
+COPY scripts/migrate.mjs scripts/migrate.mjs
+# migrations first, then the server (ADR 0001)
+CMD ["sh", "-c", "node scripts/migrate.mjs && exec node dist/server/entry.mjs"]

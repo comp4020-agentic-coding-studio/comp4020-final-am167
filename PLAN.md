@@ -13,17 +13,16 @@ _Last updated 2026-10-04._
   record in `doc/adr/` (0001–0004; 0002, the person, is still proposed).
   2026-10-04: the C8 open questions resolved (scope, overhead, launch flow,
   beacon rules, launch limits, bands); the rest deferred to C9 or later, see
-  "Now and later". No code yet; the repo is still the placeholder (the Astro
-  stack was set up then reverted, see `git log`).
+  "Now and later". Stack restored (`618d80a`). C8 slice built (uncommitted):
+  launchpad, launch rules, the sky chart and catalogue, SSE; spec tests in
+  `spec/launch.test.ts` and `spec/live.test.ts`.
 - **C8 cutoff:** Tue 6 Oct 2026, 12:00 (moved from Monday for Labour Day).
 - **Next, in order:**
-  1. Set up the stack (`/comp4020:stack` installs the Astro default), per
-     `doc/adr/0001-astro-and-sqlite-stack.md`.
+  1. Act on the adversarial review of the C8 slice, then commit.
   2. Draft the first `README.md` (400–600 words; Advay drafts it, since
      writing that reads like agent output is marked down) and publish it at
      `/readme/`.
-  3. Build the C8 slice (see "Now and later").
-  4. `PROCESS.md` overview and `reflections/crit-8.md`.
+  3. `PROCESS.md` overview and `reflections/crit-8.md`.
 - **Never deploy, flip public or commit without Advay's say-so** (CLAUDE.md).
 
 ## The idea
@@ -62,6 +61,8 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Launch flow (2026-10-04) | The landing page is the **launchpad** with the launch form. Launching plays a rocket rising, then the camera **pans up** into the orbit view and the new satellite appears. C8 gets a simple version of the pan; the cinematic version is week 12 polish. Without JS the form still posts and redirects to the orbit view. |
 | Beacon rules (2026-10-04) | **At most 60 characters, plain text, no URLs, a small word blocklist.** Shown in the sky while the satellite is live; the catalogue keeps it after. |
 | Launch limits (2026-10-04) | **One live satellite per person, plus a cooldown** (starting at 10 minutes) after your satellite dies or is deorbited, so relaunching costs something. |
+| Sky cap (2026-10-04) | **At most 200 satellites in orbit at once**; launches are refused while it's full. Added after review: nothing leaves the sky in C8 and a cookieless client can launch without limit, so this protects the 256 MB machine. Revisit with decay in C9. |
+| Catalogue (2026-10-04) | **The "In orbit" table shows callsigns, not beacons.** A beacon is only heard as its satellite passes over the station, so flying low (heard more often) stays worth it. The reviewer pointed out that a permanent list of beacons made "be seen" pointless. |
 | Bands (2026-10-04) | **Three bands (low, mid, high) with jitter:** you pick a band, the server picks a random radius and phase inside it, so orbits aren't identical. |
 
 ## The altitude trade-off
@@ -207,6 +208,14 @@ _Proposed, not final: the working assumption for C8, likely to be revisited._
 
 ### Later
 
+- **Visuals (week 12, maybe sooner): Three.js** (Advay, 2026-10-04) for the
+  striking version of the sky and the launch: glow, light trails, collision
+  bursts. Not for C8; the chart is a 2D canvas for now. It doesn't have to
+  undo the 2D decision (an orthographic camera keeps the chart flat), but it
+  weighs against the reasons 2D was chosen (light on mobile, accessible), so
+  it gets a decision record when it's adopted. The orbit maths in
+  `src/lib/orbit.ts` is renderer-agnostic, so swapping the canvas for Three.js
+  only touches the drawing code.
 - **C9 (week 10):** server-side collisions making debris, boot-time replay of
   missed time, orbital decay, deorbiting your own satellite (and the
   cooldown taking effect), conjunction alerts and dodging with fuel. Decide
@@ -246,6 +255,8 @@ flow, beacon rules, launch limits, bands.
   numbers confirmed then too.
 - **C9:** how fuel works, and whether it refills.
 - **C9:** exact cooldown length (10 minutes is the starting value).
+- **Week 12 (or sooner):** whether, and how far, to move the sky's rendering
+  to Three.js (see "Now and later").
 - **Before the final README:** the name (Kessler stays the working title).
 - **Open:** whether the catalogue shows owners' callsigns next to the debris
   they caused.

@@ -8,9 +8,9 @@
     "check": "pnpm typecheck && pnpm test",
     "check:evidence": "node scripts/check-evidence.ts",
     "test": "vitest run",
-    "dev": "astro dev",
+    "dev": "node scripts/migrate.mjs && astro dev",
     "build": "astro build",
-    "start": "node dist/server/entry.mjs",
+    "start": "node scripts/migrate.mjs && node dist/server/entry.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "devDependencies": {

@@ -1,0 +1,113 @@
+:root {
+  color-scheme: dark;
+  /* plotter-blue chart paper, its grid, cool chart ink, sodium amber for the
+     ground station and what it hears */
+  --night: #0e1a30;
+  --night-deep: #091224;
+  --grid: #24395a;
+  --grid-strong: #3a5781;
+  --ink: #dbe4ef;
+  --ink-dim: #93a6bf;
+  --amber: #f2a541;
+  --amber-dim: #a8732c;
+  --danger: #ff8a7a;
+  --dusk: #3b2f4a;
+  --ground: #070d19;
+
+  --font: "Archivo", system-ui, sans-serif;
+  --step--1: 0.875rem;
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.6rem;
+  --step-4: clamp(3rem, 9vw, 6.5rem);
+  --gutter: clamp(1rem, 4vw, 2.5rem);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--night-deep);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--night);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--step-0);
+  line-height: 1.5;
+  font-variation-settings: "wdth" 100;
+}
+
+a {
+  color: var(--ink);
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  color: var(--amber);
+}
+
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+}
+
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding: 1rem var(--gutter);
+  position: relative;
+  z-index: 2;
+}
+
+.wordmark {
+  font-weight: 800;
+  font-variation-settings: "wdth" 125;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  font-size: var(--step-1);
+}
+
+.site-nav {
+  display: flex;
+  gap: 1.25rem;
+  font-size: var(--step--1);
+}
+
+.site-nav a {
+  color: var(--ink-dim);
+  text-decoration: none;
+  padding-block: 0.25rem;
+}
+
+.site-nav a[aria-current="page"] {
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--amber);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

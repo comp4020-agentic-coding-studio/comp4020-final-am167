@@ -1,0 +1,43 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+  current?: "launchpad" | "sky" | "readme";
+}
+
+const {
+  title,
+  description = "One shared orbit. Launch a satellite and its beacon is heard by everyone watching.",
+  current,
+} = Astro.props;
+const here = (page: Props["current"]) => (page === current ? "page" : undefined);
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap"
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='7' fill='%2324395a'/%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%233a5781' stroke-width='1.5'/%3E%3Ccircle cx='27' cy='12' r='3' fill='%23f2a541'/%3E%3C/svg%3E" />
+  </head>
+  <body class={current}>
+    <header class="site-header">
+      <a class="wordmark" href="/">Kessler</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="/" aria-current={here("launchpad")}>Launchpad</a>
+        <a href="/sky/" aria-current={here("sky")}>Sky</a>
+        <a href="/readme/" aria-current={here("readme")}>README</a>
+      </nav>
+    </header>
+    <slot />
+  </body>
+</html>

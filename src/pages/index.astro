@@ -1,16 +1,517 @@
 ---
+import Base from "../layouts/Base.astro";
+import { every } from "../lib/format.ts";
+import { BEACON_MAX, CALLSIGN_MAX, readLaunch, type LaunchErrors, type LaunchValues } from "../lib/launch.ts";
+import { BANDS, type Band } from "../lib/orbit.ts";
+import { SKY_CAP, launch, liveSatelliteOf, skyIsFull } from "../lib/sky.ts";
+
+// The launchpad. The form posts here and works without JavaScript: a launch
+// redirects to the sky, a refusal re-renders the form with the reasons. The
+// page's script asks for JSON instead, so it can play the launch first.
+const { person } = Astro.locals;
+const wantsJson = Astro.request.headers.get("accept")?.includes("application/json");
+
+let errors: LaunchErrors = {};
+let values: LaunchValues = { band: "low", callsign: "", beacon: "" };
+
+let form: FormData | undefined;
+if (Astro.request.method === "POST") {
+  try {
+    form = await Astro.request.formData();
+  } catch {
+    errors = { form: "That launch form couldn't be read. Fill it in and try again." };
+    if (wantsJson) return Response.json({ errors }, { status: 400 });
+    Astro.response.status = 400;
+  }
+}
+
+if (form) {
+  const read = readLaunch(form);
+  const result = read.ok ? launch(person, read.input) : read;
+  if (result.ok) {
+    const redirect = `/sky/?launched=${result.object.id}`;
+    if (wantsJson) return Response.json({ id: result.object.id, redirect }, { status: 201 });
+    return Astro.redirect(redirect, 303);
+  }
+  if (wantsJson) return Response.json({ errors: result.errors }, { status: 422 });
+  errors = result.errors;
+  if (!read.ok) values = read.values;
+  else values = { band: read.input.band, callsign: read.input.callsign, beacon: read.input.beacon };
+  Astro.response.status = 422;
+}
+
+const live = liveSatelliteOf(person);
+const full = !live && skyIsFull();
+const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
+const hint: Record<Band, string> = {
+  low: "Close in and quick. Your beacon is heard most often.",
+  mid: "A middle course.",
+  high: "Far out and slow. Heard least often.",
+};
+// the error is always referenced, even empty, so the script can fill it in
+const describe = (field: keyof LaunchErrors, help?: string) =>
+  [`${field}-error`, help].filter(Boolean).join(" ");
 ---
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>COMP4020 final</title>
-  </head>
-  <body>
-    <main>
-      <h1>COMP4020 final</h1>
-      <p><a href="/readme/">README</a></p>
-    </main>
-  </body>
-</html>
+<Base title="Kessler: the launchpad" current="launchpad">
+  <main class="pad">
+    <div class="scene" aria-hidden="true">
+      <div class="stars"></div>
+      <svg class="gantry" viewBox="0 0 120 260" preserveAspectRatio="xMidYMax meet">
+        <g class="tower" stroke="#3a5781" stroke-width="2" fill="none">
+          <path d="M20 260V40M44 260V40M20 40h24" />
+          <path d="M20 60l24 20M44 60L20 80M20 100l24 20M44 100l-24 20M20 140l24 20M44 140l-24 20M20 180l24 20M44 180l-24 20M20 220l24 20M44 220l-24 20" />
+          <path d="M44 90h26M44 170h26" />
+        </g>
+        <g class="rocket">
+          <g class="flame">
+            <path d="M80 236c0 14 5 22 8 30 3-8 8-16 8-30z" fill="#f2a541" />
+            <path d="M84 236c0 8 2 14 4 19 2-5 4-11 4-19z" fill="#fff3d6" />
+          </g>
+          <path d="M88 40c-9 12-12 30-12 48v148h24V88c0-18-3-36-12-48z" fill="#dbe4ef" />
+          <path d="M76 200l-12 22v14h12zM100 200l12 22v14h-12z" fill="#93a6bf" />
+          <circle cx="88" cy="110" r="5" fill="#0e1a30" stroke="#93a6bf" stroke-width="2" />
+          <path d="M76 160h24" stroke="#93a6bf" stroke-width="2" />
+        </g>
+      </svg>
+      <div class="ground"></div>
+    </div>
+
+    <section class="intro">
+      <h1>Kessler</h1>
+      <p class="lede">
+        One low orbit, shared by everyone who comes here. Launch a satellite and
+        write it a beacon: one line, broadcast to everyone watching each time it
+        passes over the ground station.
+      </p>
+      <p class="lede">Nobody owns the sky. Every launch makes it more crowded.</p>
+    </section>
+
+    <section class="console" aria-labelledby="launch-title">
+      <h2 id="launch-title">Launch a satellite</h2>
+
+      {live && (
+        <p class="notice">
+          <strong>{live.callsign}</strong> is in orbit. You can launch again once
+          it's gone. <a href="/sky/">Watch the sky</a>
+        </p>
+      )}
+
+      {full && (
+        <p class="notice">
+          The sky is full: {SKY_CAP} satellites in orbit, the most it holds.
+          <a href="/sky/">Watch the sky</a>
+        </p>
+      )}
+
+      <div class="form-error" role="alert" id="form-error">{errors.form}</div>
+
+      <form method="post" action="/" novalidate data-launch>
+        <fieldset disabled={Boolean(live) || full}>
+          <fieldset class="bands" aria-describedby={describe("band")}>
+            <legend>Altitude</legend>
+            {bands.map(([band, b]) => (
+              <label class="band">
+                <input type="radio" name="band" value={band} checked={values.band === band} />
+                <span class="band-name">{b.label}</span>
+                <span class="band-hint">
+                  Over the station about every {every(b.period)}. {hint[band]}
+                </span>
+              </label>
+            ))}
+            <p class="field-error" id="band-error" data-error="band">{errors.band}</p>
+          </fieldset>
+
+          <div class="field">
+            <label for="callsign">Callsign</label>
+            <input
+              id="callsign"
+              name="callsign"
+              required
+              maxlength={CALLSIGN_MAX}
+              autocomplete="off"
+              spellcheck="false"
+              value={values.callsign}
+              aria-invalid={errors.callsign ? "true" : undefined}
+              aria-describedby={describe("callsign", "callsign-help")}
+            />
+            <p class="help" id="callsign-help">
+              Up to {CALLSIGN_MAX} letters or numbers, shown beside your satellite.
+            </p>
+            <p class="field-error" id="callsign-error" data-error="callsign">{errors.callsign}</p>
+          </div>
+
+          <div class="field">
+            <label for="beacon">Beacon</label>
+            <input
+              id="beacon"
+              name="beacon"
+              required
+              maxlength={BEACON_MAX}
+              autocomplete="off"
+              value={values.beacon}
+              aria-invalid={errors.beacon ? "true" : undefined}
+              aria-describedby={describe("beacon", "beacon-help")}
+            />
+            <p class="help" id="beacon-help">
+              Up to {BEACON_MAX} characters, no links. It stays on record after
+              your satellite is gone.
+            </p>
+            <p class="field-error" id="beacon-error" data-error="beacon">{errors.beacon}</p>
+          </div>
+
+          <button type="submit">Launch</button>
+        </fieldset>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    // Plays the launch before going to the sky: the rocket lifts, the view
+    // follows it up, then the sky page takes over. Without this script the form
+    // posts and redirects as normal.
+    const form = document.querySelector<HTMLFormElement>("form[data-launch]")!;
+    const formError = document.getElementById("form-error")!;
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function showErrors(errors: Record<string, string>) {
+      formError.textContent = errors.form ?? "";
+      for (const el of form.querySelectorAll<HTMLElement>("[data-error]")) {
+        const field = el.dataset.error!;
+        el.textContent = errors[field] ?? "";
+        const input = form.querySelector(`#${field}`);
+        if (errors[field]) input?.setAttribute("aria-invalid", "true");
+        else input?.removeAttribute("aria-invalid");
+      }
+      const first = Object.keys(errors).find((f) => f !== "form");
+      form.querySelector<HTMLElement>(first === "band" ? "[name=band]" : `#${first}`)?.focus();
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = form.querySelector("button")!;
+      button.disabled = true;
+      try {
+        const res = await fetch(form.action, {
+          method: "POST",
+          headers: { accept: "application/json" },
+          body: new URLSearchParams(new FormData(form) as unknown as Record<string, string>),
+        });
+        const body = res.headers.get("content-type")?.includes("json") ? await res.json() : {};
+        if (!res.ok) {
+          showErrors(body.errors ?? { form: `The launchpad refused the launch (${res.status}). Try again.` });
+          button.disabled = false;
+          return;
+        }
+        showErrors({});
+        if (reduced) return location.assign(body.redirect);
+        form.inert = true;
+        document.body.classList.add("launching");
+        setTimeout(() => location.assign(body.redirect), 2400);
+      } catch {
+        showErrors({ form: "Couldn't reach the launchpad. Check your connection and try again." });
+        button.disabled = false;
+      }
+    });
+  </script>
+</Base>
+
+
+<style>
+  .pad {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-areas: "intro console";
+    gap: 2rem var(--gutter);
+    padding: clamp(1rem, 4vw, 3rem) var(--gutter) 0;
+    min-height: calc(100vh - 4rem);
+    overflow: hidden;
+  }
+
+  /* Dusk at the pad: the sky is lighter at the horizon, as it is. */
+  .scene {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, var(--dusk) 0%, var(--night) 55%);
+    transition: transform 1.6s cubic-bezier(0.5, 0, 0.75, 0) 0.6s;
+    z-index: 0;
+  }
+
+  .stars {
+    position: absolute;
+    inset: 0 0 30% 0;
+    background-image:
+      radial-gradient(1px 1px at 12% 18%, #dbe4ef 50%, transparent 51%),
+      radial-gradient(1px 1px at 33% 8%, #93a6bf 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 58% 22%, #dbe4ef 50%, transparent 51%),
+      radial-gradient(1px 1px at 72% 12%, #93a6bf 50%, transparent 51%),
+      radial-gradient(1px 1px at 88% 30%, #dbe4ef 50%, transparent 51%),
+      radial-gradient(1px 1px at 6% 42%, #93a6bf 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 46% 38%, #93a6bf 50%, transparent 51%);
+  }
+
+  .ground {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3.5rem;
+    background: var(--ground);
+    border-top: 1px solid var(--grid);
+  }
+
+  .gantry {
+    position: absolute;
+    bottom: 3.5rem;
+    left: clamp(1rem, 30%, 28rem);
+    height: min(52vh, 26rem);
+    overflow: visible;
+  }
+
+  .rocket {
+    transition: transform 2s cubic-bezier(0.55, 0, 0.9, 0.4) 0.4s;
+  }
+
+  .flame {
+    opacity: 0;
+    transform-origin: 88px 236px;
+  }
+
+  .intro {
+    grid-area: intro;
+    position: relative;
+    z-index: 1;
+    max-width: 34rem;
+  }
+
+  h1 {
+    margin: 0 0 1rem;
+    font-size: var(--step-4);
+    line-height: 0.9;
+    font-weight: 800;
+    font-variation-settings: "wdth" 125;
+    letter-spacing: -0.01em;
+  }
+
+  .lede {
+    margin: 0 0 0.75rem;
+    font-size: var(--step-1);
+    line-height: 1.45;
+    color: var(--ink);
+    max-width: 32rem;
+  }
+
+  .lede + .lede {
+    color: var(--ink-dim);
+  }
+
+  .console {
+    grid-area: console;
+    position: relative;
+    z-index: 1;
+    align-self: start;
+    max-width: 30rem;
+    width: 100%;
+    justify-self: end;
+    margin-bottom: 5rem;
+    padding: 1.5rem;
+    background: rgb(9 18 36 / 0.88);
+    border: 1px solid var(--grid-strong);
+    border-radius: 4px;
+    transition: opacity 0.5s;
+  }
+
+  h2 {
+    margin: 0 0 1rem;
+    font-size: var(--step-2);
+    font-weight: 700;
+    font-variation-settings: "wdth" 112;
+    line-height: 1.1;
+  }
+
+  fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+
+  legend,
+  .field label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+
+  .bands {
+    display: grid;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .band {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 0.75rem;
+    align-items: baseline;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--grid);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .band:has(input:checked) {
+    border-color: var(--amber);
+    background: rgb(242 165 65 / 0.07);
+  }
+
+  .band input {
+    grid-row: span 2;
+    accent-color: var(--amber);
+    margin: 0;
+    width: 1.1rem;
+    height: 1.1rem;
+    align-self: center;
+  }
+
+  .band-name {
+    font-weight: 700;
+  }
+
+  .band-hint,
+  .help {
+    font-size: var(--step--1);
+    color: var(--ink-dim);
+  }
+
+  .field {
+    margin-bottom: 1.25rem;
+  }
+
+  .field input {
+    width: 100%;
+    padding: 0.6rem 0.7rem;
+    font: inherit;
+    color: var(--ink);
+    background: var(--night-deep);
+    border: 1px solid var(--grid-strong);
+    border-radius: 3px;
+  }
+
+  .field input[aria-invalid="true"] {
+    border-color: var(--danger);
+  }
+
+  .help,
+  .field-error {
+    margin: 0.35rem 0 0;
+  }
+
+  .field-error,
+  .form-error {
+    color: var(--danger);
+    font-size: var(--step--1);
+  }
+
+  .field-error:empty,
+  .form-error:empty {
+    display: none;
+  }
+
+  .form-error {
+    margin: 0 0 1rem;
+    font-size: var(--step-0);
+  }
+
+  .notice {
+    margin: 0 0 1rem;
+    padding: 0.75rem;
+    border-left: 3px solid var(--amber);
+    background: rgb(242 165 65 / 0.08);
+  }
+
+  button {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    font: inherit;
+    font-weight: 800;
+    font-variation-settings: "wdth" 118;
+    font-size: var(--step-1);
+    color: var(--night-deep);
+    background: var(--amber);
+    border: 0;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: #ffbb5c;
+  }
+
+  fieldset:disabled .band,
+  fieldset:disabled .field {
+    opacity: 0.5;
+  }
+
+  fieldset:disabled button,
+  button:disabled {
+    background: var(--amber-dim);
+    cursor: not-allowed;
+  }
+
+  /* The launch: the flame lights, the rocket lifts, the ground falls away. */
+  :global(body.launching) .console,
+  :global(body.launching) .intro {
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+
+  :global(body.launching) .flame {
+    opacity: 1;
+    animation: flicker 0.12s infinite alternate;
+  }
+
+  :global(body.launching) .rocket {
+    transform: translateY(-140vh);
+  }
+
+  :global(body.launching) .scene {
+    transform: translateY(70vh);
+  }
+
+  @keyframes flicker {
+    to {
+      transform: scaleY(1.25);
+    }
+  }
+
+  @media (max-width: 52rem) {
+    .pad {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: "intro" "console";
+      padding-bottom: 2rem;
+    }
+
+    .console {
+      justify-self: stretch;
+      margin-bottom: 0;
+    }
+
+    /* the rocket stands in a gutter beside the intro, clear of the text */
+    .intro {
+      padding-right: 4.5rem;
+    }
+
+    .gantry {
+      left: auto;
+      right: 0;
+      top: 1rem;
+      bottom: auto;
+      height: 11rem;
+    }
+
+    .ground {
+      display: none;
+    }
+  }
+</style>
