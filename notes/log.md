@@ -188,3 +188,13 @@ points, lists which claims `spec/` enforces and which are judged (and how),
 and what I chose not to build. `/readme/` now uses the site layout. Still to
 do: rewrite it in my own voice, check the sources against what I've actually
 read, and add the small-web reading the brief asks for.
+
+## 2026-10-04 — Small-scale reading for the README
+
+The README draft only cited subject sources (Kessler, Hardin, Ostrom); the
+brief also wants reading on what good means at small scale. Had the agent
+fetch four candidates and summarise them in `notes/reading.md`: Shirky's
+"Situated Software" (the best fit: visibility doing the work enforcement
+would, like Kessler's lineage), Kazemi's *Run Your Own Social* (limits make
+small spaces work), Sloan's home-cooked app and Appleton's barefoot
+developers (more for `PROCESS.md`). I'll read them before citing any.
