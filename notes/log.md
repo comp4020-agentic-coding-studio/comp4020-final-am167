@@ -44,3 +44,29 @@ surfaced one hard requirement: Fly stops idle machines, so the server must
 replay missed time on boot or collisions silently stop happening while nobody
 watches. Added a "Foundations" section to `PLAN.md` and the ADR rule to
 CLAUDE.md/AGENTS.md.
+
+## 2026-10-04 — Resolving the open questions for C8
+
+Read the C8 brief first: it only asks for proof of life ("the feature list,
+the real-time layer and the polish can all wait"), plus a first README at
+`/readme/`. Worked through `PLAN.md`'s open questions one at a time; the agent
+gave options with trade-offs and I picked.
+
+- **C8 scope:** proof of life plus SSE (launch, persist, orbits drawn,
+  launches live in other sessions). Collisions, debris, decay and deorbit
+  move to C9. Kept SSE to get the event plumbing in early, even though the
+  brief says it can wait.
+- **Overhead:** one shared ground station, so everyone reads the same beacon
+  at once. My addition: the landing page is a launchpad; launching shows the
+  rocket rising and the camera pans up into the orbit view where the
+  satellite appears. A simple pan for C8, the cinematic version in week 12.
+- **Beacon:** 60 chars, plain text, no URLs, small blocklist; shown while
+  live, kept in the catalogue.
+- **Launch limits:** one live satellite each, plus a cooldown (10 min to
+  start) after it dies, against relaunch spam.
+- **Bands:** low/mid/high with server-side jitter in radius and phase.
+- **Deferred:** decay rates, collision radius, fuel and cooldown length to C9
+  (tune with the sim running); the name before the final README.
+
+`PLAN.md` now has a "Now and later" section splitting the C8 build from what
+comes after.

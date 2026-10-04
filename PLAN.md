@@ -6,23 +6,24 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-03._
+_Last updated 2026-10-04._
 
 - **Done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
-  record in `doc/adr/` (0001–0004; 0002, the person, is still proposed). No code yet;
-  the repo is still the placeholder (the Astro stack was set up then reverted,
-  see `git log`).
+  record in `doc/adr/` (0001–0004; 0002, the person, is still proposed).
+  2026-10-04: the C8 open questions resolved (scope, overhead, launch flow,
+  beacon rules, launch limits, bands); the rest deferred to C9 or later, see
+  "Now and later". No code yet; the repo is still the placeholder (the Astro
+  stack was set up then reverted, see `git log`).
+- **C8 cutoff:** Tue 6 Oct 2026, 12:00 (moved from Monday for Labour Day).
 - **Next, in order:**
-  1. Resolve the open questions at the bottom of this file, one at a time
-     with Advay, including whether to trim the C8 slice to launch, orbit,
-     beacon and persist (moving collisions to C9).
-  2. Set up the stack (`/comp4020:stack` installs the Astro default), per
+  1. Set up the stack (`/comp4020:stack` installs the Astro default), per
      `doc/adr/0001-astro-and-sqlite-stack.md`.
-  3. Draft the first `README.md` (400–600 words; Advay drafts it, since
+  2. Draft the first `README.md` (400–600 words; Advay drafts it, since
      writing that reads like agent output is marked down) and publish it at
      `/readme/`.
-  4. Build the C8 slice (see "Crit thread").
+  3. Build the C8 slice (see "Now and later").
+  4. `PROCESS.md` overview and `reflections/crit-8.md`.
 - **Never deploy, flip public or commit without Advay's say-so** (CLAUDE.md).
 
 ## The idea
@@ -56,6 +57,12 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Ending | **No reset; the sky decays.** Orbital decay slowly pulls everything down, satellites and debris alike. Low orbits decay fast, high orbits slowly, so the sky heals over time but a bad cascade takes a long while to clear. |
 | Dimension | **2D** orbital chart: clearer, lighter on mobile, easier to make accessible than 3D. |
 | Deorbiting | **Allowed** for your own satellite. Debris can't be cleaned up by anyone. |
+| C8 scope (2026-10-04) | **Proof of life + SSE:** launch, persist, orbits drawn, launches appear live in other sessions. Collisions, debris, decay and deorbiting move to C9. The C8 brief only asks for proof of life ("the real-time layer and the polish can all wait"); SSE is kept to build the event plumbing early. |
+| Overhead (2026-10-04) | **One shared ground station**, a fixed point on the planet. A beacon shows to everyone when its satellite crosses that arc, so everyone reads the same line at the same moment. The station is the launchpad. |
+| Launch flow (2026-10-04) | The landing page is the **launchpad** with the launch form. Launching plays a rocket rising, then the camera **pans up** into the orbit view and the new satellite appears. C8 gets a simple version of the pan; the cinematic version is week 12 polish. Without JS the form still posts and redirects to the orbit view. |
+| Beacon rules (2026-10-04) | **At most 60 characters, plain text, no URLs, a small word blocklist.** Shown in the sky while the satellite is live; the catalogue keeps it after. |
+| Launch limits (2026-10-04) | **One live satellite per person, plus a cooldown** (starting at 10 minutes) after your satellite dies or is deorbited, so relaunching costs something. |
+| Bands (2026-10-04) | **Three bands (low, mid, high) with jitter:** you pick a band, the server picks a random radius and phase inside it, so orbits aren't identical. |
 
 ## The altitude trade-off
 
@@ -64,7 +71,10 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Low | Passes overhead often, so the beacon is read more | Drag brings it down fast; crowded |
 | High | Lasts much longer | Rarely overhead; its debris lingers far longer |
 
-Exact bands and decay rates are still open.
+Bands are chosen (three, with jitter; see the table above). Starting values,
+in units of the planet's radius, to tune once the sim runs: low r 1.2–1.4,
+period about 1 minute; mid r 1.6–1.9, about 3 minutes; high r 2.2–2.6, about 8
+minutes. Decay rates are set in C9.
 
 ## Co-presence
 
@@ -175,13 +185,32 @@ _Proposed, not final: the working assumption for C8, likely to be revisited._
 - One active satellite per person; dodging uses fuel; only the owner can
   deorbit.
 
-## Crit thread
+## Now and later
 
-- **C8 (week 9):** 2D chart, launch into a band with a beacon, orbits drawn
-  from elements, server-side collisions making debris, SSE updates, first
-  README at `/readme/`.
-- **C9 (week 10):** conjunction alerts and dodging, plus orbital decay and
-  deorbiting.
+### C8 (week 9, cutoff Tue 6 Oct 12:00): building now
+
+- Stack set up (Astro, SQLite/Drizzle on `/data`, migrations at boot).
+- Anonymous person cookie (ADR 0002).
+- Landing page = launchpad: form with band, callsign and beacon (rules
+  above). One live satellite per person; cooldown stored but only matters
+  once satellites can die.
+- Launch stores the satellite (band, jittered radius, phase, launch time).
+- Simple launch animation and camera pan up to the 2D orbit view; the new
+  satellite is highlighted.
+- Orbit view draws every live satellite from its stored elements and the
+  server clock.
+- Beacon shows when a satellite crosses the shared ground station.
+- SSE: a launch appears in every open session within about a second;
+  reconnect catches up from a snapshot.
+- First `README.md`, served at `/readme/`; `PROCESS.md`; `reflections/crit-8.md`.
+- Deployed to Fly (only when Advay says so).
+
+### Later
+
+- **C9 (week 10):** server-side collisions making debris, boot-time replay of
+  missed time, orbital decay, deorbiting your own satellite (and the
+  cooldown taking effect), conjunction alerts and dodging with fuel. Decide
+  the deferred tuning (below) with the sim running.
 - **C10 (week 11):** server-side logs as evidence (launches per band,
   collisions, dodges, deorbits), and the catalogue's lineage.
 - **Week 12:** visual polish (light trails, collision effects), README and
@@ -209,10 +238,14 @@ _Proposed, not final: the working assumption for C8, likely to be revisited._
 
 ## Open questions
 
-- Altitude bands, decay rates and collision radius, tuned so a marker sees
-  something happen within ten minutes while the sky still lasts weeks.
-- Launch limits: cooldowns, and what stops one person filling the sky.
-- What "overhead" means in 2D: one shared viewing point, or one per visitor.
-- Beacon length and moderation.
-- How fuel works, and whether it refills.
-- Name.
+Resolved 2026-10-04 (now in "Decisions so far"): C8 scope, overhead, launch
+flow, beacon rules, launch limits, bands.
+
+- **C9:** decay rates and collision radius, tuned so a marker sees something
+  happen within ten minutes while the sky still lasts weeks. Exact band
+  numbers confirmed then too.
+- **C9:** how fuel works, and whether it refills.
+- **C9:** exact cooldown length (10 minutes is the starting value).
+- **Before the final README:** the name (Kessler stays the working title).
+- **Open:** whether the catalogue shows owners' callsigns next to the debris
+  they caused.
