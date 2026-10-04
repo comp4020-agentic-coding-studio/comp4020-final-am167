@@ -70,3 +70,15 @@ gave options with trade-offs and I picked.
 
 `PLAN.md` now has a "Now and later" section splitting the C8 build from what
 comes after.
+
+## 2026-10-04 — Stack restored
+
+`/comp4020:stack` still only targets GitHub Pages and stops on a Fly repo, so
+restored the hand-wired stack from `f3e6c27` (reverting its revert `d86a89e`,
+which had only been reverted because the stack wasn't decided yet; ADR 0001
+now decides it). One change against the ADR: the old setup created a
+placeholder `notes` table with raw SQL; replaced that with Drizzle's migrator
+running at boot (`drizzle/`, copied into the image) and an empty schema, so
+the first migration will be the real satellites table. `pnpm build` and
+`pnpm check` green against the local build; Docker build not re-run (daemon
+off).
