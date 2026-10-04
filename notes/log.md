@@ -177,3 +177,14 @@ Decided both open review points:
   against the same app. Verified by hand instead: with `SKY_CAP=3` on a
   scratch DB, launches 1–3 gave 303, the 4th gave 422 "The sky is full", and
   the pad showed the notice.
+
+## 2026-10-04 — C8 slice committed; README first draft
+
+Committed the slice as `4be85b1`. Then, at my request, the agent drafted the
+first `README.md` (about 590 words), even though the brief says to write it
+myself, so it's a starting point to rewrite. It argues "good" from the
+commons (Kessler and Cour-Palais 1978, Hardin 1968, Ostrom 1990) as four
+points, lists which claims `spec/` enforces and which are judged (and how),
+and what I chose not to build. `/readme/` now uses the site layout. Still to
+do: rewrite it in my own voice, check the sources against what I've actually
+read, and add the small-web reading the brief asks for.

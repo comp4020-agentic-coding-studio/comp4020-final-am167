@@ -13,16 +13,15 @@ _Last updated 2026-10-04._
   record in `doc/adr/` (0001–0004; 0002, the person, is still proposed).
   2026-10-04: the C8 open questions resolved (scope, overhead, launch flow,
   beacon rules, launch limits, bands); the rest deferred to C9 or later, see
-  "Now and later". Stack restored (`618d80a`). C8 slice built (uncommitted):
+  "Now and later". Stack restored (`618d80a`). C8 slice built (`4be85b1`):
   launchpad, launch rules, the sky chart and catalogue, SSE; spec tests in
   `spec/launch.test.ts` and `spec/live.test.ts`.
 - **C8 cutoff:** Tue 6 Oct 2026, 12:00 (moved from Monday for Labour Day).
 - **Next, in order:**
-  1. Act on the adversarial review of the C8 slice, then commit.
-  2. Draft the first `README.md` (400–600 words; Advay drafts it, since
-     writing that reads like agent output is marked down) and publish it at
-     `/readme/`.
-  3. `PROCESS.md` overview and `reflections/crit-8.md`.
+  1. Advay rewrites the agent's README draft (`README.md`, published at
+     `/readme/`) in his own words, and confirms which sources he has
+     actually read; the small-web reading the brief asks for isn't cited yet.
+  2. `PROCESS.md` overview and `reflections/crit-8.md`.
 - **Never deploy, flip public or commit without Advay's say-so** (CLAUDE.md).
 
 ## The idea

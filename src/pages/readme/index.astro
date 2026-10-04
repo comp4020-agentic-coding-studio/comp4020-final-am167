@@ -1,17 +1,41 @@
 ---
 import { readFileSync } from "node:fs";
 import { marked } from "marked";
+import Base from "../../layouts/Base.astro";
 
 const html = await marked.parse(readFileSync("README.md", "utf8"));
 ---
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>README</title>
-  </head>
-  <body>
-    <main set:html={html} />
-  </body>
-</html>
+<Base title="Kessler: README" current="readme">
+  <main class="readme" set:html={html} />
+</Base>
+
+<style>
+  .readme {
+    max-width: 42rem;
+    padding: 1rem var(--gutter) 4rem;
+    line-height: 1.6;
+  }
+
+  .readme :global(h1) {
+    font-size: var(--step-4);
+    font-weight: 800;
+    font-variation-settings: "wdth" 125;
+    line-height: 0.95;
+    margin: 0.5rem 0 1.5rem;
+  }
+
+  .readme :global(h2) {
+    font-size: var(--step-2);
+    font-variation-settings: "wdth" 112;
+    margin: 2.5rem 0 0.75rem;
+  }
+
+  .readme :global(li) {
+    margin-bottom: 0.4rem;
+  }
+
+  .readme :global(code) {
+    font-size: 0.9em;
+    color: var(--amber);
+  }
+</style>
