@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-04._
+_Last updated 2026-10-05._
 
 - **Done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -16,6 +16,10 @@ _Last updated 2026-10-04._
   "Now and later". Stack restored (`618d80a`). C8 slice built (`4be85b1`):
   launchpad, launch rules, the sky chart and catalogue, SSE; spec tests in
   `spec/launch.test.ts` and `spec/live.test.ts`.
+- **C9, in progress (branch `C9`):** the sky page redrawn with Three.js as a
+  horizon view from Advay's sketch (ADR 0005, proposed): the limb, stars, the
+  bands over the horizon, satellites crossing with trails and labels, the
+  station panel over the scene, the catalogue below. Uncommitted.
 - **C8 cutoff:** Tue 6 Oct 2026, 12:00 (moved from Monday for Labour Day).
 - **Next, in order:**
   1. Advay rewrites the agent's README draft (`README.md`, published at
@@ -207,6 +211,9 @@ _Proposed, not final: the working assumption for C8, likely to be revisited._
 
 ### Later
 
+- **Adopted for the sky in C9 (2026-10-05, ADR 0005):** a horizon view
+  through an orthographic camera; the launch and collision effects are still
+  to do.
 - **Visuals (week 12, maybe sooner): Three.js** (Advay, 2026-10-04) for the
   striking version of the sky and the launch: glow, light trails, collision
   bursts. Not for C8; the chart is a 2D canvas for now. It doesn't have to

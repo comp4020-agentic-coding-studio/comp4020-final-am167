@@ -5,8 +5,9 @@ import { BANDS } from "../../lib/orbit.ts";
 import { liveSky, toPublic } from "../../lib/sky.ts";
 
 // The shared sky. The server renders the catalogue of what's in orbit, so the
-// page is complete without JavaScript; the script draws the chart from the
-// same orbits and keeps everything live over the event stream (ADR 0004).
+// page is complete without JavaScript; the script draws the sky over the
+// station from the same orbits and keeps everything live over the event
+// stream (ADR 0004).
 const { person } = Astro.locals;
 const now = Date.now();
 const sky = liveSky()
@@ -19,70 +20,78 @@ const count = (n: number) => `${n} satellite${n === 1 ? "" : "s"} in orbit`;
 ---
 <Base title="Kessler: the sky" current="sky">
   <main class="sky-page">
-    {launched && (
-      <p class="notice launched" id="launched-notice">
-        <strong>{launched.callsign}</strong> is in orbit. Its beacon is broadcast
-        each time it passes over the station.
-      </p>
-    )}
-
-    <section class="chart-wrap" aria-labelledby="chart-title">
+    <section class="scene" aria-labelledby="chart-title">
       <h1 id="chart-title" class="visually-hidden">The shared sky</h1>
-      <canvas
-        id="chart"
-        role="img"
-        aria-label={`Orbital chart: ${count(sky.length)} around the planet. The ground station is at the top.`}
-      ></canvas>
-      <noscript>
-        <p class="noscript">The chart and the station need JavaScript. Everything in orbit is listed below.</p>
-      </noscript>
+      <div class="view">
+        <canvas
+          id="chart"
+          role="img"
+          aria-label={`The sky over the station: ${count(sky.length)}. Satellites rise on the left and set on the right.`}
+        ></canvas>
+        <div id="scene-labels" class="scene-labels" aria-hidden="true"></div>
+        <noscript>
+          <p class="no-view">The sky and the station need JavaScript. Everything in orbit is listed below.</p>
+        </noscript>
+        <p id="no-webgl" class="no-view" hidden>
+          The sky couldn't be drawn here (it needs WebGL, and a connection to
+          load it). The station still hears every beacon, and everything in
+          orbit is listed below.
+        </p>
+      </div>
+
+      <div class="panels">
+        {launched && (
+          <p class="notice launched" id="launched-notice">
+            <strong>{launched.callsign}</strong> is in orbit. Its beacon is broadcast
+            each time it passes over the station.
+          </p>
+        )}
+
+        <section class="station" aria-labelledby="station-title">
+          <h2 id="station-title">Over the station</h2>
+          <ul id="overhead" class="overhead" aria-live="polite"></ul>
+          <p id="next-pass" class="next-pass">
+            {sky.length === 0 ? "Nothing in orbit yet." : "Beacons are heard here as satellites pass overhead."}
+          </p>
+          {mine && <p id="your-pass" class="your-pass" data-id={mine.id}>Yours: {mine.callsign}.</p>}
+        </section>
+      </div>
     </section>
 
-    <aside class="side">
-      <section class="station" aria-labelledby="station-title">
-        <h2 id="station-title">Over the station</h2>
-        <ul id="overhead" class="overhead" aria-live="polite"></ul>
-        {mine && <p id="your-pass" class="your-pass" data-id={mine.id}>Yours: {mine.callsign}.</p>}
-        <p id="next-pass" class="next-pass">
-          {sky.length === 0 ? "Nothing in orbit yet." : "Beacons are heard here as satellites pass overhead."}
-        </p>
-      </section>
-
-      <section class="catalogue" aria-labelledby="catalogue-title">
-        <h2 id="catalogue-title">In orbit</h2>
-        <p class="count">
-          <span id="count">{count(sky.length)}</span>
-          <span id="connection" class="connection" data-state="offline">Not live</span>
-        </p>
-        <p class="help">Beacons are only heard over the station.</p>
-        <p class="empty" id="empty" hidden={sky.length > 0}>
-          The sky is empty. <a href="/">Launch the first satellite</a>.
-        </p>
-        <table hidden={sky.length === 0} id="catalogue">
-          <thead>
-            <tr>
-              <th scope="col">Callsign</th>
-              <th scope="col">Band</th>
-              <th scope="col">Launched</th>
+    <section class="catalogue" aria-labelledby="catalogue-title">
+      <h2 id="catalogue-title">In orbit</h2>
+      <p class="count">
+        <span id="count">{count(sky.length)}</span>
+        <span id="connection" class="connection" data-state="offline">Not live</span>
+      </p>
+      <p class="help">Beacons are only heard over the station.</p>
+      <p class="empty" id="empty" hidden={sky.length > 0}>
+        The sky is empty. <a href="/">Launch the first satellite</a>.
+      </p>
+      <table hidden={sky.length === 0} id="catalogue">
+        <thead>
+          <tr>
+            <th scope="col">Callsign</th>
+            <th scope="col">Band</th>
+            <th scope="col">Launched</th>
+          </tr>
+        </thead>
+        <tbody id="rows">
+          {sky.map((o) => (
+            <tr data-id={o.id} class:list={{ mine: o.mine }}>
+              <th scope="row">
+                <span class="swatch" style={`--hue: ${(o.id * 137.508) % 360}`}></span>
+                {o.callsign}
+                {o.mine && <span class="yours"> (yours)</span>}
+              </th>
+              <td>{BANDS[o.band].label}</td>
+              <td><time datetime={new Date(o.launchedAt).toISOString()}>{ago(now - o.launchedAt)}</time></td>
             </tr>
-          </thead>
-          <tbody id="rows">
-            {sky.map((o) => (
-              <tr data-id={o.id} class:list={{ mine: o.mine }}>
-                <th scope="row">
-                  <span class="swatch" style={`--hue: ${(o.id * 137.508) % 360}`}></span>
-                  {o.callsign}
-                  {o.mine && <span class="yours"> (yours)</span>}
-                </th>
-                <td>{BANDS[o.band].label}</td>
-                <td><time datetime={new Date(o.launchedAt).toISOString()}>{ago(now - o.launchedAt)}</time></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!mine && <p class="cta"><a href="/">Launch a satellite</a></p>}
-      </section>
-    </aside>
+          ))}
+        </tbody>
+      </table>
+      {!mine && <p class="cta"><a href="/">Launch a satellite</a></p>}
+    </section>
   </main>
 
   <script type="application/json" id="sky-data" set:html={embed({ serverTime: now, sky, launched: launched?.id ?? null })} />
@@ -91,24 +100,24 @@ const count = (n: number) => `${n} satellite${n === 1 ? "" : "s"} in orbit`;
   </script>
 </Base>
 
-<!-- global: the script rebuilds the table and the station list, and
-     elements it makes carry no scoped-style attribute -->
+<!-- global: the script rebuilds the table, the station list and the scene's
+     labels, and elements it makes carry no scoped-style attribute -->
 <style is:global>
   .sky-page {
-    display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(18rem, 1fr);
-    gap: 1.5rem var(--gutter);
-    padding: 0 var(--gutter) 2rem;
-    align-items: start;
+    --space: #03060e;
+    --scene-height: max(30rem, calc(100svh - 3.75rem));
   }
 
-  .sky-page .chart-wrap {
-    position: sticky;
-    top: 1rem;
-    aspect-ratio: 1;
-    max-height: calc(100vh - 6rem);
-    width: 100%;
-    margin-inline: auto;
+  /* The sky fills the first screen; the station panel floats over it. */
+  .sky-page .scene {
+    position: relative;
+  }
+
+  .sky-page .view {
+    position: relative;
+    height: var(--scene-height);
+    overflow: hidden;
+    background: var(--space);
   }
 
   .sky-page canvas {
@@ -117,14 +126,110 @@ const count = (n: number) => `${n} satellite${n === 1 ? "" : "s"} in orbit`;
     height: 100%;
   }
 
-  .sky-page .noscript {
+  .sky-page .no-view {
+    position: absolute;
+    inset: auto var(--gutter) 2rem;
+    margin: 0;
     color: var(--ink-dim);
   }
 
-  .sky-page .side {
+  .sky-page .scene-labels {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    font-size: 0.8rem;
+    line-height: 1;
+  }
+
+  .sky-page .scene-labels > * {
+    position: absolute;
+    top: 0;
+    left: 0;
+    white-space: nowrap;
+    will-change: transform;
+  }
+
+  .sky-page .sat-label {
+    color: var(--ink);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-shadow: 0 0 4px var(--space), 0 0 2px var(--space);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .sky-page .sat-label.shown {
+    opacity: 0.8;
+  }
+
+  .sky-page .sat-label.overhead,
+  .sky-page .sat-label.mine {
+    color: var(--amber);
+  }
+
+  .sky-page .sat-label.mine.shown {
+    opacity: 1;
+    font-weight: 800;
+  }
+
+  .sky-page .band-label {
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+    font-weight: 700;
+    font-variation-settings: "wdth" 112;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-shadow: 0 0 4px var(--space), 0 0 2px var(--space);
+  }
+
+  .sky-page .station-label {
+    color: var(--amber);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-shadow: 0 0 4px var(--space);
+  }
+
+  .sky-page .your-pointer {
+    padding: 0.3rem 0.55rem;
+    border: 1px solid var(--amber-dim);
+    border-radius: 3px;
+    background: rgb(3 6 14 / 0.75);
+    color: var(--amber);
+    font-weight: 700;
+  }
+
+  .sky-page .launch-pulse::before {
+    content: "";
+    position: absolute;
+    left: -1.5rem;
+    top: -1.5rem;
+    width: 3rem;
+    height: 3rem;
+    border: 2px solid var(--amber);
+    border-radius: 50%;
+    animation: pulse 1.5s ease-out infinite;
+  }
+
+  @keyframes pulse {
+    from {
+      transform: scale(0.3);
+      opacity: 1;
+    }
+    to {
+      transform: scale(1.3);
+      opacity: 0;
+    }
+  }
+
+  .sky-page .panels {
+    position: absolute;
+    top: 1.25rem;
+    left: var(--gutter);
+    width: min(24rem, 40vw);
     display: grid;
-    gap: 1.5rem;
-    min-width: 0;
+    gap: 0.75rem;
   }
 
   .sky-page h2 {
@@ -138,25 +243,16 @@ const count = (n: number) => `${n} satellite${n === 1 ? "" : "s"} in orbit`;
     margin: 0;
     padding: 0.75rem;
     border-left: 3px solid var(--amber);
-    background: rgb(242 165 65 / 0.08);
-  }
-
-  .sky-page .launched {
-    grid-column: 1 / -1;
-  }
-
-  .sky-page .your-pass {
-    margin: 0.75rem 0 0;
-    padding-top: 0.6rem;
-    border-top: 1px solid var(--amber-dim);
-    font-size: var(--step--1);
+    background: rgb(20 16 10 / 0.8);
+    backdrop-filter: blur(6px);
   }
 
   .sky-page .station {
     padding: 1rem;
     border: 1px solid var(--amber-dim);
     border-radius: 4px;
-    background: rgb(242 165 65 / 0.05);
+    background: rgb(6 11 24 / 0.72);
+    backdrop-filter: blur(6px);
     min-height: 8.5rem;
   }
 
@@ -192,6 +288,19 @@ const count = (n: number) => `${n} satellite${n === 1 ? "" : "s"} in orbit`;
 
   .sky-page .overhead:not(:empty) + .next-pass {
     display: none;
+  }
+
+  .sky-page .your-pass {
+    margin: 0.75rem 0 0;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--amber-dim);
+    font-size: var(--step--1);
+  }
+
+  .sky-page .catalogue {
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: 2.5rem var(--gutter) 3rem;
   }
 
   .sky-page .count {
@@ -275,15 +384,20 @@ const count = (n: number) => `${n} satellite${n === 1 ? "" : "s"} in orbit`;
     margin: 0.75rem 0 0;
   }
 
+  /* On a phone the panel would cover the sky, so it follows it instead. */
   @media (max-width: 52rem) {
     .sky-page {
-      grid-template-columns: minmax(0, 1fr);
+      --scene-height: 52svh;
     }
 
-    .sky-page .chart-wrap {
+    .sky-page .panels {
       position: static;
-      max-height: none;
+      width: auto;
+      padding: 1rem var(--gutter) 0;
     }
 
+    .sky-page .catalogue {
+      padding-top: 1.5rem;
+    }
   }
 </style>

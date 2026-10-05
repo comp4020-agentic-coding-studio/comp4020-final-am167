@@ -198,3 +198,64 @@ fetch four candidates and summarise them in `notes/reading.md`: Shirky's
 would, like Kessler's lineage), Kazemi's *Run Your Own Social* (limits make
 small spaces work), Sloan's home-cooked app and Appleton's barefoot
 developers (more for `PROCESS.md`). I'll read them before citing any.
+
+## 2026-10-05 — C9: the sky redrawn as a horizon view (Three.js)
+
+Started branch `C9`. I sketched a new sky view: the planet's limb along the
+bottom, a realistic star background, the bands (high, medium, low) stacked over
+the horizon, a satellite crossing with a trail and its name, and the "Over the
+station" panel floating top-left. The agent asked four questions first. I
+chose the horizon window (only the arc around the station is in view), a
+stylised night Earth over a textured one, labels on every satellite but hidden
+when they crowd, and the catalogue below the scene.
+
+What was built (`src/scripts/scene.ts`, ADR 0005, proposed):
+
+- Three.js with an **orthographic camera**, so the sim stays the flat 2D chart
+  of `orbit.ts`; only the drawing changed. The planet is drawn six chart units
+  across while orbits keep their heights, so the bands sit close over a gently
+  curved horizon. The view is mirrored so satellites cross left to right.
+- A dark sphere with a rim glow, the green **airglow** line seen in photos
+  from orbit, and coastlines baked from Natural Earth around the station,
+  which now sits on Canberra (`scripts/coastline.mjs`, about 48 kB gzipped).
+- About 34,000 seeded stars with spectral colours and a steep brightness
+  falloff, plus a faint Milky Way band, thinned on zoomed-out phone views.
+- Satellites as glow points with tapering trails, amber while over the
+  station; the station's window is an amber wedge. Labels are HTML, placed
+  greedily (yours first, then those overhead) so they never overlap.
+- Your satellite, when it's out of view, gets a "‹ CALLSIGN rises in 41 s"
+  pointer at the left edge.
+- Three.js loads as its own chunk after the page works (about 185 kB gzipped).
+  Without WebGL, or if the chunk fails to load, the page says so; the panel and
+  the catalogue never depend on it.
+
+![The sky as a horizon view: the limb and airglow, the three bands, satellites crossing with trails, the station's wedge and the panel over the scene](screenshots/2026-10-05-sky-horizon-view.png)
+
+Bugs found while checking it in Chrome: the trails didn't draw (Three.js
+culled the dynamic geometry by stale bounds, then back-face culled the
+ribbon), the glow sprites had square edges, and on a phone the Earth filled
+60% of the scene with stars five times denser than on desktop.
+
+**Adversarial review** (fresh Sonnet agent). Real bugs it found, all fixed:
+
+- an **empty sky threw on every frame** and left the canvas blank (the
+  buffers were only made once there was a satellite). Checked on a fresh
+  database: now draws.
+- your satellite could **vanish with no pointer** while it was behind the
+  planet, since the "in view" test checked only x;
+- **no fallback if the scene chunk failed to load** (an unhandled rejection
+  and a blank canvas);
+- the **floating panel hid labels and the pointer** where satellites rise.
+  Labels and the pointer now keep clear of it.
+
+Also took its performance points: the loop pauses when the scene is scrolled
+away, there are no per-frame allocations in the hot loops, DOM writes happen
+only on change, old GPU buffers are freed, the pixel ratio is re-read on
+resize, and labels flip left at the right-hand edge and re-measure after the
+webfont loads.
+
+Left as judgement calls for me: a **sparse sky can look empty** (only about
+7–15% of each orbit is in view, so with a few satellites the scene is often
+bare); and the pointer's "rises in" counts to the view's edge while the panel
+counts to the station's window, so they differ by a few seconds. Checks green
+(typecheck, 37 specs). Uncommitted.
