@@ -113,9 +113,8 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
               <label class="band">
                 <input type="radio" name="band" value={band} checked={values.band === band} />
                 <span class="band-name">{b.label}</span>
-                <span class="band-hint">
-                  Over the station about every {every(b.period)}. {hint[band]}
-                </span>
+                <span class="band-period">over the station every {every(b.period)}</span>
+                <span class="band-hint">{hint[band]}</span>
               </label>
             ))}
             <p class="field-error" id="band-error" data-error="band">{errors.band}</p>
@@ -223,7 +222,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
     grid-template-areas: "intro console";
     gap: 2rem var(--gutter);
-    padding: clamp(1rem, 4vw, 3rem) var(--gutter) 0;
+    padding: clamp(1rem, 4vh, 3rem) var(--gutter) 0;
     min-height: calc(100vh - 4rem);
     overflow: hidden;
   }
@@ -264,7 +263,8 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     position: absolute;
     bottom: 3.5rem;
     left: clamp(1rem, 30%, 28rem);
-    height: min(52vh, 26rem);
+    /* no taller than the room between the intro text and the ground */
+    height: clamp(10rem, calc(100vh - 29rem), 26rem);
     overflow: visible;
   }
 
@@ -313,8 +313,8 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     max-width: 30rem;
     width: 100%;
     justify-self: end;
-    margin-bottom: 5rem;
-    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding: 1.25rem 1.5rem;
     background: rgb(9 18 36 / 0.88);
     border: 1px solid var(--grid-strong);
     border-radius: 4px;
@@ -322,7 +322,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   }
 
   h2 {
-    margin: 0 0 1rem;
+    margin: 0 0 0.75rem;
     font-size: var(--step-2);
     font-weight: 700;
     font-variation-settings: "wdth" 112;
@@ -346,15 +346,16 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   .bands {
     display: grid;
     gap: 0.5rem;
-    margin-bottom: 1.25rem;
+    margin-bottom: 1rem;
   }
 
+  /* two lines a band: the name and how often it passes, then what that means */
   .band {
     display: grid;
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto 1fr auto;
     column-gap: 0.75rem;
     align-items: baseline;
-    padding: 0.65rem 0.75rem;
+    padding: 0.5rem 0.75rem;
     border: 1px solid var(--grid);
     border-radius: 4px;
     cursor: pointer;
@@ -378,6 +379,16 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     font-weight: 700;
   }
 
+  .band-period {
+    font-size: var(--step--1);
+    color: var(--ink);
+    text-align: right;
+  }
+
+  .band-hint {
+    grid-column: 2 / 4;
+  }
+
   .band-hint,
   .help {
     font-size: var(--step--1);
@@ -385,7 +396,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   }
 
   .field {
-    margin-bottom: 1.25rem;
+    margin-bottom: 1rem;
   }
 
   .field input {
@@ -482,6 +493,23 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   @keyframes flicker {
     to {
       transform: scaleY(1.25);
+    }
+  }
+
+  /* On a short laptop screen the form still fits without scrolling: each band
+     keeps how often it passes and gives up its note, and the spacing tightens. */
+  @media (min-width: 52.01rem) and (max-height: 46rem) {
+    .band-hint {
+      display: none;
+    }
+
+    .bands,
+    .field {
+      margin-bottom: 0.75rem;
+    }
+
+    .console {
+      margin-bottom: 1rem;
     }
   }
 

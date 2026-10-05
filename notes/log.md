@@ -362,3 +362,27 @@ notice pushed the Sky now card off the bottom of the screen.
 
 No new spec: this is layout, which the HTTP suite can't see. Checks green
 (50 tests).
+
+Catalogue page, Sky now card and the steady station panel committed as
+`455789e`.
+
+## 2026-10-05 — The launchpad fits a laptop screen
+
+On my laptop the launchpad scrolled: the Launch button sat below the fold.
+Measured in Chrome, the page was 919px tall at every laptop size, because the
+form ran 727px plus a 5rem bottom margin.
+
+- Each altitude is now two lines: the name with how often it passes ("over
+  the station every 3 minutes") on the right, then its note. This was 292px of
+  bands, now 235px.
+- Tighter spacing in the form, a 1.5rem bottom margin, and top padding that
+  scales with the screen's height, not its width.
+- Below 46rem tall, each band drops its note and keeps the pass time, so it
+  still fits at 1280×680.
+- The rocket is capped to the room between the intro and the ground. Once the
+  page was exactly one screen, it ran into the "Nobody owns the sky" line.
+
+No scroll at 1920×1080, 1512×860, 1536×770, 1440×800, 1280×720 or 1280×680,
+and the rocket's top stays below the text at each. The phone layout is
+unchanged and scrolls as before. Layout only, so no new spec; checks green
+(50 tests).
