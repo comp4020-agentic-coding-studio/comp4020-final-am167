@@ -6,11 +6,8 @@ import {
   DoubleSide,
   DynamicDrawUsage,
   Float32BufferAttribute,
-  LineLoop,
-  LineBasicMaterial,
   LineSegments,
   Mesh,
-  MeshBasicMaterial,
   OrthographicCamera,
   PlaneGeometry,
   Points,
@@ -18,9 +15,8 @@ import {
   Scene,
   ShaderMaterial,
   SphereGeometry,
-  Vector3,
+  Vector2,
   WebGLRenderer,
-  type Object3D,
 } from "three";
 import { BANDS, OVERHEAD_HALF_WIDTH, STATION_ANGLE, angleAt, isOverhead, type Band, type Orbit } from "../lib/orbit.ts";
 import coastline from "./coastline.json";
@@ -28,7 +24,8 @@ import { countdown } from "./countdown.ts";
 
 // The sky as seen from just above the station: the planet's limb along the
 // bottom, the three bands stacked over it, and satellites rising in on the
-// left, crossing the station's window and setting on the right.
+// left, crossing the station's window and setting on the right. It zooms out
+// to the whole planet, with every orbit in view.
 //
 // The simulation is still the flat chart of orbit.ts (PLAN.md, "Dimension"):
 // every orbit lies in the screen's plane and the camera is orthographic, so
@@ -39,6 +36,11 @@ export interface SceneSatellite extends Orbit {
   callsign: string;
   band: Band;
   mine: boolean;
+}
+
+export interface SceneControls {
+  // true for the whole planet, false for the horizon over the station
+  zoom(out: boolean): void;
 }
 
 export interface SceneOptions {
@@ -55,10 +57,16 @@ export interface SceneOptions {
 
 const TAU = Math.PI * 2;
 
-// The planet is drawn six chart units across, but the orbits keep their
-// heights above it, so the bands sit close over a gently curved horizon.
+// Over the station the planet is drawn six chart units across, but the orbits
+// keep their heights above it, so the bands sit close over a gently curved
+// horizon. Zoomed out, it shrinks back to the chart's own size.
 const PLANET = 6;
-const display = (radius: number) => PLANET + (radius - 1);
+const WHOLE = 1;
+const display = (radius: number, planet = PLANET) => planet + (radius - 1);
+// how long the zoom takes, and how much of it the stars follow (0 not at
+// all, 1 as much as the planet)
+const ZOOM_MS = 1400;
+const STAR_DEPTH = 0.5;
 // the top of the view, just above the high band
 const TOP = display(BANDS.high.maxRadius) + 0.4;
 // at least this much planet shows under the limb
@@ -78,8 +86,8 @@ const TRAIL_STEPS = 28;
 
 // Seen from the other side of the chart's plane, so satellites cross left to
 // right; the station is at the top either way.
-const place = (radius: number, angle: number): [number, number] => {
-  const d = display(radius);
+const place = (radius: number, angle: number, planet: number): [number, number] => {
+  const d = display(radius, planet);
   return [-d * Math.cos(angle), d * Math.sin(angle)];
 };
 
@@ -259,7 +267,7 @@ function milkyWay(): Mesh {
 
 // ── the planet ─────────────────────────────────────────────────────────────
 
-function planet(): Mesh {
+function globe(): Mesh {
   // poles towards the camera, so the limb is the sphere's finely cut equator
   const geometry = new SphereGeometry(PLANET, 512, 64);
   geometry.rotateX(Math.PI / 2);
@@ -331,10 +339,12 @@ function coastlines(): LineSegments {
 // The thin green airglow line that hangs over the limb in photographs from
 // orbit, over a softer blue haze.
 function atmosphere(): Mesh {
-  const geometry = new RingGeometry(PLANET, PLANET + 1.4, 512, 1);
+  const geometry = new RingGeometry(WHOLE * 0.5, PLANET + 1.4, 512, 1);
   const material = new ShaderMaterial({
     uniforms: {
       radius: { value: PLANET },
+      // thinner as the planet shrinks, so it stays a rim, not a halo
+      thickness: { value: 1 },
       air: { value: new Color("#86eab0") },
       haze: { value: new Color("#3d86dc") },
     },
@@ -346,11 +356,13 @@ function atmosphere(): Mesh {
       }`,
     fragmentShader: /* glsl */ `
       uniform float radius;
+      uniform float thickness;
       uniform vec3 air;
       uniform vec3 haze;
       varying vec2 vPos;
       void main() {
-        float h = length(vPos) - radius;
+        float h = (length(vPos) - radius) / thickness;
+        if (h < 0.0 || h > 1.4) discard;
         float line = exp(-pow((h - 0.07) / 0.022, 2.0)) * 0.5;
         float glow = exp(-h / 0.1) * 0.5 + exp(-h / 0.45) * 0.03;
         gl_FragColor = vec4(air * line + haze * glow, 1.0);
@@ -365,28 +377,50 @@ function atmosphere(): Mesh {
 
 // ── the chart over the horizon: bands and the station's window ────────────
 
-function bands(): Object3D[] {
-  const fill = new MeshBasicMaterial({ color: "#3a5781", transparent: true, opacity: 0.025, depthWrite: false });
-  const edge = new LineBasicMaterial({ color: "#3a5781", transparent: true, opacity: 0.3, depthWrite: false });
-  const meshes: Object3D[] = [];
-  for (const band of Object.values(BANDS)) {
-    meshes.push(new Mesh(new RingGeometry(display(band.minRadius), display(band.maxRadius), 512, 1), fill));
-    for (const r of [band.minRadius, band.maxRadius]) {
-      const ring = new BufferGeometry().setFromPoints(
-        Array.from({ length: 512 }, (_, i) => {
-          const a = (i / 512) * TAU;
-          return new Vector3(display(r) * Math.cos(a), display(r) * Math.sin(a), 0);
-        }),
-      );
-      meshes.push(new LineLoop(ring, edge));
-    }
-  }
-  return meshes;
+// Each band is a faint ring with a hairline at either edge, drawn by height
+// above the planet so it follows the planet as the view zooms.
+function bands(): Mesh {
+  const geometry = new RingGeometry(WHOLE * 0.5, display(BANDS.high.maxRadius) + 0.5, 512, 1);
+  const material = new ShaderMaterial({
+    uniforms: {
+      colour: { value: new Color("#3a5781") },
+      radius: { value: PLANET },
+      ranges: { value: Object.values(BANDS).map((b) => new Vector2(b.minRadius - 1, b.maxRadius - 1)) },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vPos;
+      void main() {
+        vPos = position.xy;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 colour;
+      uniform float radius;
+      uniform vec2 ranges[3];
+      varying vec2 vPos;
+      void main() {
+        float h = length(vPos) - radius;
+        float pixel = fwidth(h);
+        float a = 0.0;
+        for (int i = 0; i < 3; i++) {
+          vec2 r = ranges[i];
+          if (h > r.x && h < r.y) a = max(a, 0.025);
+          float edge = min(abs(h - r.x), abs(h - r.y)) / pixel;
+          a = max(a, (1.0 - smoothstep(0.5, 1.5, edge)) * 0.3);
+        }
+        if (a <= 0.0) discard;
+        gl_FragColor = vec4(colour, a);
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthWrite: false,
+  });
+  return new Mesh(geometry, material);
 }
 
 // Anything inside this wedge is over the station, and its beacon is heard.
 function stationWindow(): Mesh {
-  const geometry = new RingGeometry(PLANET, TOP + 2, 64, 8, STATION_ANGLE - OVERHEAD_HALF_WIDTH, OVERHEAD_HALF_WIDTH * 2);
+  const geometry = new RingGeometry(WHOLE * 0.5, TOP + 2, 64, 8, STATION_ANGLE - OVERHEAD_HALF_WIDTH, OVERHEAD_HALF_WIDTH * 2);
   const material = new ShaderMaterial({
     uniforms: {
       colour: { value: AMBER },
@@ -407,6 +441,7 @@ function stationWindow(): Mesh {
       uniform float halfWidth;
       varying vec2 vPos;
       void main() {
+        if (length(vPos) < radius) discard;
         float up = clamp((length(vPos) - radius) / reach, 0.0, 1.0);
         float off = abs(atan(vPos.x, vPos.y)) / halfWidth;
         float edge = smoothstep(0.96, 1.0, off) * 0.12;
@@ -476,23 +511,29 @@ interface Placed {
   overhead: boolean;
 }
 
-export function createScene(options: SceneOptions): boolean {
+export function createScene(options: SceneOptions): SceneControls | null {
   const { canvas, overlay, reduced } = options;
   let renderer: WebGLRenderer;
   try {
     renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: "low-power" });
   } catch {
-    return false;
+    return null;
   }
   renderer.setClearColor("#03060e");
+  renderer.autoClear = false;
 
+  // The stars are a backdrop with their own camera, which zooms by less than
+  // the planet's: a far-off sky the planet pulls back against.
+  const backdropScene = new Scene();
+  const backdropCamera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+  backdropCamera.position.set(0, 0, 100);
   const scene = new Scene();
   const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
   camera.position.set(0, 0, 100);
 
   const starPoints = stars();
   const backdrop = milkyWay();
-  const earth = planet();
+  const earth = globe();
   const coasts = coastlines();
   const air = atmosphere();
   const beam = stationWindow();
@@ -529,12 +570,17 @@ export function createScene(options: SceneOptions): boolean {
   satellites.frustumCulled = false;
 
   // drawn back to front
-  const layers = [backdrop, starPoints, earth, coasts, air, ...bands(), beam, trails, station, satellites];
+  backdrop.renderOrder = 0;
+  starPoints.renderOrder = 1;
+  backdropScene.add(backdrop, starPoints);
+  const bandRings = bands();
+  const layers = [earth, coasts, air, bandRings, beam, trails, station, satellites];
   layers.forEach((layer, i) => {
     layer.renderOrder = i;
-    if (layer !== starPoints && layer !== backdrop && layer !== earth && layer !== coasts) layer.position.z = 8;
+    if (layer !== earth && layer !== coasts) layer.position.z = 8;
     scene.add(layer);
   });
+  const sized = [air, bandRings, beam].map((layer) => (layer.material as ShaderMaterial).uniforms.radius);
 
   // ── the labels over the canvas ──
   const bandLabels = (Object.values(BANDS) as (typeof BANDS)[Band][]).map((band) => {
@@ -572,6 +618,72 @@ export function createScene(options: SceneOptions): boolean {
   let half = 1; // half the view's width, in scene units
   let top = TOP;
   let bottom = 0;
+  let planet = PLANET;
+  // 0 is the horizon over the station, 1 the whole planet
+  let zoom = 0;
+  let zoomFrom = 0;
+  let zoomTo = 0;
+  let zoomStart = 0;
+
+  // The view at a zoom level: the planet's size and the camera's edges.
+  function frameAt(level: number) {
+    const aspect = width / height;
+    const size = PLANET + (WHOLE - PLANET) * level;
+    // the horizon: the limb along the bottom, the bands just over it
+    const sky = display(BANDS.high.maxRadius, size) + 0.4;
+    const minHalf = display(BANDS.mid.minRadius, size) * Math.sin(MIN_HALF_ANGLE);
+    const minHalfHeight = (sky - (size - GROUND)) / 2;
+    const horizonHalf = Math.max(minHalf, minHalfHeight * aspect) / aspect;
+    const spare = 2 * horizonHalf - 2 * minHalfHeight;
+    const horizonCentre = sky + spare * SPARE_SKY - horizonHalf;
+    // the whole planet, centred, with every orbit in view
+    const fit = display(BANDS.high.maxRadius, size) + 0.3;
+    const wholeHalf = aspect >= 1 ? fit : fit / aspect;
+    // move the centre evenly, but scale the size geometrically, so the zoom
+    // feels steady
+    const centre = horizonCentre * (1 - level);
+    const halfHeight = horizonHalf * (wholeHalf / horizonHalf) ** level;
+    return { size, half: halfHeight * aspect, top: centre + halfHeight, bottom: centre - halfHeight };
+  }
+
+  // Puts the camera, the planet and the fixed labels where a zoom level has them.
+  function apply(level: number) {
+    ({ size: planet, half, top, bottom } = frameAt(level));
+    Object.assign(camera, { left: -half, right: half, top, bottom });
+    camera.updateProjectionMatrix();
+    // the stars are far away, so they follow the camera only part of the way
+    const near = frameAt(0);
+    const far = frameAt(1);
+    const depth = ((far.top - far.bottom) / (near.top - near.bottom)) ** (level * STAR_DEPTH);
+    const nearCentre = (near.top + near.bottom) / 2;
+    const centre = nearCentre + ((far.top + far.bottom) / 2 - nearCentre) * level * STAR_DEPTH * 0.3;
+    const reach = ((near.top - near.bottom) / 2) * depth;
+    Object.assign(backdropCamera, {
+      left: -near.half * depth,
+      right: near.half * depth,
+      top: centre + reach,
+      bottom: centre - reach,
+    });
+    backdropCamera.updateProjectionMatrix();
+    const scale = planet / PLANET;
+    earth.scale.setScalar(scale);
+    coasts.scale.setScalar(scale);
+    for (const uniform of sized) uniform.value = planet;
+    (air.material as ShaderMaterial).uniforms.thickness.value = Math.sqrt(scale);
+    station.position.y = planet - PLANET;
+    // band names on their arcs at the right-hand edge; zoomed out the bands
+    // sit too close together to name, so the names fade away
+    for (const { band, el } of bandLabels) {
+      el.style.opacity = String(Math.max(0, 1 - level * 2));
+      const r = display((band.minRadius + band.maxRadius) / 2, planet);
+      const x = Math.min(half * 0.96, r * Math.cos(0.3));
+      const [sx, sy] = screen(x, Math.sqrt(r * r - x * x));
+      el.style.transform = `translate(${sx}px, ${sy}px) translate(-100%, -50%)`;
+    }
+    const [sx, sy] = screen(0, planet);
+    stationLabel.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, 0.6rem)`;
+    measure();
+  }
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -582,34 +694,19 @@ export function createScene(options: SceneOptions): boolean {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     renderer.setPixelRatio(ratio);
     renderer.setSize(width, height, false);
-    const aspect = width / height;
-    const minHalf = display(BANDS.mid.minRadius) * Math.sin(MIN_HALF_ANGLE);
-    const minHalfHeight = (TOP - (PLANET - GROUND)) / 2;
-    half = Math.max(minHalf, minHalfHeight * aspect);
-    const spare = (2 * half) / aspect - 2 * minHalfHeight;
-    top = TOP + spare * SPARE_SKY;
-    bottom = top - (2 * half) / aspect;
-    Object.assign(camera, { left: -half, right: half, top, bottom });
-    camera.updateProjectionMatrix();
     for (const layer of [starPoints, satellites, station]) {
       (layer.material as ShaderMaterial).uniforms.ratio.value = ratio;
     }
-    const zoom = width / (2 * half) / STAR_SCALE;
-    (starPoints.material as ShaderMaterial).uniforms.density.value = Math.min(1, zoom * zoom);
-    // band names at the right-hand edge, on their arcs
-    for (const { band, el } of bandLabels) {
-      const r = display((band.minRadius + band.maxRadius) / 2);
-      const [x, y] = screen(half * 0.96, Math.sqrt(r * r - (half * 0.96) ** 2));
-      el.style.transform = `translate(${x}px, ${y}px) translate(-100%, -50%)`;
-    }
-    const [sx, sy] = screen(0, PLANET);
-    stationLabel.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, 0.6rem)`;
-    measure();
+    // stars are thinned for the horizon view's scale
+    const density = width / (2 * frameAt(0).half) / STAR_SCALE;
+    (starPoints.material as ShaderMaterial).uniforms.density.value = Math.min(1, density * density);
+    apply(zoom);
   }
 
   // Label sizes, read again once the webfont has loaded.
   function measure() {
-    fixed = [...bandLabels.map(({ el }) => el), stationLabel].map(boxOf);
+    const named = bandLabels.filter(({ el }) => el.style.opacity !== "0").map(({ el }) => el);
+    fixed = [...named, stationLabel].map(boxOf);
     for (const entry of labels.values()) entry.width = entry.el.offsetWidth;
   }
   document.fonts?.ready.then(measure);
@@ -695,7 +792,14 @@ export function createScene(options: SceneOptions): boolean {
     if (width === 0 || height === 0) return;
     const time = options.now();
 
-    const margin = TRAIL_MAX * display(BANDS.high.maxRadius);
+    if (zoom !== zoomTo) {
+      const t = reduced ? 1 : Math.min(1, (performance.now() - zoomStart) / ZOOM_MS);
+      const eased = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+      zoom = t === 1 ? zoomTo : zoomFrom + (zoomTo - zoomFrom) * eased;
+      apply(zoom);
+    }
+
+    const margin = TRAIL_MAX * display(BANDS.high.maxRadius, planet);
     placed.length = 0;
     ids.clear();
     let mine: Placed | null = null;
@@ -704,7 +808,7 @@ export function createScene(options: SceneOptions): boolean {
       count++;
       ids.add(sat.id);
       const angle = angleAt(sat, time);
-      const [x, y] = place(sat.radius, angle);
+      const [x, y] = place(sat.radius, angle, planet);
       const p = { sat, angle, x, y, overhead: isOverhead(sat, time) };
       if (sat.mine) mine = p;
       if (Math.abs(x) <= half + margin && y > bottom) placed.push(p);
@@ -738,7 +842,7 @@ export function createScene(options: SceneOptions): boolean {
       const p = placed[s];
       const arc = Math.min(TRAIL_MAX, (TAU * TRAIL_MS) / p.sat.period);
       const c = colourOf(p.sat.id);
-      const d = display(p.sat.radius);
+      const d = display(p.sat.radius, planet);
       for (let i = 0; i < TRAIL_STEPS; i++) {
         const t = i / (TRAIL_STEPS - 1);
         const a = p.angle - t * arc;
@@ -766,6 +870,8 @@ export function createScene(options: SceneOptions): boolean {
     tg.getAttribute("tint").needsUpdate = true;
     tg.setDrawRange(0, placed.length * (TRAIL_STEPS - 1) * 6);
 
+    renderer.clear();
+    renderer.render(backdropScene, backdropCamera);
     renderer.render(scene, camera);
     // read the panels' boxes before any label is moved, so layout runs once
     const blocked = [...fixed, ...options.obstacles.map(boxOf)];
@@ -828,7 +934,7 @@ export function createScene(options: SceneOptions): boolean {
       pointer.hidden = true;
     } else {
       pointer.hidden = false;
-      const d = display(mine.sat.radius);
+      const d = display(mine.sat.radius, planet);
       const rise = Math.acos(Math.min(1, half / d));
       const gap = (rise - mine.angle + TAU) % TAU;
       const text = `‹ ${mine.sat.callsign} rises in ${countdown((gap / TAU) * mine.sat.period)}`;
@@ -854,5 +960,11 @@ export function createScene(options: SceneOptions): boolean {
   }
 
   requestAnimationFrame(frame);
-  return true;
+  return {
+    zoom(out: boolean) {
+      zoomFrom = zoom;
+      zoomTo = out ? 1 : 0;
+      zoomStart = performance.now();
+    },
+  };
 }

@@ -29,6 +29,7 @@ const count = (n: number) => `${n} satellite${n === 1 ? "" : "s"} in orbit`;
           aria-label={`The sky over the station: ${count(sky.length)}. Satellites rise on the left and set on the right.`}
         ></canvas>
         <div id="scene-labels" class="scene-labels" aria-hidden="true"></div>
+        <button type="button" id="zoom" class="zoom" hidden>See the whole sky</button>
         <noscript>
           <p class="no-view">The sky and the station need JavaScript. Everything in orbit is listed below.</p>
         </noscript>
@@ -221,6 +222,27 @@ const count = (n: number) => `${n} satellite${n === 1 ? "" : "s"} in orbit`;
       transform: scale(1.3);
       opacity: 0;
     }
+  }
+
+  .sky-page .zoom {
+    position: absolute;
+    top: 1.25rem;
+    right: var(--gutter);
+    padding: 0.5rem 0.85rem;
+    border: 1px solid var(--grid-strong);
+    border-radius: 4px;
+    background: rgb(6 11 24 / 0.72);
+    backdrop-filter: blur(6px);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--step--1);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .sky-page .zoom:hover {
+    border-color: var(--amber-dim);
+    color: var(--amber);
   }
 
   .sky-page .panels {

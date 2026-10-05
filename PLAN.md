@@ -19,7 +19,9 @@ _Last updated 2026-10-05._
 - **C9, in progress (branch `C9`):** the sky page redrawn with Three.js as a
   horizon view from Advay's sketch (ADR 0005, proposed): the limb, stars, the
   bands over the horizon, satellites crossing with trails and labels, the
-  station panel over the scene, the catalogue below. Uncommitted.
+  station panel over the scene, the catalogue below (`f8f7003`). Then a
+  zoom-out to the whole planet, so the rest of the sky (and C9's collisions)
+  can be seen.
 - **C8 cutoff:** Tue 6 Oct 2026, 12:00 (moved from Monday for Labour Day).
 - **Next, in order:**
   1. Advay rewrites the agent's README draft (`README.md`, published at

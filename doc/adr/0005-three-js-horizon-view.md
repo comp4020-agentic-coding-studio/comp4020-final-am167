@@ -39,8 +39,13 @@ camera; keep the simulation 2D.**
 
 - The view is a fixed window on the limb around the station. Satellites rise
   on the left, cross the station's window (an amber wedge) and set on the
-  right; out of view, they are only in the catalogue. Your own satellite gets a
-  pointer at the left edge with a countdown to when it rises.
+  right. Your own satellite gets a pointer at the left edge with a countdown
+  to when it rises.
+- **A button zooms out to the whole planet** (added 2026-10-05, after the
+  first review showed most of the sky is out of view). The planet shrinks to
+  the chart's own size while orbits keep their heights, so it's one
+  continuous zoom, and the stars follow it with parallax, as a far-off sky. Zoomed out, every
+  satellite, its trail and (in C9) every collision is in view.
 - The planet is drawn six chart units across while orbits keep their heights
   above it, so the bands sit close over a gently curved horizon. The display
   is a mirror image of the chart's plane, so motion reads left to right.
@@ -55,10 +60,9 @@ camera; keep the simulation 2D.**
 
 ## Consequences
 
-- Most of an orbit is out of view, so a sparse sky can look empty for a while.
-  The station panel still names the next satellite overhead, and your own has
-  its pointer, but this is the cost of the framing and worth watching once real
-  people use it.
+- Over the station, most of an orbit is out of view, so a sparse sky can look
+  empty for a while. The zoom-out answers this, and it's where collisions
+  elsewhere in the sky can be seen.
 - The page is heavier: about 185 kB gzipped of JavaScript for the scene, plus
   the GPU work of drawing it. On a phone the scene is shorter and draws fewer
   stars.

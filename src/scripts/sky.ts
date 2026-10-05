@@ -53,9 +53,18 @@ import("./scene.ts")
       now: serverNow,
       launched: initial.launched,
       reduced,
-      obstacles: [document.querySelector<HTMLElement>(".sky-page .panels")!],
+      obstacles: [document.querySelector<HTMLElement>(".sky-page .panels")!, document.getElementById("zoom")!],
     });
-    if (!started) noScene();
+    if (!started) return noScene();
+    // over the station, or the whole planet with every orbit in view
+    const zoom = document.getElementById("zoom") as HTMLButtonElement;
+    let out = false;
+    zoom.hidden = false;
+    zoom.addEventListener("click", () => {
+      out = !out;
+      started.zoom(out);
+      zoom.textContent = out ? "Back to the station" : "See the whole sky";
+    });
   })
   // the chunk didn't load (offline, or a deploy replaced it), or the scene
   // failed to start

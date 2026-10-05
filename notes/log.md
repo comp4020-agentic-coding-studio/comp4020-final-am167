@@ -204,7 +204,11 @@ developers (more for `PROCESS.md`). I'll read them before citing any.
 Started branch `C9`. I sketched a new sky view: the planet's limb along the
 bottom, a realistic star background, the bands (high, medium, low) stacked over
 the horizon, a satellite crossing with a trail and its name, and the "Over the
-station" panel floating top-left. The agent asked four questions first. I
+station" panel floating top-left.
+
+![My sketch for the C9 sky: the limb at the bottom, "realistic star background", high/medium/low bands on the right, one example satellite with a trail, and the "Over the Station" panel top-left](screenshots/2026-10-05-sky-horizon-sketch.png)
+
+The agent asked four questions first. I
 chose the horizon window (only the arc around the station is in view), a
 stylised night Earth over a textured one, labels on every satellite but hidden
 when they crowd, and the catalogue below the scene.
@@ -258,4 +262,31 @@ Left as judgement calls for me: a **sparse sky can look empty** (only about
 7–15% of each orbit is in view, so with a few satellites the scene is often
 bare); and the pointer's "rises in" counts to the view's edge while the panel
 counts to the station's window, so they differ by a few seconds. Checks green
-(typecheck, 37 specs). Uncommitted.
+(typecheck, 37 specs). Committed as `f8f7003` on branch `C9`.
+
+## 2026-10-05 — C9: zooming out to the whole planet
+
+Asked what in the horizon view needed my review, the agent raised that most
+collisions in C9 would happen out of view, and that the "Some Light" trails
+are mostly off screen too. I chose a zoomed-out view to answer both.
+
+A "See the whole sky" button zooms out; "Back to the station" zooms in. The
+planet shrinks from six chart units to the chart's own size while every orbit
+keeps its height above the surface, so it's one continuous move rather than a
+cut, and the camera's size is scaled geometrically so the zoom feels steady.
+The stars moved to their own camera, which at first stayed still while the
+planet zoomed; I didn't like the static background during the transition, so
+the stars now follow the zoom half as far as the planet does (parallax), like
+a far-off sky. Bands, the airglow and the station's
+wedge became shaders drawn by height above the planet, so they follow it as it
+shrinks. The coastline bake now covers the whole near hemisphere (coarser
+outside the station's region; 68 kB gzipped). Reduced motion jumps straight to
+the other view.
+
+![Zoomed out: the whole planet, every orbit and trail in view, the station's wedge at the top](screenshots/2026-10-05-sky-whole-planet.png)
+
+Fixed after checking it in Chrome: zoomed out, the airglow became a thick
+halo around the small planet (it now thins with the planet's size), the band
+names piled up on top of each other on a phone (they fade out as you zoom
+out), and the zoom button hid a label on mobile (labels now keep clear of it).
+ADR 0005 (still proposed) now records the zoom.
