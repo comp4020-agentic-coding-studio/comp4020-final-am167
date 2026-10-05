@@ -311,3 +311,54 @@ orbit still has a longer period. It failed (100% inside, no `bandReach`),
 then passed. The drawn bands went from a faint fill with hairline edges to a
 soft glow following the same curve; my first glow was too faint to see in
 Chrome, so it was brightened. Checks green (45 tests).
+
+Soft band edges committed as `baf5342`.
+
+## 2026-10-05 — The table leaves the sky page
+
+I didn't like the big table under the sky: too much scrolling, and debris in
+C9 would make it far longer. The agent offered three layouts (a summary on
+the sky page with the full catalogue on its own page, a drawer over the
+scene, or tabs in the station panel); I chose the first.
+
+- **`/sky/`** now ends with a "Sky now" card under "Over the station":
+  the total, counts per band, the six latest launches (newest first, kept live
+  over the stream) and links to the catalogue and the launchpad. On desktop
+  the page is exactly one screen; a crowded pass scrolls inside the station
+  panel instead of pushing the card down.
+- **`/catalogue/`** is the full record: callsign, band, launched and status,
+  in orbit or everything ever launched, picked by a plain link so it works
+  without JavaScript. It's in the site nav, and ready for debris rows.
+
+Tests first: new `spec/sky.test.ts` (counts per band match the page's own
+sky data, the latest launches are newest first and carry no beacons, the
+sky page has no table and links to the catalogue; the catalogue lists and
+marks yours, and has the "everything" view). The C8 specs that read the
+sky page's table rows now read the catalogue's; the person-id check covers
+both pages. Seven failed for the expected reasons, then all 50 passed. Fixed
+after checking in Chrome: the counts line ran together ("orbit:Low 51 ·Mid"),
+now three small tiles, and the desktop page scrolled 4px past the screen.
+
+## 2026-10-05 — A station panel that holds still
+
+Reviewing that in the browser, I found two things jarring: "Over the station"
+grew and shrank every time a satellite rose or set (it scrolled inside up to
+16rem, and the card below jumped with it), and after a launch the "in orbit"
+notice pushed the Sky now card off the bottom of the screen.
+
+- The station panel is now a **fixed height**: three beacon slots (callsign
+  plus at most two lines of beacon), a small "N overhead" line, and a
+  reserved line for yours. With more than three overhead it **pages** through
+  them every 4s ("4–6 of 9 overhead"), sorted by id so pages don't reshuffle,
+  and each new page fades in. Measured in Chrome over twelve seconds of
+  paging: the panel stayed at exactly 304px (366px with yours).
+- The launched notice is a **toast** over the top of the scene, so it never
+  moves the panels; it fades after 6s. On a phone it stays in the page flow.
+- On shorter desktop screens the Sky now card gives things up rather than
+  overflow: latest launches cut to three below 56rem tall, gone below 46rem,
+  band tiles gone below 40rem. No page scroll at 1920×1080, 1440×800 (with
+  the toast) or 1280×680; on an iPhone 14 the panels stack under the scene as
+  before.
+
+No new spec: this is layout, which the HTTP suite can't see. Checks green
+(50 tests).

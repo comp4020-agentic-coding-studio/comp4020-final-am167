@@ -1,4 +1,4 @@
-import { and, count, eq, max, ne } from "drizzle-orm";
+import { and, count, desc, eq, max, ne, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { publish } from "./events.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
@@ -48,6 +48,45 @@ const columns = {
 
 export function liveSky(): SkyObject[] {
   return db.select(columns).from(objects).where(eq(objects.fate, "live")).orderBy(objects.id).all();
+}
+
+// A catalogue row: an object, whether it's still up, and when it came down.
+export interface CatalogueEntry {
+  id: number;
+  callsign: string | null;
+  band: Band;
+  launchedAt: number;
+  fate: "live" | "decayed" | "deorbited" | "destroyed";
+  fateAt: number | null;
+  mine: boolean;
+}
+
+// The record (ADR 0003): what's in orbit now, or everything ever launched,
+// newest first. Owners stay on the server; a row only says if it's yours.
+export function catalogue(show: "live" | "all", person: string | undefined): CatalogueEntry[] {
+  const rows = db
+    .select({
+      id: objects.id,
+      owner: objects.owner,
+      callsign: objects.callsign,
+      band: objects.band,
+      launchedAt: objects.launchedAt,
+      fate: objects.fate,
+      fateAt: objects.fateAt,
+    })
+    .from(objects)
+    .where(show === "live" ? eq(objects.fate, "live") : undefined)
+    .orderBy(desc(objects.launchedAt), desc(objects.id))
+    .all();
+  return rows.map(({ owner, ...row }) => ({ ...row, mine: owner !== null && owner === person }));
+}
+
+export function catalogueCounts(): { live: number; all: number } {
+  const row = db
+    .select({ all: count(), live: sql<number>`sum(${objects.fate} = 'live')` })
+    .from(objects)
+    .get();
+  return { live: Number(row?.live ?? 0), all: row?.all ?? 0 };
 }
 
 type LaunchResult = { ok: true; object: SkyObject } | { ok: false; errors: LaunchErrors };

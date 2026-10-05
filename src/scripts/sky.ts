@@ -38,7 +38,7 @@ const hue = (id: number) => (id * 137.508) % 360;
 // ── the scene ─────────────────────────────────────────────────────────────
 
 // Three.js is most of the page's weight, so it loads on its own while the
-// station and the catalogue start working.
+// station and the summary start working.
 const canvas = document.getElementById("chart") as HTMLCanvasElement;
 const noScene = () => {
   canvas.hidden = true;
@@ -53,7 +53,11 @@ import("./scene.ts")
       now: serverNow,
       launched: initial.launched,
       reduced,
-      obstacles: [document.querySelector<HTMLElement>(".sky-page .panels")!, document.getElementById("zoom")!],
+      obstacles: [
+        document.querySelector<HTMLElement>(".sky-page .panels")!,
+        document.getElementById("zoom")!,
+        ...(document.getElementById("launched-notice") ? [document.getElementById("launched-notice")!] : []),
+      ],
     });
     if (!started) return noScene();
     // over the station, or the whole planet with every orbit in view
@@ -73,9 +77,15 @@ import("./scene.ts")
 // ── what the station hears ────────────────────────────────────────────────
 
 const overheadList = document.getElementById("overhead")!;
+const overheadCount = document.getElementById("overhead-count")!;
 const nextPass = document.getElementById("next-pass")!;
 const yourPass = document.getElementById("your-pass");
 let heard = "";
+
+// The panel has room for three beacons. When more are overhead it pages
+// through them, so every one is still heard while the panel keeps its size.
+const SLOTS = 3;
+const PAGE_MS = 4000;
 
 // How long until a satellite next enters the station's window.
 function untilOverhead(sat: Satellite, time: number): number {
@@ -85,12 +95,21 @@ function untilOverhead(sat: Satellite, time: number): number {
 
 function listen() {
   const time = serverNow();
-  const over = [...sky.values()].filter((s) => isOverhead(s, time));
-  const key = over.map((s) => s.id).join(",");
+  const over = [...sky.values()].filter((s) => isOverhead(s, time)).sort((a, b) => a.id - b.id);
+  const pages = Math.ceil(over.length / SLOTS);
+  const page = pages > 1 ? Math.floor(Date.now() / PAGE_MS) % pages : 0;
+  const shown = over.slice(page * SLOTS, page * SLOTS + SLOTS);
+  overheadCount.textContent =
+    over.length === 0
+      ? "\u00a0"
+      : pages > 1
+        ? `${page * SLOTS + 1}–${page * SLOTS + shown.length} of ${over.length} overhead`
+        : `${over.length} overhead`;
+  const key = shown.map((s) => s.id).join(",");
   if (key !== heard) {
     heard = key;
     overheadList.replaceChildren(
-      ...over.map((s) => {
+      ...shown.map((s) => {
         const li = document.createElement("li");
         const name = document.createElement("span");
         name.className = "callsign";
@@ -126,46 +145,48 @@ function listen() {
 setInterval(listen, 250);
 listen();
 
-// ── the catalogue ─────────────────────────────────────────────────────────
+// The "in orbit" notice after a launch floats over the scene; it fades after
+// a few seconds (on a phone it sits in the page and stays).
+const notice = document.getElementById("launched-notice");
+if (notice && getComputedStyle(notice).position === "absolute") {
+  setTimeout(() => notice.classList.add("fading"), 6000);
+  notice.addEventListener("transitionend", () => (notice.hidden = true));
+}
 
-const rows = document.getElementById("rows")!;
-const table = document.getElementById("catalogue")!;
+// ── the summary: counts per band and the latest launches ──────────────────
+
+const recentList = document.getElementById("recent")!;
 const empty = document.getElementById("empty")!;
 const count = document.getElementById("count")!;
+const RECENT = Number(document.querySelector<HTMLElement>(".summary")!.dataset.recent);
 
-function row(sat: Satellite): HTMLTableRowElement {
-  const tr = document.createElement("tr");
-  tr.dataset.id = String(sat.id);
-  if (sat.mine) tr.className = "mine";
-  const th = document.createElement("th");
-  th.scope = "row";
+function recentItem(sat: Satellite): HTMLLIElement {
+  const li = document.createElement("li");
+  if (sat.mine) li.className = "mine";
   const swatch = document.createElement("span");
   swatch.className = "swatch";
   swatch.style.setProperty("--hue", String(hue(sat.id)));
-  th.append(swatch, sat.callsign);
-  if (sat.mine) {
-    const yours = document.createElement("span");
-    yours.className = "yours";
-    yours.textContent = " (yours)";
-    th.append(yours);
-  }
-  const band = document.createElement("td");
-  band.textContent = BANDS[sat.band].label;
-  const when = document.createElement("td");
+  const what = document.createElement("span");
+  const name = document.createElement("strong");
+  name.textContent = sat.callsign;
+  what.append(name, `${sat.mine ? " (yours)" : ""} to ${BANDS[sat.band].label}`);
   const time = document.createElement("time");
   time.dateTime = new Date(sat.launchedAt).toISOString();
   time.textContent = ago(serverNow() - sat.launchedAt);
-  when.append(time);
-  tr.append(th, band, when);
-  return tr;
+  li.append(swatch, what, time);
+  return li;
 }
 
-function renderCatalogue() {
+function renderSummary() {
   const sats = [...sky.values()].sort((a, b) => b.launchedAt - a.launchedAt);
-  rows.replaceChildren(...sats.map(row));
+  recentList.replaceChildren(...sats.slice(0, RECENT).map(recentItem));
   const n = sats.length;
   count.textContent = `${n} satellite${n === 1 ? "" : "s"} in orbit`;
-  table.hidden = n === 0;
+  for (const band of Object.keys(BANDS) as Band[]) {
+    document.querySelector(`[data-band-count="${band}"]`)!.textContent = String(
+      sats.filter((s) => s.band === band).length,
+    );
+  }
   empty.hidden = n > 0;
   canvas.setAttribute(
     "aria-label",
@@ -175,7 +196,7 @@ function renderCatalogue() {
 
 // keep "5 min ago" honest
 setInterval(() => {
-  for (const time of rows.querySelectorAll("time")) {
+  for (const time of recentList.querySelectorAll("time")) {
     time.textContent = ago(serverNow() - Date.parse(time.dateTime));
   }
 }, 30_000);
@@ -199,14 +220,14 @@ function connect() {
     offset = hello.serverTime - Date.now();
     sky.clear();
     for (const sat of hello.sky) sky.set(sat.id, sat);
-    renderCatalogue();
+    renderSummary();
     setConnection("live");
   });
 
   stream.addEventListener("launch", (event) => {
     const sat = JSON.parse(event.data) as Satellite;
     sky.set(sat.id, sat);
-    renderCatalogue();
+    renderSummary();
   });
 
   stream.addEventListener("error", () => {
