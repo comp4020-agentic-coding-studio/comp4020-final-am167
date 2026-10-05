@@ -18,7 +18,7 @@ import {
   Vector2,
   WebGLRenderer,
 } from "three";
-import { BANDS, OVERHEAD_HALF_WIDTH, STATION_ANGLE, angleAt, isOverhead, type Band, type Orbit } from "../lib/orbit.ts";
+import { BAND_SPREAD, BANDS, OVERHEAD_HALF_WIDTH, STATION_ANGLE, angleAt, isOverhead, type Band, type Orbit } from "../lib/orbit.ts";
 import coastline from "./coastline.json";
 import { countdown } from "./countdown.ts";
 
@@ -377,8 +377,9 @@ function atmosphere(): Mesh {
 
 // ── the chart over the horizon: bands and the station's window ────────────
 
-// Each band is a faint ring with a hairline at either edge, drawn by height
-// above the planet so it follows the planet as the view zooms.
+// Each band is a soft glow, brightest at its middle and fading past its
+// edges the way launches spread (orbit.ts), drawn by height above the planet
+// so it follows the planet as the view zooms.
 function bands(): Mesh {
   const geometry = new RingGeometry(WHOLE * 0.5, display(BANDS.high.maxRadius) + 0.5, 512, 1);
   const material = new ShaderMaterial({
@@ -386,6 +387,7 @@ function bands(): Mesh {
       colour: { value: new Color("#3a5781") },
       radius: { value: PLANET },
       ranges: { value: Object.values(BANDS).map((b) => new Vector2(b.minRadius - 1, b.maxRadius - 1)) },
+      spread: { value: BAND_SPREAD },
     },
     vertexShader: /* glsl */ `
       varying vec2 vPos;
@@ -397,18 +399,18 @@ function bands(): Mesh {
       uniform vec3 colour;
       uniform float radius;
       uniform vec2 ranges[3];
+      uniform float spread;
       varying vec2 vPos;
       void main() {
         float h = length(vPos) - radius;
-        float pixel = fwidth(h);
         float a = 0.0;
         for (int i = 0; i < 3; i++) {
           vec2 r = ranges[i];
-          if (h > r.x && h < r.y) a = max(a, 0.025);
-          float edge = min(abs(h - r.x), abs(h - r.y)) / pixel;
-          a = max(a, (1.0 - smoothstep(0.5, 1.5, edge)) * 0.3);
+          float sigma = (r.y - r.x) / 2.0 / spread;
+          float z = (h - (r.x + r.y) / 2.0) / sigma;
+          a = max(a, exp(-0.5 * z * z) * 0.2);
         }
-        if (a <= 0.0) discard;
+        if (a < 0.002) discard;
         gl_FragColor = vec4(colour, a);
         #include <colorspace_fragment>
       }`,

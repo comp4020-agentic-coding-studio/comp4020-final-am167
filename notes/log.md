@@ -290,3 +290,24 @@ halo around the small planet (it now thins with the planet's size), the band
 names piled up on top of each other on a phone (they fade out as you zoom
 out), and the zoom button hid a label on mobile (labels now keep clear of it).
 ADR 0005 (still proposed) now records the zoom.
+
+The zoom-out above was committed as `9cc3927`.
+
+## 2026-10-05 — Soft band edges
+
+Before starting collisions, I asked for randomness in the low/mid/high
+boundaries: zoomed out, the satellites sat in three neat rings with clean
+gaps. Now a launch's radius comes from a bell curve around the band's middle
+(Box–Muller, cut off and redrawn outside the band's reach), so most land
+mid-band and about one in eight strays past the band's edges. The reach stops
+short of the neighbouring bands, so a launch never lands in the band next door.
+That matters for collisions next: in a flat sky of circular orbits, two
+objects can only meet if their radii nearly match.
+
+Test first (`spec/orbit.test.ts`, the first pure unit test): with a seeded
+random source, 70–97% of launches land inside the band, some on each side of
+it, none outside the reach, the bands' reaches don't overlap, and a higher
+orbit still has a longer period. It failed (100% inside, no `bandReach`),
+then passed. The drawn bands went from a faint fill with hairline edges to a
+soft glow following the same curve; my first glow was too faint to see in
+Chrome, so it was brightened. Checks green (45 tests).

@@ -48,13 +48,40 @@ export function isOverhead(orbit: Orbit, time: number): boolean {
   return Math.min(off, TAU - off) <= OVERHEAD_HALF_WIDTH;
 }
 
-// A new orbit somewhere in the band: the band sets the rough period, the
-// radius and phase are jittered so no two orbits are the same, and within a
-// band a higher orbit is slower (period grows with radius^1.5, as Kepler has it).
+// Bands have soft edges. A launch's radius is drawn from a bell curve around
+// the band's middle, wide enough that about one launch in eight strays past
+// the band's edges, and cut off at its reach: SPILL half-widths either side,
+// which keeps every band clear of its neighbours.
+//
+// The band's edges sit this many standard deviations from its middle,
+export const BAND_SPREAD = 1.5;
+// and its reach this many half-widths
+const SPILL = 1.6;
+
+export function bandReach(band: Band): { min: number; max: number } {
+  const { minRadius, maxRadius } = BANDS[band];
+  const middle = (minRadius + maxRadius) / 2;
+  const half = (maxRadius - minRadius) / 2;
+  return { min: middle - half * SPILL, max: middle + half * SPILL };
+}
+
+// A standard normal number, from two uniform ones (Box–Muller).
+function normal(random: () => number): number {
+  const u = 1 - random(); // never 0, so the log is finite
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * random());
+}
+
+// A new orbit in the band: the band sets the rough period, the radius and
+// phase are random so no two orbits are the same, and within a band a higher
+// orbit is slower (period grows with radius^1.5, as Kepler has it).
 export function placeInBand(band: Band, epoch: number, random = Math.random): Orbit {
   const { minRadius, maxRadius, period } = BANDS[band];
-  const radius = minRadius + random() * (maxRadius - minRadius);
   const middle = (minRadius + maxRadius) / 2;
+  const half = (maxRadius - minRadius) / 2;
+  const { min, max } = bandReach(band);
+  let radius: number;
+  do radius = middle + (normal(random) * half) / BAND_SPREAD;
+  while (radius < min || radius > max);
   return {
     radius,
     phase: random() * TAU,
