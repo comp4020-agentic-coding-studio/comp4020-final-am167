@@ -28,8 +28,14 @@ const nameOf = (o: { kind: Kind; callsign: string | null }) =>
 const listed = (names: string[]) =>
   names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 
-// "ALPHA and BRAVO's collision": where debris came from
-export const collisionOf = (roots: readonly StoryRoot[]) => `${listed(roots.map(nameOf))}'s collision`;
+// "ALPHA and BRAVO's collision": where debris came from. A cascade can trace
+// back to many: three are named, then "and 5 others'".
+export function collisionOf(roots: readonly StoryRoot[]): string {
+  const names = roots.map(nameOf);
+  if (names.length <= 3) return `${listed(names)}'s collision`;
+  const rest = names.length - 3;
+  return `${names.slice(0, 3).join(", ")} and ${rest} ${rest === 1 ? "other's" : "others'"} collision`;
+}
 
 // "debris from ALPHA and BRAVO's collision"
 const debrisPhrase = (party: Pick<StoryParty, "from">) =>

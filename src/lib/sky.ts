@@ -4,9 +4,9 @@ import { fatalMeeting, fragmentsOf, impactOf, nextMeeting } from "./collide.ts";
 import { listening, publish } from "./events.ts";
 import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
-import { BANDS, STATION_ANGLE, bandAt, periodAt, placeInBand, reentryAt, type Band, type Orbit } from "./orbit.ts";
+import { BANDS, STATION_ANGLE, bandAt, periodAt, placeInBand, radiusAt, reentryAt, type Band, type Orbit } from "./orbit.ts";
 
-const { objects, collisions } = schema;
+const { objects, collisions, operators } = schema;
 
 // How long between one person's launches (PLAN.md, "Launch limits"). There's
 // no limit on how many you have up: each launch is another beacon heard, and
@@ -543,6 +543,8 @@ export interface CatalogueEntry extends Orbit {
   sourceCollision: number | null;
   fate: "live" | "decayed" | "deorbited" | "destroyed";
   fateAt: number | null;
+  // its operator's handle, if it has one (ADR 0009)
+  handle: string | null;
   mine: boolean;
   // its lineage (ADR 0003): for debris, the satellites at the root of the
   // collision it came from; for anything destroyed, what it collided with
@@ -550,19 +552,89 @@ export interface CatalogueEntry extends Orbit {
   collidedWith: Party | null;
 }
 
-// The most rows the catalogue shows at once (its newest).
-export const CATALOGUE_MAX = 500;
+// How to look at the record: which objects, in what order, which page.
+// Read from the page's address, so every view can be linked to and the
+// form works without JavaScript.
+export type Fate = CatalogueEntry["fate"];
+export const SORTS = ["launched", "name", "kind", "band", "height", "status", "operator"] as const;
+export type Sort = (typeof SORTS)[number];
+export interface CatalogueQuery {
+  show: "live" | "all";
+  kind: Kind | null;
+  band: Band | null;
+  // only with show "all": live is what "In orbit" shows
+  fate: Fate | null;
+  // a callsign or an operator's handle, or part of one
+  q: string;
+  mine: boolean;
+  sort: Sort;
+  dir: "asc" | "desc";
+  page: number;
+  per: number;
+}
 
-// The record (ADR 0003): what's in orbit now, or everything ever launched,
-// newest first. Owners stay on the server; a row only says if it's yours.
-export function catalogue(show: "live" | "all", who: Who): CatalogueEntry[] {
-  settle();
+export const PER_PAGE = 100;
+const PER_MAX = 200;
+// which way each column sorts first: names A to Z, newest launches first
+export const FIRST_DIR: Record<Sort, "asc" | "desc"> = {
+  launched: "desc",
+  name: "asc",
+  kind: "asc",
+  band: "asc",
+  height: "asc",
+  status: "asc",
+  operator: "asc",
+};
+
+const oneOf = <T extends string>(value: string | null, options: readonly T[]): T | null =>
+  value !== null && (options as readonly string[]).includes(value) ? (value as T) : null;
+
+export function readCatalogueQuery(params: URLSearchParams): CatalogueQuery {
+  const show = params.get("show") === "all" ? "all" : "live";
+  const sort = oneOf(params.get("sort"), SORTS) ?? "launched";
+  const whole = (value: string | null, fallback: number, min: number, max: number) => {
+    const n = Math.floor(Number(value));
+    return Number.isFinite(n) && n >= min ? Math.min(n, max) : fallback;
+  };
+  return {
+    show,
+    kind: oneOf(params.get("kind"), ["satellite", "derelict", "debris"] as const),
+    band: oneOf(params.get("band"), Object.keys(BANDS) as Band[]),
+    fate: show === "all" ? oneOf(params.get("fate"), ["live", "decayed", "deorbited", "destroyed"] as const) : null,
+    q: (params.get("q") ?? "").trim().slice(0, 40),
+    mine: params.get("mine") === "1",
+    sort,
+    dir: oneOf(params.get("dir"), ["asc", "desc"] as const) ?? FIRST_DIR[sort],
+    page: whole(params.get("page"), 1, 1, 1_000_000),
+    per: whole(params.get("per"), PER_PAGE, 1, PER_MAX),
+  };
+}
+
+export const DEFAULT_QUERY: CatalogueQuery = readCatalogueQuery(new URLSearchParams());
+
+export interface CataloguePage {
+  rows: CatalogueEntry[];
+  // how many match, and which of them this page holds (1-based, inclusive)
+  total: number;
+  from: number;
+  to: number;
+  pages: number;
+}
+
+// The record (ADR 0003), filtered, sorted and paged. Owners stay on the
+// server; a row only says if it's yours. Lineage is worked out for the
+// rows on the page only.
+export function browse(query: CatalogueQuery, who: Who, now = Date.now()): CataloguePage {
+  settle(now);
+  const pattern = `%${query.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const fate = query.show === "live" ? "live" : query.fate;
   const rows = db
     .select({
       id: objects.id,
       kind: objects.kind,
       owner: objects.owner,
       operator: objects.operator,
+      handle: operators.handle,
       callsign: objects.callsign,
       band: objects.band,
       launchedAt: objects.launchedAt,
@@ -576,19 +648,76 @@ export function catalogue(show: "live" | "all", who: Who): CatalogueEntry[] {
       sourceCollision: objects.sourceCollision,
     })
     .from(objects)
-    .where(show === "live" ? eq(objects.fate, "live") : undefined)
+    .leftJoin(operators, eq(objects.operator, operators.id))
+    .where(
+      and(
+        fate ? eq(objects.fate, fate) : undefined,
+        query.kind ? eq(objects.kind, query.kind) : undefined,
+        query.band ? eq(objects.band, query.band) : undefined,
+        query.mine ? ownerIs(who) : undefined,
+        query.q
+          ? sql`(${objects.callsign} LIKE ${pattern} ESCAPE '\\' OR ${operators.handle} LIKE ${pattern} ESCAPE '\\')`
+          : undefined,
+      ),
+    )
     .orderBy(desc(objects.launchedAt), desc(objects.id))
-    // the record only grows: the page shows the newest
-    .limit(CATALOGUE_MAX)
     .all();
+
+  // the sort, in memory: a height is worked out from the orbit, and names
+  // include the kind of what has none. Ties stay newest first.
+  const nameOf = (row: (typeof rows)[number]) =>
+    row.kind === "satellite" ? (row.callsign ?? "") : row.kind === "derelict" ? "Derelict" : "Fragment";
+  const up = (row: (typeof rows)[number]) => row.fate === "live";
+  const order = ["live", "destroyed", "decayed", "deorbited"];
+  const text = (a: string | null, b: string | null) =>
+    a === b ? 0 : a === null ? 1 : b === null ? -1 : a.localeCompare(b, "en", { sensitivity: "base" });
+  const keyed = rows.map((row) => ({ row, height: up(row) ? radiusAt(toObject(row), now) : null }));
+  const sign = query.dir === "asc" ? 1 : -1;
+  const compare = (x: (typeof keyed)[number], y: (typeof keyed)[number]): number => {
+    switch (query.sort) {
+      case "launched":
+        return sign * (x.row.launchedAt - y.row.launchedAt);
+      case "name":
+        return sign * text(nameOf(x.row), nameOf(y.row));
+      case "kind":
+        return sign * text(x.row.kind, y.row.kind);
+      case "band":
+        return sign * (Object.keys(BANDS).indexOf(x.row.band) - Object.keys(BANDS).indexOf(y.row.band));
+      case "height":
+        // nothing gone has a height: always last
+        if (x.height === null || y.height === null) return x.height === y.height ? 0 : x.height === null ? 1 : -1;
+        return sign * (x.height - y.height);
+      case "status":
+        return sign * (order.indexOf(x.row.fate) - order.indexOf(y.row.fate) || (y.row.fateAt ?? 0) - (x.row.fateAt ?? 0));
+      case "operator":
+        // anyone without a handle comes last
+        if (x.row.handle === null || y.row.handle === null) return text(x.row.handle, y.row.handle);
+        return sign * text(x.row.handle, y.row.handle);
+    }
+  };
+  keyed.sort((x, y) => compare(x, y) || y.row.launchedAt - x.row.launchedAt || y.row.id - x.row.id);
+
+  const total = keyed.length;
+  const pages = Math.max(1, Math.ceil(total / query.per));
+  const page = Math.min(query.page, pages);
+  const shown = keyed.slice((page - 1) * query.per, page * query.per).map(({ row }) => row);
+
   // each collision's roots once, however many fragments it made
   const roots = new Map<number, Root[]>();
   const rootsFor = (collision: number) => roots.get(collision) ?? roots.set(collision, rootsOf(collision)).get(collision)!;
-  // what each destroyed object met
+  // what each destroyed object on the page met
+  const destroyed = shown.filter((row) => row.fate === "destroyed").map((row) => row.id);
   const met = new Map<number, number>();
-  for (const c of db.select({ a: collisions.a, b: collisions.b }).from(collisions).all()) {
-    met.set(c.a, c.b);
-    met.set(c.b, c.a);
+  if (destroyed.length > 0) {
+    const hits = db
+      .select({ a: collisions.a, b: collisions.b })
+      .from(collisions)
+      .where(sql`${collisions.a} IN ${destroyed} OR ${collisions.b} IN ${destroyed}`)
+      .all();
+    for (const c of hits) {
+      met.set(c.a, c.b);
+      met.set(c.b, c.a);
+    }
   }
   const partyById = (id: number) => {
     const row = db.select(columns).from(objects).where(eq(objects.id, id)).get();
@@ -596,13 +725,24 @@ export function catalogue(show: "live" | "all", who: Who): CatalogueEntry[] {
     const object = toObject(row);
     return { ...partyOf({ ...object, sourceCollision: null }), from: object.sourceCollision === null ? null : rootsFor(object.sourceCollision) };
   };
-  return rows.map(({ owner, operator, ...row }) => ({
-    ...toObject(row),
-    mine: ownedBy({ owner, operator }, who),
-    from: row.kind === "debris" && row.sourceCollision !== null ? rootsFor(row.sourceCollision) : null,
-    collidedWith: row.fate === "destroyed" && met.has(row.id) ? partyById(met.get(row.id)!) : null,
-  }));
+  return {
+    rows: shown.map(({ owner, operator, ...row }) => ({
+      ...toObject(row),
+      mine: ownedBy({ owner, operator }, who),
+      from: row.kind === "debris" && row.sourceCollision !== null ? rootsFor(row.sourceCollision) : null,
+      collidedWith: row.fate === "destroyed" && met.has(row.id) ? partyById(met.get(row.id)!) : null,
+    })),
+    total,
+    from: total === 0 ? 0 : (page - 1) * query.per + 1,
+    to: (page - 1) * query.per + shown.length,
+    pages,
+  };
 }
+
+// The newest rows of the record, unfiltered: what's in orbit, or everything.
+export const CATALOGUE_MAX = 500;
+export const catalogue = (show: "live" | "all", who: Who): CatalogueEntry[] =>
+  browse({ ...DEFAULT_QUERY, show, per: CATALOGUE_MAX }, who).rows;
 
 export function catalogueCounts(): { live: number; all: number } {
   settle();

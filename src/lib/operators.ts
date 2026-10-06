@@ -85,7 +85,10 @@ type Result = { ok: true; operator: Operator } | { ok: false; errors: OperatorEr
 // as it grows; a restart forgets it.
 const FAILS = 5;
 const LOCK_MS = 30_000;
-const CLAIMS_PER_HOUR = 10;
+// generous: a whole class can sit behind one campus address
+const CLAIMS_PER_HOUR = 60;
+// this machine itself (development, and the tests) isn't limited
+const LOCAL = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 const tries = new Map<string, { count: number; until: number }>();
 const claims = new Map<string, number[]>();
 function sweep(now: number) {
@@ -100,7 +103,7 @@ export async function claim(person: string, form: OperatorForm, from: string, no
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   sweep(now);
   const recent = (claims.get(from) ?? []).filter((at) => now - at < 3_600_000);
-  if (recent.length >= CLAIMS_PER_HOUR) return { ok: false, errors: { form: "Too many handles claimed from here. Try later." } };
+  if (!LOCAL.has(from) && recent.length >= CLAIMS_PER_HOUR) return { ok: false, errors: { form: "Too many handles claimed from here. Try later." } };
   const salt = randomBytes(16).toString("hex");
   const hash = await hashOf(form.passphrase, salt);
   if (!hash) return BUSY;

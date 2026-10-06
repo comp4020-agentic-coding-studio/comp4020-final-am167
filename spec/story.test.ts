@@ -45,6 +45,16 @@ describe("telling a collision", () => {
     );
   });
 
+  it("names at most three in a cascade's lineage", () => {
+    const many = ["A1", "B2", "C3", "D4", "E5"].map((c) => satellite(c, "x"));
+    expect(headline([debrisOf(...many), charlie])).toBe(
+      "Debris from A1, B2, C3 and 2 others' collision destroyed CHARLIE",
+    );
+    expect(headline([debrisOf(...many.slice(0, 4)), charlie])).toBe(
+      "Debris from A1, B2, C3 and 1 other's collision destroyed CHARLIE",
+    );
+  });
+
   it("names who launched what, or says nobody claimed it", () => {
     expect(blame([alpha, bravo])).toBe("ALPHA: launched without a handle. BRAVO: skywriter.");
     expect(blame([debrisOf(alpha, bravo), charlie])).toBe(

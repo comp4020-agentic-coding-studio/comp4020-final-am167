@@ -1,25 +1,36 @@
 ---
 import Base from "../../layouts/Base.astro";
 import { ago, falling, km } from "../../lib/format.ts";
-import { BANDS, fallRate, heightKm, radiusAt } from "../../lib/orbit.ts";
-import { CATALOGUE_MAX, catalogue, catalogueCounts, recentCollisions } from "../../lib/sky.ts";
+import { BANDS, fallRate, heightKm, radiusAt, type Band } from "../../lib/orbit.ts";
+import {
+  FIRST_DIR,
+  PER_PAGE,
+  browse,
+  catalogueCounts,
+  readCatalogueQuery,
+  recentCollisions,
+  type CatalogueQuery,
+  type Sort,
+} from "../../lib/sky.ts";
 import { blame, collisionOf, couplet, describe, headline } from "../../lib/story.ts";
 
-// The record of everything launched (ADR 0003): what's in orbit now, or
-// everything ever, picked by a plain link so it works without JavaScript.
-// Callsigns only: a beacon is only heard over the station. Heights are
-// worked out from each orbit (ADR 0007), and a script keeps them falling.
-// Every fragment traces back to the collision that made it, and every
-// collision is told with who it names (ADR 0010).
+// The record of everything launched (ADR 0003), as a table: filtered,
+// searched, sorted and paged by a plain GET form and links, so it works
+// without JavaScript and every view has its own address. Callsigns only: a
+// beacon is only heard over the station. Heights are worked out from each
+// orbit (ADR 0007), and a script keeps them falling. Every fragment traces
+// back to the collision that made it, and every collision is told with who
+// it names (ADR 0010).
 const { person, operator } = Astro.locals;
-const show = Astro.url.searchParams.get("show") === "all" ? "all" : "live";
-const rows = catalogue(show, { person, operator: operator?.id ?? null });
-const counts = catalogueCounts();
+const query = readCatalogueQuery(Astro.url.searchParams);
 const now = Date.now();
+const result = browse(query, { person, operator: operator?.id ?? null }, now);
+const rows = result.rows;
+const counts = catalogueCounts();
 // the latest collisions, told the way the sky page tells them
 const COLLISIONS = 50;
 const collided = recentCollisions(COLLISIONS);
-const kinds = { satellite: "", derelict: "Derelict", debris: "Fragment" } as const;
+const kinds = { satellite: "Satellite", derelict: "Derelict", debris: "Fragment" } as const;
 // a lineage in a narrow column: callsigns keep their hyphens on one line
 const whole = (text: string) => text.replaceAll("-", "\u2011");
 const fates = {
@@ -28,10 +39,48 @@ const fates = {
   deorbited: "Deorbited",
   destroyed: "Destroyed",
 } as const;
+
+// The address of this view with some of it changed. Defaults are left out,
+// so the plain catalogue is just /catalogue/.
+function href(changes: Partial<CatalogueQuery>): string {
+  const q = { ...query, page: 1, ...changes };
+  const params = new URLSearchParams();
+  if (q.show !== "live") params.set("show", q.show);
+  if (q.q) params.set("q", q.q);
+  if (q.kind) params.set("kind", q.kind);
+  if (q.band) params.set("band", q.band);
+  if (q.show === "all" && q.fate) params.set("fate", q.fate);
+  if (q.mine) params.set("mine", "1");
+  if (q.sort !== "launched" || q.dir !== FIRST_DIR.launched) {
+    params.set("sort", q.sort);
+    params.set("dir", q.dir);
+  }
+  if (q.per !== PER_PAGE) params.set("per", String(q.per));
+  if (q.page > 1) params.set("page", String(q.page));
+  const text = params.toString();
+  return `/catalogue/${text ? `?${text}` : ""}`;
+}
+const filtered = Boolean(query.q || query.kind || query.band || query.fate || query.mine);
+const clear = href({ q: "", kind: null, band: null, fate: null, mine: false });
+// a column's header: a link that sorts by it, or turns the sort round
+const sortBy = (sort: Sort) =>
+  href({ sort, dir: query.sort === sort ? (query.dir === "asc" ? "desc" : "asc") : FIRST_DIR[sort] });
+const ariaSort = (sort: Sort) => (query.sort === sort ? (query.dir === "asc" ? "ascending" : "descending") : undefined);
+const columns: { sort: Sort; label: string; class?: string }[] = [
+  { sort: "name", label: "Object" },
+  { sort: "kind", label: "Kind", class: "kind" },
+  { sort: "band", label: "Band", class: "band" },
+  { sort: "height", label: "Height" },
+  { sort: "launched", label: "Launched", class: "launched" },
+  { sort: "status", label: "Status" },
+  { sort: "operator", label: "Operator", class: "operator" },
+];
 const views = [
-  { show: "live", href: "/catalogue/", label: `In orbit (${counts.live})` },
-  { show: "all", href: "/catalogue/?show=all", label: `Everything ever launched (${counts.all})` },
+  { show: "live", label: `In orbit (${counts.live})` },
+  { show: "all", label: `Everything ever launched (${counts.all})` },
 ] as const;
+const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
+const number = (n: number) => n.toLocaleString("en");
 ---
 <Base title="Kessler: the catalogue" current="catalogue">
   <main class="catalogue-page">
@@ -47,64 +96,134 @@ const views = [
 
     <nav class="views" aria-label="Show">
       {views.map((v) => (
-        <a href={v.href} aria-current={v.show === show ? "page" : undefined}>{v.label}</a>
+        <a href={href({ show: v.show, fate: null })} aria-current={v.show === query.show ? "page" : undefined}>{v.label}</a>
       ))}
     </nav>
 
-    {rows.length === CATALOGUE_MAX && (
-      <p class="lede">The newest {CATALOGUE_MAX} of {show === "live" ? counts.live : counts.all}.</p>
-    )}
+    <form class="filters" method="get" action="/catalogue/" aria-label="Filter the catalogue">
+      {query.show !== "live" && <input type="hidden" name="show" value={query.show} />}
+      {query.sort !== "launched" && <input type="hidden" name="sort" value={query.sort} />}
+      {query.sort !== "launched" && <input type="hidden" name="dir" value={query.dir} />}
+      {query.per !== PER_PAGE && <input type="hidden" name="per" value={query.per} />}
+      <label class="search">
+        <span>Search</span>
+        <input type="search" name="q" value={query.q} placeholder="Callsign or handle" maxlength="40" autocomplete="off" spellcheck="false" />
+      </label>
+      <label>
+        <span>Kind</span>
+        <select name="kind">
+          <option value="">Any</option>
+          {(Object.keys(kinds) as (keyof typeof kinds)[]).map((k) => (
+            <option value={k} selected={query.kind === k}>{kinds[k]}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Band</span>
+        <select name="band">
+          <option value="">Any</option>
+          {bands.map(([band, b]) => <option value={band} selected={query.band === band}>{b.label}</option>)}
+        </select>
+      </label>
+      {query.show === "all" && (
+        <label>
+          <span>Status</span>
+          <select name="fate">
+            <option value="">Any</option>
+            {(Object.keys(fates) as (keyof typeof fates)[]).map((f) => (
+              <option value={f} selected={query.fate === f}>{fates[f]}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label class="check">
+        <input type="checkbox" name="mine" value="1" checked={query.mine} />
+        <span>Only yours</span>
+      </label>
+      <button type="submit">Apply</button>
+      {filtered && <a class="clear" href={clear}>Clear filters</a>}
+    </form>
 
-    {rows.length === 0 ? (
+    {result.total === 0 ? (
       <p class="empty">
-        {show === "live" ? "Nothing in orbit." : "Nothing has been launched yet."}{" "}
-        <a href="/">Launch the first satellite</a>.
+        {filtered ? (
+          <>Nothing matches these filters. <a href={clear}>Clear the filters</a>.</>
+        ) : (
+          <>
+            {query.show === "live" ? "Nothing in orbit." : "Nothing has been launched yet."}{" "}
+            <a href="/">Launch the first satellite</a>.
+          </>
+        )}
       </p>
     ) : (
-      <table data-server-time={now}>
-        <thead>
-          <tr>
-            <th scope="col">Object</th>
-            <th scope="col" class="band">Band</th>
-            <th scope="col">Height</th>
-            <th scope="col">Launched</th>
-            <th scope="col">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((o) => (
-            <tr class:list={{ mine: o.mine, gone: o.fate !== "live" }}>
-              <th scope="row">
-                <span class:list={["swatch", o.kind]} style={`--hue: ${(o.id * 137.508) % 360}`}></span>
-                {o.kind === "satellite" ? o.callsign : kinds[o.kind]}
-                {o.mine && <span class="yours"> (yours)</span>}
-                {o.from && <span class="lineage"> from {whole(collisionOf(o.from))}</span>}
-              </th>
-              <td class="band">{BANDS[o.band].label}</td>
-              {o.fate === "live" ? (
-                <td
-                  class="height"
-                  data-radius={o.radius}
-                  data-phase={o.phase}
-                  data-period={o.period}
-                  data-epoch={o.epoch}
-                >
-                  <span class="km">{km(heightKm(radiusAt(o, now)))}</span>{" "}
-                  <span class="falling">{falling(fallRate(o, now))}</span>
-                </td>
-              ) : (
-                <td class="height"><span aria-hidden="true">—</span><span class="visually-hidden">Gone</span></td>
-              )}
-              <td><time datetime={new Date(o.launchedAt).toISOString()}>{ago(now - o.launchedAt)}</time></td>
-              <td>
-                {fates[o.fate]}
-                {o.collidedWith && <span class="lineage"> with {whole(describe(o.collidedWith))}</span>}
-                {o.fateAt && <> <time class="fate-time" datetime={new Date(o.fateAt).toISOString()}>{ago(now - o.fateAt)}</time></>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <>
+        <p class="range" aria-live="polite">
+          {number(result.from)}–{number(result.to)} of {number(result.total)}
+        </p>
+        <div class="table-wrap">
+          <table data-server-time={now}>
+            <thead>
+              <tr>
+                {columns.map((c) => (
+                  <th scope="col" class={c.class} aria-sort={ariaSort(c.sort)}>
+                    <a href={sortBy(c.sort)}>
+                      {c.label}
+                      <span class="arrow" aria-hidden="true">
+                        {query.sort === c.sort ? (query.dir === "asc" ? "▲" : "▼") : ""}
+                      </span>
+                    </a>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((o) => (
+                <tr class:list={{ mine: o.mine, gone: o.fate !== "live" }}>
+                  <th scope="row">
+                    <span class:list={["swatch", o.kind]} style={`--hue: ${(o.id * 137.508) % 360}`}></span>
+                    {o.kind === "satellite" ? o.callsign : kinds[o.kind]}
+                    {o.mine && <span class="yours"> (yours)</span>}
+                    {o.from && <span class="lineage"> from {whole(collisionOf(o.from))}</span>}
+                    {o.handle && <span class="operator-inline"> {o.handle}</span>}
+                  </th>
+                  <td class="kind">{kinds[o.kind]}</td>
+                  <td class="band">{BANDS[o.band].label}</td>
+                  {o.fate === "live" ? (
+                    <td
+                      class="height"
+                      data-radius={o.radius}
+                      data-phase={o.phase}
+                      data-period={o.period}
+                      data-epoch={o.epoch}
+                    >
+                      <span class="km">{km(heightKm(radiusAt(o, now)))}</span>{" "}
+                      <span class="falling">{falling(fallRate(o, now))}</span>
+                    </td>
+                  ) : (
+                    <td class="height"><span aria-hidden="true">—</span><span class="visually-hidden">Gone</span></td>
+                  )}
+                  <td class="launched"><time datetime={new Date(o.launchedAt).toISOString()}>{ago(now - o.launchedAt)}</time></td>
+                  <td>
+                    {fates[o.fate]}
+                    {o.collidedWith && <span class="lineage"> with {whole(describe(o.collidedWith))}</span>}
+                    {o.fateAt && <> <time class="fate-time" datetime={new Date(o.fateAt).toISOString()}>{ago(now - o.fateAt)}</time></>}
+                  </td>
+                  <td class="operator">
+                    {o.handle ?? (o.kind === "satellite" ? <span class="none">no handle</span> : <span class="none">—</span>)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {result.pages > 1 && (
+          <nav class="pages" aria-label="Pages">
+            {query.page > 1 ? <a rel="prev" href={href({ page: query.page - 1 })}>← Previous page</a> : <span></span>}
+            <span>Page {query.page} of {result.pages}</span>
+            {query.page < result.pages ? <a rel="next" href={href({ page: query.page + 1 })}>Next page →</a> : <span></span>}
+          </nav>
+        )}
+      </>
     )}
 
     <section class="collisions" id="collisions" aria-labelledby="collisions-title">
@@ -135,6 +254,15 @@ const views = [
       )}
     </section>
   </main>
+
+  <script>
+    // Filters apply as they change; the Apply button is for no JavaScript,
+    // and for the search box (Enter works too).
+    const filters = document.querySelector<HTMLFormElement>("form.filters");
+    filters?.addEventListener("change", (event) => {
+      if ((event.target as HTMLElement).matches("select, input[type=checkbox]")) filters.requestSubmit();
+    });
+  </script>
 
   <script>
     import { falling, km } from "../../lib/format.ts";
@@ -169,7 +297,7 @@ const views = [
 
 <style>
   .catalogue-page {
-    max-width: 48rem;
+    max-width: 64rem;
     margin: 0 auto;
     padding: 1.5rem var(--gutter) 3rem;
   }
@@ -227,7 +355,7 @@ const views = [
 
   tbody th {
     font-weight: 700;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 
   td {
@@ -303,6 +431,120 @@ const views = [
     margin: 1rem 0 0;
   }
 
+  /* the filters: one wrapping row of small fields */
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.75rem 1rem;
+    margin: 0 0 1rem;
+    padding: 0.75rem;
+    border: 1px solid var(--grid);
+    border-radius: 4px;
+    font-size: var(--step--1);
+  }
+
+  .filters label {
+    display: grid;
+    gap: 0.25rem;
+    color: var(--ink-dim);
+  }
+
+  .filters .search {
+    flex: 1 1 12rem;
+  }
+
+  .filters input[type="search"],
+  .filters select {
+    min-height: 2.25rem;
+    padding: 0.35rem 0.5rem;
+    font: inherit;
+    color: var(--ink);
+    background: var(--night-deep);
+    border: 1px solid var(--grid-strong);
+    border-radius: 3px;
+  }
+
+  .filters .check {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.25rem;
+    color: var(--ink);
+  }
+
+  .filters .check input {
+    accent-color: var(--amber);
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+  }
+
+  .filters button {
+    min-height: 2.25rem;
+    padding: 0.35rem 0.9rem;
+    font: inherit;
+    font-weight: 700;
+    color: var(--night-deep);
+    background: var(--amber);
+    border: 0;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .filters .clear {
+    align-self: center;
+    color: var(--ink-dim);
+  }
+
+  .range {
+    margin: 0 0 0.5rem;
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+  }
+
+  /* the column headers sort */
+  thead th a {
+    color: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  thead th a:hover,
+  thead th[aria-sort] a {
+    color: var(--ink);
+  }
+
+  thead th a:focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: 2px;
+  }
+
+  .arrow {
+    margin-left: 0.25rem;
+    font-size: 0.75em;
+    color: var(--amber);
+  }
+
+  .operator .none {
+    color: var(--ink-dim);
+    opacity: 0.7;
+  }
+
+  .operator-inline {
+    display: none;
+  }
+
+  .pages {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+    font-size: var(--step--1);
+    color: var(--ink-dim);
+  }
+
   .collisions {
     margin-top: 2.5rem;
   }
@@ -356,8 +598,23 @@ const views = [
      status loses its time. */
   @media (max-width: 40rem) {
     .band,
+    .kind,
+    .launched,
+    .operator,
     .fate-time {
       display: none;
+    }
+
+    tbody th {
+      min-width: 8rem;
+    }
+
+    /* the operator moves under the name */
+    .operator-inline {
+      display: block;
+      font-weight: 400;
+      font-size: 0.9em;
+      color: var(--ink-dim);
     }
 
     .height .falling {
