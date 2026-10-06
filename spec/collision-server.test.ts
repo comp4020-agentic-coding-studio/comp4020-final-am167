@@ -1,0 +1,158 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { FRAGMENTS, HIT, fatalMeeting, nextMeeting } from "../src/lib/collide.ts";
+import { periodAt, type Orbit } from "../src/lib/orbit.ts";
+import type { SkyEvent } from "../src/lib/events.ts";
+
+// The server's side of collisions (ADR 0008): a collision is predicted and
+// announced before it happens, applied when its time comes (both objects
+// destroyed, a collision row, fragments tracing back to it), and a server
+// that was stopped through a cascade ends up with the same sky as one that
+// ran through it. The HTTP spec can't arrange two orbits to meet, so this
+// drives the server's own code against throwaway databases, with the clock
+// passed in.
+
+// no derelicts unless a test asks for them: they're placed at random
+process.env.DERELICTS = "0";
+
+const dirs: string[] = [];
+afterAll(() => {
+  for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+});
+
+// A server with its own empty database.
+async function freshServer() {
+  const dir = mkdtempSync(join(tmpdir(), "kessler-collide-"));
+  dirs.push(dir);
+  process.env.DATABASE_PATH = join(dir, "app.db");
+  execFileSync(process.execPath, ["scripts/migrate.mjs"], { env: process.env });
+  vi.resetModules();
+  const sky = await import("../src/lib/sky.ts");
+  const events = await import("../src/lib/events.ts");
+  const heard: SkyEvent[] = [];
+  events.subscribe((event) => heard.push(event));
+  return { sky, heard };
+}
+
+const HOUR = 3_600_000;
+// in the future, so the server's own wake-up timers never fire mid-test
+const T = Date.now() + 10 * 24 * HOUR;
+const orbit = (radius: number, phase: number, direction: 1 | -1, epoch = T): Required<Orbit> => ({
+  radius,
+  phase,
+  period: Math.round(periodAt(radius)),
+  epoch,
+  direction,
+});
+
+// a repeatable stand-in for Math.random
+function seeded(seed: number) {
+  return () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
+}
+
+describe("a collision, on the server", async () => {
+  const { sky, heard } = await freshServer();
+  const a = sky.addDerelict(orbit(1.3, 0, 1), T);
+  const b = sky.addDerelict(orbit(1.3 + HIT.headOn / 2, 2, -1), T);
+  // most meetings miss: the pair's ids say which one hits
+  const at = Math.round(nextMeeting(a, b, T, fatalMeeting(a, b))!);
+
+  it("is announced to everyone before it happens", () => {
+    const conjunction = heard.find((e) => e.type === "conjunction");
+    expect(conjunction).toMatchObject({ type: "conjunction", conjunction: { a: a.id, b: b.id, at } });
+    expect(sky.conjunctions(T).map((c) => [c.a, c.b, c.at])).toEqual([[a.id, b.id, at]]);
+  });
+
+  it("hasn't happened a moment before", () => {
+    expect(sky.settle(at - 1).collisions).toHaveLength(0);
+    expect(sky.liveSky(at - 1).map((o) => o.id)).toEqual([a.id, b.id]);
+  });
+
+  it("destroys both when its time comes, and leaves fragments that trace back to it", () => {
+    const [collision] = sky.settle(at + 1).collisions;
+    expect(collision).toMatchObject({ at, a: a.id, b: b.id });
+
+    const rows = sky.catalogue("all", undefined);
+    for (const id of [a.id, b.id]) expect(rows.find((o) => o.id === id)).toMatchObject({ fate: "destroyed", fateAt: at });
+    const fragments = rows.filter((o) => o.kind === "debris");
+    expect(fragments).toHaveLength(2 * FRAGMENTS.perObject);
+    for (const fragment of fragments) {
+      expect(fragment).toMatchObject({ fate: "live", sourceCollision: collision.id, epoch: at, launchedAt: at });
+    }
+  });
+
+  it("tells everyone what collided, with both beacons, and the fragments", () => {
+    const event = heard.find((e) => e.type === "collision");
+    if (event?.type !== "collision") throw new Error("no collision event");
+    expect(event.collision.objects.map((o) => o.id)).toEqual([a.id, b.id]);
+    expect(event.collision.fragments).toHaveLength(2 * FRAGMENTS.perObject);
+  });
+
+  it("happens once, however often it's asked, and its fragments never hit each other", () => {
+    const before = heard.filter((e) => e.type === "collision").length;
+    expect(sky.settle(at + 6 * HOUR).collisions).toHaveLength(0);
+    expect(heard.filter((e) => e.type === "collision").length).toBe(before);
+    expect(sky.collisionLog()).toHaveLength(1);
+  });
+});
+
+describe("a cascade while the server was stopped", () => {
+  // forty dead satellites crowded into one thin shell, going both ways
+  const random = seeded(42);
+  const crowd = Array.from({ length: 40 }, () =>
+    orbit(1.3 + (random() - 0.5) * 0.06, random() * 2 * Math.PI, random() < 0.5 ? 1 : -1),
+  );
+  const end = T + 2 * HOUR;
+
+  async function run(step: number | null) {
+    const { sky } = await freshServer();
+    for (const o of crowd) sky.addDerelict(o, T);
+    if (step === null) sky.settle(end);
+    else for (let t = T; t <= end; t += step) sky.settle(t);
+    sky.settle(end);
+    const record = sky
+      .catalogue("all", undefined)
+      .map(({ id, kind, fate, fateAt, sourceCollision, radius, phase, direction }) => ({
+        id,
+        kind,
+        fate,
+        fateAt,
+        sourceCollision,
+        radius,
+        phase,
+        direction,
+      }));
+    return { record, collisions: sky.collisionLog() };
+  }
+
+  it("ends with the same sky as a server that ran through it", async () => {
+    const stopped = await run(null);
+    const running = await run(5_000);
+    // a real cascade: debris hit something
+    const debris = new Set(stopped.record.filter((o) => o.kind === "debris").map((o) => o.id));
+    expect(stopped.collisions.some((c) => debris.has(c.a) || debris.has(c.b))).toBe(true);
+    expect(running.collisions).toEqual(stopped.collisions);
+    expect(running.record).toEqual(stopped.record);
+  });
+});
+
+describe("derelicts", async () => {
+  const { sky, heard } = await freshServer();
+
+  it("top the sky up to the baseline, arriving as launches by nobody", () => {
+    sky.keepDerelicts(T, 5);
+    const live = sky.liveSky(T);
+    expect(live.filter((o) => o.kind === "derelict")).toHaveLength(5);
+    expect(live.every((o) => o.owner === null)).toBe(true);
+    const launches = heard.filter((e) => e.type === "launch");
+    expect(launches).toHaveLength(5);
+    sky.keepDerelicts(T + 1, 5);
+    expect(sky.liveSky(T + 1).filter((o) => o.kind === "derelict")).toHaveLength(5);
+  });
+});

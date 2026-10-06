@@ -63,6 +63,10 @@ export interface Orbit {
   period: number;
   // server time, in ms, that the elements are measured from
   epoch: number;
+  // which way round it goes: 1 anticlockwise (prograde), -1 clockwise
+  // (retrograde). Orbits going opposite ways meet head-on (ADR 0008).
+  // Missing means prograde, as every orbit was before.
+  direction?: 1 | -1;
 }
 
 // ── decay ──────────────────────────────────────────────────────────────────
@@ -154,17 +158,23 @@ function sweptFalling(orbit: Orbit, r: number): number {
   return ((omega * orbit.radius ** PERIOD_POWER) / (RATE * (power / M))) * (orbit.radius ** power - r ** power);
 }
 
-export function angleAt(orbit: Orbit, time: number): number {
+// The angle swept since the epoch, whichever way round: it only grows.
+export function sweptAt(orbit: Orbit, time: number): number {
   const burn = burnAt(orbit);
-  let angle: number;
-  if (time <= burn) {
-    angle = orbit.phase + sweptFalling(orbit, radiusAt(orbit, time));
-  } else {
-    const start = plungeStart(orbit);
-    const omega = (TAU / orbit.period) * (orbit.radius / start) ** PERIOD_POWER;
-    const s = Math.min(1, (time - burn) / plungeMs);
-    angle = orbit.phase + sweptFalling(orbit, start) + omega * plungeMs * plungeSweep(s);
-  }
+  if (time <= burn) return sweptFalling(orbit, radiusAt(orbit, time));
+  const start = plungeStart(orbit);
+  const omega = (TAU / orbit.period) * (orbit.radius / start) ** PERIOD_POWER;
+  const s = Math.min(1, (time - burn) / plungeMs);
+  return sweptFalling(orbit, start) + omega * plungeMs * plungeSweep(s);
+}
+
+// The angle, not wrapped to a turn: it runs on for ever in the orbit's
+// direction, so two of them can be compared to find when they meet.
+export const turnedAt = (orbit: Orbit, time: number): number =>
+  orbit.phase + (orbit.direction ?? 1) * sweptAt(orbit, time);
+
+export function angleAt(orbit: Orbit, time: number): number {
+  const angle = turnedAt(orbit, time);
   return ((angle % TAU) + TAU) % TAU;
 }
 
@@ -215,8 +225,8 @@ function normal(random: () => number): number {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * random());
 }
 
-// A new orbit in the band: the radius and phase are random so no two orbits
-// are the same, and the period is the one for that height.
+// A new orbit in the band: the radius, phase and direction are random so no
+// two orbits are the same, and the period is the one for that height.
 export function placeInBand(band: Band, epoch: number, random = Math.random): Orbit {
   const { minRadius, maxRadius } = BANDS[band];
   const middle = (minRadius + maxRadius) / 2;
@@ -230,5 +240,8 @@ export function placeInBand(band: Band, epoch: number, random = Math.random): Or
     phase: random() * TAU,
     period: Math.round(periodAt(radius)),
     epoch,
+    // either way round, at random: going against the traffic is no advantage,
+    // so it isn't a choice (ADR 0008)
+    direction: random() < 0.5 ? 1 : -1,
   };
 }

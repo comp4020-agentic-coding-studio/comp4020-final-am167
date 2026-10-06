@@ -6,12 +6,14 @@ import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-or
 
 // Every object that has ever been in the sky, kept forever (ADR 0003). The
 // live sky is the rows whose fate is `live`; the catalogue is all of them.
-// Debris and its lineage arrive with collisions in C9.
+// A satellite is launched by a person; a derelict is a dead satellite the
+// server keeps in the sky so it's never empty; debris comes from a
+// collision (ADR 0008).
 export const objects = sqliteTable(
   "objects",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    kind: text("kind", { enum: ["satellite", "debris"] }).notNull(),
+    kind: text("kind", { enum: ["satellite", "derelict", "debris"] }).notNull(),
     // the person cookie that launched it (ADR 0002); never sent to clients
     owner: text("owner"),
     callsign: text("callsign"),
@@ -24,6 +26,10 @@ export const objects = sqliteTable(
     phase: real("phase").notNull(),
     period: integer("period").notNull(),
     epoch: integer("epoch").notNull(),
+    // 1 prograde, -1 retrograde (ADR 0008); everything before was prograde
+    direction: integer("direction").notNull().default(1),
+    // for debris, the collision it came from: its lineage (ADR 0003)
+    sourceCollision: integer("source_collision"),
     fate: text("fate", { enum: ["live", "decayed", "deorbited", "destroyed"] })
       .notNull()
       .default("live"),
@@ -36,5 +42,22 @@ export const objects = sqliteTable(
     uniqueIndex("objects_one_live_per_owner")
       .on(t.owner)
       .where(sql`${t.fate} = 'live' AND ${t.owner} IS NOT NULL`),
+    index("objects_source_collision").on(t.sourceCollision),
   ],
+);
+
+// Every collision, kept forever (ADR 0003, 0008): when, which two objects,
+// and where (angle and height, in planet radii). Its fragments point back
+// here through objects.source_collision.
+export const collisions = sqliteTable(
+  "collisions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    at: integer("at").notNull(),
+    a: integer("a").notNull(),
+    b: integer("b").notNull(),
+    angle: real("angle").notNull(),
+    radius: real("radius").notNull(),
+  },
+  (t) => [index("collisions_at").on(t.at), uniqueIndex("collisions_pair").on(t.a, t.b)],
 );

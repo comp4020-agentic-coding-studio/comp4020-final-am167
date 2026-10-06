@@ -1,8 +1,12 @@
-import type { SkyObject } from "./sky.ts";
+import type { CollisionReport, Conjunction, SkyObject } from "./sky.ts";
 
 // In-process pub/sub behind the SSE endpoint. One machine, so no broker needed.
-// Events carry the full object; each stream decides what its viewer may see.
-export type SkyEvent = { type: "launch"; object: SkyObject } | { type: "decay"; object: SkyObject };
+// Events carry full objects; each stream decides what its viewer may see.
+export type SkyEvent =
+  | { type: "launch"; object: SkyObject }
+  | { type: "decay"; object: SkyObject }
+  | { type: "conjunction"; conjunction: Conjunction }
+  | { type: "collision"; collision: CollisionReport };
 
 type Listener = (event: SkyEvent) => void;
 

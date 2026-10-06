@@ -1,7 +1,7 @@
 # 0002. A person is an anonymous cookie
 
-**Status:** proposed (2026-10-03). Working assumption for C8, not final;
-expected to be revisited before it's accepted.
+**Status:** superseded by 0009 (2026-10-06). Proposed 2026-10-03 as the
+working assumption for C8.
 
 ## Context
 

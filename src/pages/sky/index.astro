@@ -18,9 +18,10 @@ const launchedParam = Number(Astro.url.searchParams.get("launched"));
 const launched = sky.find((o) => o.id === launchedParam && o.mine) ?? null;
 const mine = sky.find((o) => o.mine) ?? null;
 const count = (n: number) => `${n} satellite${n === 1 ? "" : "s"} in orbit`;
-// how many of the latest launches the summary lists (sky.ts keeps it live)
+// how many of the latest launches the summary lists (sky.ts keeps it live):
+// people's, not the derelicts the server adds or debris
 const RECENT = 6;
-const recent = sky.slice(0, RECENT);
+const recent = sky.filter((o) => o.kind === "satellite").slice(0, RECENT);
 const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 ---
 <Base title="Kessler: the sky" current="sky">

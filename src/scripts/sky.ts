@@ -21,6 +21,8 @@ import { countdown } from "./countdown.ts";
 
 interface Satellite {
   id: number;
+  // people launch satellites; derelicts and debris are nobody's (ADR 0008)
+  kind: "satellite" | "derelict" | "debris";
   callsign: string;
   beacon: string;
   band: Band;
@@ -29,6 +31,8 @@ interface Satellite {
   phase: number;
   period: number;
   epoch: number;
+  direction: 1 | -1;
+  sourceCollision: number | null;
   mine: boolean;
 }
 
@@ -274,7 +278,8 @@ function recentItem(sat: Satellite): HTMLLIElement {
 function renderSummary() {
   const time = serverNow();
   const sats = flying().sort((a, b) => b.launchedAt - a.launchedAt);
-  recentList.replaceChildren(...sats.slice(0, RECENT).map(recentItem));
+  const launches = sats.filter((sat) => sat.kind === "satellite");
+  recentList.replaceChildren(...launches.slice(0, RECENT).map(recentItem));
   const n = sats.length;
   count.textContent = `${n} satellite${n === 1 ? "" : "s"} in orbit`;
   for (const band of Object.keys(BANDS) as Band[]) {

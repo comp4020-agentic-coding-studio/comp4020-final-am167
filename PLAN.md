@@ -27,6 +27,12 @@ _Last updated 2026-10-06 (decay)._
   the camera pulls back to the planet's limb and hands off to the sky page.
   2026-10-06: a page explaining Kessler syndrome at `/kessler/` (uncommitted),
   linked from the nav, the launchpad's intro and the sky's "Sky now" card.
+  2026-10-06: **collisions on the server** (ADR 0008, proposed): orbits
+  go either way, the server predicts every collision and announces it, and
+  catches up exactly after a restart. ADRs 0009 (claimable operators) and
+  0010 (every screen names who caused a collision) drafted. Still to do: the
+  sky page drawing collisions, the couplet and blame, the catalogue's
+  lineage, login.
   2026-10-06: **orbital decay** (ADR 0007, accepted): every
   orbit falls, faster the lower it is, and ends in a 30-second burn-up drawn
   as a real re-entry (fireball, cooling wake, breakup, sparks). Bands are
@@ -82,6 +88,12 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Bands (2026-10-04) | **Three bands (low, mid, high) with jitter:** you pick a band, the server picks a random radius and phase inside it, so orbits aren't identical. |
 | Decay (2026-10-06, ADR 0007) | **Closed form, then a burn-up.** radius³ falls at one steady rate, so an orbit falls slowly, then faster; from the low band's middle it lasts 4 hours, the mid's about 17 hours, the high's about 2 days (across each band's reach: 1–8 h, 9–27 h, 31 h–3 days). Shortened from a day / a week / two months on 2026-10-06: the high band has to clear within a few days. At 1.06 planet radii it plunges for 30 seconds and burns up, drawn as a real re-entry. Positions stay a pure function of orbit and clock, so nothing new is stored or sent. |
 | Bands as ranges (2026-10-06, ADR 0007) | **One period for each height** (low middle once a minute, high middle every eight; mid now 2.7 min), and the bands meet at 1.5 and 2.05, so every height is in one band. Counts on the sky page are by where objects are now. |
+| Collision geometry (2026-10-06) | **Mixed directions, plus near misses.** Orbits are flat and the period depends only on height, so two objects going the same way at the same height never close in, and decay keeps the gap in radius³ fixed. So each object gets a direction (prograde or retrograde): opposite-direction objects at similar heights cross head-on twice a lap. Same-direction objects can still collide when one creeps up on another within a (larger) hit distance. Rejected: hidden 3D inclinations (rewrites the rendering). Needs a decision record. |
+| Collision mechanics (2026-10-06, draft) | **Predicted by the server, broadcast ahead.** Positions are closed-form, so the server solves each pair's next crossing, keeps a queue of upcoming hits and sets a timer for the next (as decay does for burn-ups). A `conjunction` event gives every screen the impact time in advance, so all screens draw it at the same moment. At impact both objects are `destroyed` and seeded fragments spawn near the point, mostly keeping their parent's direction, so a head-on hit leaves debris going both ways. Catch-up after a restart runs the queue forward in time order (decays and collisions, new debris colliding inside the gap). New `collisions` table; `objects` gains direction and source collision (the lineage of ADR 0003). |
+| Seeding (2026-10-06) | **The server keeps a baseline of derelicts**: dead, ownerless satellites and old debris, as real orbit has, so collisions can happen when only the marker's two sessions are open. |
+| Identity (2026-10-06) | **Optional claim on top of the cookie.** You still launch anonymously within seconds (ADR 0002's reason holds); you can claim a unique operator handle with a passphrase, which keeps your record and blame across devices. No email, no personal data; passphrases hashed with Node's `scrypt`. Supersedes ADR 0002, so needs a new record. Rejected: required sign-up (marker friction), GitHub OAuth (secrets, personal data, marker needs an account), handle without a password (no cross-device). |
+| Blame (2026-10-06) | **Worked out from lineage, not stored.** Every fragment traces through its collision to the satellites at the root; their operators are who to blame. |
+| C9 scope (2026-10-06) | **Collisions + login.** Collisions, debris, lineage and blame by operator, and the optional claim. Conjunction alerts and dodging wait for C10. The C9 written decision is still to pick (see "Open questions"). |
 | Band edges (2026-10-05) | **Soft edges:** the radius is drawn from a bell curve around the band's middle, so about one launch in eight lands past the band's edges, but never far enough to reach a neighbouring band. The bands are drawn as soft glows to match. |
 
 ## The altitude trade-off
@@ -379,6 +391,19 @@ Things to ponder:
 Resolved 2026-10-04 (now in "Decisions so far"): C8 scope, overhead, launch
 flow, beacon rules, launch limits, bands.
 
+- **C9 (settled 2026-10-06):** the written decision is **who sees the
+  blame** (every screen live, the catalogue, or only you; the answer itself
+  goes in its record); **the server picks direction at random**, like
+  height and phase; signing in on a device with its own live satellite
+  **merges** it into the operator's record (no new launch until both are
+  gone); a collision shows **both beacons as a couplet** on every screen
+  and in the catalogue, and fragments carrying words can come later as a
+  nullable column.
+- **C9, tuned 2026-10-06 (ADR 0008):** a floor of 20 satellites and
+  derelicts, topped up at most one every 10 minutes; 3 fragments per
+  satellite, none from debris; a 2% chance a meeting; debris decays like
+  everything else. Advay chose the gentler rate: 1 to 5 collisions an hour
+  in a quiet sky, about half of satellites burning up before a hit.
 - **C9:** collision radius, tuned so a marker sees something happen within
   ten minutes while the sky still lasts days. Decay can't do this alone
   (the shortest lifetime is an hour), so collisions carry it. Decay rates are

@@ -11,6 +11,7 @@ const doc = (html: string) => new JSDOM(html).window.document;
 
 interface SkyObject {
   id: number;
+  kind: "satellite" | "derelict" | "debris";
   callsign: string;
   band: "low" | "mid" | "high";
   launchedAt: number;
@@ -40,14 +41,15 @@ describe("the sky page", () => {
     }
   });
 
-  it("lists the latest launches, newest first", async () => {
+  it("lists the latest launches by people, newest first", async () => {
     const name = callsign();
     await new Session(baseUrl).launch({ band: "mid", callsign: name, beacon: "recent" });
     const { page, sky } = await skyPage();
     const items = [...page.querySelectorAll("#recent li")].map((li) => li.textContent ?? "");
     expect(items.length).toBeGreaterThan(0);
     expect(items.length).toBeLessThanOrEqual(6);
-    const newest = [...sky].sort((a, b) => b.launchedAt - a.launchedAt);
+    // derelicts and debris aren't launches (ADR 0008)
+    const newest = sky.filter((o) => o.kind === "satellite").sort((a, b) => b.launchedAt - a.launchedAt);
     items.forEach((text, i) => expect(text).toContain(newest[i].callsign));
     // a beacon is only heard over the station, never in the summary
     expect(items.join(" ")).not.toContain("recent");

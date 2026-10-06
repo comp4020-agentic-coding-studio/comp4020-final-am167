@@ -755,3 +755,85 @@ catalogue's heights visibly fall within seconds.
 
 Advay also asked to shelve **boosting a satellite** (raising your own orbit
 to stay up longer) for later: in `PLAN.md`.
+
+## 2026-10-06 — C9: planning collisions and login
+
+Advay wanted to start collisions for C9 and add a login, to track who
+launched what and who to blame, but wasn't sure how collisions could work.
+The agent read the orbit maths and found the snag: the chart's orbits are
+flat circles whose period depends only on height, so two objects going the
+same way at the same height never close in, and decay (radius³ falling at
+one rate for all) keeps the gap between any two objects fixed. As built,
+almost nothing would ever collide. Options it gave: a bigger hit distance on
+the current model (rare, slow overtakes), mixed directions (head-on crossings
+twice a lap), or hidden 3D inclinations (rendering rewrite).
+
+Decided with Advay (now in `PLAN.md`): **mixed directions plus a little
+same-direction near-miss**; the server predicts hits ahead and broadcasts the
+impact time so every screen draws it at once; restart catch-up runs the hit
+queue forward; **seed derelicts** so a quiet sky still collides; **optional
+login** (claim a unique operator handle with a passphrase on top of the
+anonymous cookie, superseding ADR 0002); blame worked out from lineage;
+**C9 scope is collisions + login**, with dodging moved to C10. Details still
+open are listed under "Open questions"; decision records come once they're
+settled. Checked the C9 spec first: it asks for one written decision about
+several people acting at once, which still has to be picked now that dodging
+(the obvious candidate) moved out.
+
+Second round, same day: the C9 written decision is **who sees the blame**
+(dodging, the first candidate, moved to C10); the server picks each orbit's
+direction at random (retrograde gives no airtime, so a free choice would be
+a trap); signing in on a device with its own live satellite merges it into
+the operator's record; a collision shows both beacons as a couplet, with
+fragments carrying words left for later (a nullable column, so deferring is
+cheap). Derelict count, fragments per hit, the live cap and debris decay are
+to be tuned with the sim running.
+
+## 2026-10-06 — C9: collisions on the server (branch `C9`)
+
+Advay asked to keep the C9 work on the `C9` branch, so it moved into the
+existing `.claude/worktrees/C9` worktree (CLAUDE.md says `main`; his
+instruction wins). Wrote ADRs 0008 (collisions predicted in closed form),
+0009 (an operator you can claim; supersedes 0002) and 0010 (every screen
+names who caused a collision: the C9 "several people at once" decision), all
+proposed.
+
+Built test-first: `spec/collision.test.ts` (the maths: direction, when two
+orbits meet, fragments from a seed) and `spec/collision-server.test.ts`
+(announced ahead, applied at its time, fragments tracing back, and a
+stopped server ending with the same sky as one that ran through a cascade).
+Orbits gained a direction (`turnedAt`, the unwrapped angle); the server
+predicts each pair's meeting once, keeps a schedule, announces
+`conjunction` events and applies `collision` events. Migration
+`0001_collisions` adds the `collisions` table, `direction` and
+`source_collision`.
+
+The interesting part was tuning, with a throwaway harness simulating a day:
+
+- First version: any two objects inside the hit distance were certain to
+  meet within half a lap. One collision's six fragments in a thin shell set
+  off the next, and a 40-object test shell ran away to the 600-object cap
+  within a minute, with thousands of collisions an hour that never stopped.
+  The catch-up loop also re-sorted every pair per collision, so the test hung.
+- Fixes, each found by the harness: debris is small (a fifth of a
+  satellite's hit distance); each meeting is a chance (5% head-on), drawn
+  once per pair so replays agree; fragments scatter widely in height; a
+  fragment that hits something is pulverised (debris can't multiply on its
+  own, so a cascade feeds on satellites and dies out when launches stop);
+  the derelict baseline counts satellites and derelicts only and adds at
+  most one every 10 minutes (the first version kept refilling derelicts into
+  its own debris field and fed a permanent cascade).
+- Result: a quiet sky holds a steady 5 to 15 collisions an hour with about
+  a hundred objects up, no runaway, settling in milliseconds. Open trade-off
+  for Advay: at that rate most satellites end in a collision within an hour
+  or two rather than burning up.
+
+`decay-server.test.ts` now turns derelicts off and seeds its launches, since
+random satellites can now collide. The sky page's "latest launches" lists
+people's satellites only. `pnpm check` green (101 tests).
+
+Advay chose **gentler** over deadly (asked with the simulated numbers): head-on
+hit distance 0.012, 2% a meeting, lapping 0.015. A quiet sky now has 1 to 5
+collisions an hour, satellites typically last 2 to 4 hours before a hit, and
+about half burn up first; a visitor may wait 15 to 30 minutes for a
+collision, which the conjunction warnings will have to carry.
