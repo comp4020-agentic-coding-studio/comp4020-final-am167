@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-06._
+_Last updated 2026-10-06 (decay)._
 
 - **Done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -27,6 +27,11 @@ _Last updated 2026-10-06._
   the camera pulls back to the planet's limb and hands off to the sky page.
   2026-10-06: a page explaining Kessler syndrome at `/kessler/` (uncommitted),
   linked from the nav, the launchpad's intro and the sky's "Sky now" card.
+  2026-10-06: **orbital decay** (ADR 0007, accepted): every
+  orbit falls, faster the lower it is, and ends in a 30-second burn-up drawn
+  as a real re-entry (fireball, cooling wake, breakup, sparks). Bands are
+  now ranges of one height with one period law; the server marks burn-ups
+  `decayed` and sends a `decay` event.
 - **C8 cutoff:** Tue 6 Oct 2026, 12:00 (moved from Monday for Labour Day).
 - **Next, in order:**
   1. Advay rewrites the agent's README draft (`README.md`, published at
@@ -75,6 +80,8 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Catalogue (2026-10-04) | **The "In orbit" table shows callsigns, not beacons.** A beacon is only heard as its satellite passes over the station, so flying low (heard more often) stays worth it. The reviewer pointed out that a permanent list of beacons made "be seen" pointless. |
 | Catalogue page (2026-10-05) | **The sky page keeps a short "Sky now" card; the full table moves to `/catalogue/`.** The card has counts per band and the latest launches, live; the catalogue lists what's in orbit or everything ever launched (a plain link), and is where debris and its lineage go. The table under the sky made the page scroll too far, and debris would make it far longer. The card is also where collisions out of view will be announced. |
 | Bands (2026-10-04) | **Three bands (low, mid, high) with jitter:** you pick a band, the server picks a random radius and phase inside it, so orbits aren't identical. |
+| Decay (2026-10-06, ADR 0007) | **Closed form, then a burn-up.** radius³ falls at one steady rate, so an orbit falls slowly, then faster; from the low band's middle it lasts 4 hours, the mid's about 17 hours, the high's about 2 days (across each band's reach: 1–8 h, 9–27 h, 31 h–3 days). Shortened from a day / a week / two months on 2026-10-06: the high band has to clear within a few days. At 1.06 planet radii it plunges for 30 seconds and burns up, drawn as a real re-entry. Positions stay a pure function of orbit and clock, so nothing new is stored or sent. |
+| Bands as ranges (2026-10-06, ADR 0007) | **One period for each height** (low middle once a minute, high middle every eight; mid now 2.7 min), and the bands meet at 1.5 and 2.05, so every height is in one band. Counts on the sky page are by where objects are now. |
 | Band edges (2026-10-05) | **Soft edges:** the radius is drawn from a bell curve around the band's middle, so about one launch in eight lands past the band's edges, but never far enough to reach a neighbouring band. The bands are drawn as soft glows to match. |
 
 ## The altitude trade-off
@@ -87,7 +94,10 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 Bands are chosen (three, with jitter; see the table above). Starting values,
 in units of the planet's radius, to tune once the sim runs: low r 1.2–1.4,
 period about 1 minute; mid r 1.6–1.9, about 3 minutes; high r 2.2–2.6, about 8
-minutes. Decay rates are set in C9.
+minutes (mid is now 2.7 minutes: one period law for every height, ADR 0007).
+Decay: about 4 hours from the low band's middle, 17 hours from the mid's,
+2 days from the high's; 1 to 8 hours, 9 to 27 hours and 31 hours to 3 days
+across each band.
 
 ## Co-presence
 
@@ -247,6 +257,17 @@ _Proposed, not final: the working assumption for C8, likely to be revisited._
   orbit one collision can set off the next: Kessler syndrome"), for Advay to
   confirm. When collisions land in C9, drop the page's "not built yet" tags
   for whatever is built.
+- **Seeing a burn-up on demand (added 2026-10-06, for later).** The shortest
+  lifetime is hours and everyone has one satellite, so a visitor (or a
+  marker) only sees a re-entry if someone else's falls while they watch.
+  Ideas: replay the latest burn-up on request, or a short "watch the last
+  re-entry" clip from the sky page. Not decided; see ADR 0007.
+- **Boosting a satellite (added 2026-10-06, for later).** The other half of
+  deorbiting: an owner spends something (fuel?) to raise their own orbit and
+  stay up longer, fighting decay. Pairs with the deorbit control and with
+  fuel for dodging (both C9 ideas above). It changes the stored orbit, so a
+  boost would be a new epoch for that object, and it needs a decision record.
+  Shelved; not decided.
 - **C10 (week 11):** server-side logs as evidence (launches per band,
   collisions, dodges, deorbits), and the catalogue's lineage.
 - **Week 12:** visual polish (light trails, collision effects), README and
@@ -358,9 +379,11 @@ Things to ponder:
 Resolved 2026-10-04 (now in "Decisions so far"): C8 scope, overhead, launch
 flow, beacon rules, launch limits, bands.
 
-- **C9:** decay rates and collision radius, tuned so a marker sees something
-  happen within ten minutes while the sky still lasts weeks. Exact band
-  numbers confirmed then too.
+- **C9:** collision radius, tuned so a marker sees something happen within
+  ten minutes while the sky still lasts days. Decay can't do this alone
+  (the shortest lifetime is an hour), so collisions carry it. Decay rates are
+  set (ADR 0007: hours, about a day, a few days); revisit them once
+  collisions run.
 - **C9:** how fuel works, and whether it refills.
 - **C9:** exact cooldown length (10 minutes is the starting value).
 - **Week 12 (or sooner):** whether, and how far, to move the sky's rendering

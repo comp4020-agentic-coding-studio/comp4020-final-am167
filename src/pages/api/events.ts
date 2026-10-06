@@ -12,7 +12,8 @@ export const GET: APIRoute = ({ request, locals }) => {
     start(controller) {
       const send = (event: string, data: unknown) =>
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-      // subscribe before the snapshot so nothing falls between the two
+      // subscribe before the snapshot so nothing falls between the two (so a
+      // burn-up the snapshot catches up on arrives as a decay event first)
       const unsubscribe = subscribe((event) => send(event.type, toPublic(event.object, person)));
       send("hello", {
         serverTime: Date.now(),

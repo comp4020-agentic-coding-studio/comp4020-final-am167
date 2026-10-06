@@ -1,7 +1,7 @@
 ---
 import Base from "../../layouts/Base.astro";
 import { ago, embed } from "../../lib/format.ts";
-import { BANDS, type Band } from "../../lib/orbit.ts";
+import { BANDS, bandAt, radiusAt, type Band } from "../../lib/orbit.ts";
 import { liveSky, toPublic } from "../../lib/sky.ts";
 
 // The shared sky. The server renders a summary of what's in orbit (counts per
@@ -79,10 +79,12 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
             {bands.map(([band, b]) => (
               <div>
                 <dt>{b.label}</dt>
-                <dd data-band-count={band}>{sky.filter((o) => o.band === band).length}</dd>
+                <dd data-band-count={band}>{sky.filter((o) => bandAt(radiusAt(o, now)) === band).length}</dd>
               </div>
             ))}
           </dl>
+          <!-- burn-ups, wherever they happen: most are out of the station's view -->
+          <p class="sky-news" id="sky-news" role="status" hidden></p>
           <p class="empty" id="empty" hidden={sky.length > 0}>
             The sky is empty. <a href="/">Launch the first satellite</a>.
           </p>
@@ -186,6 +188,10 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
   .sky-page .sat-label.overhead,
   .sky-page .sat-label.mine {
     color: var(--amber);
+  }
+
+  .sky-page .sat-label.burning {
+    color: #ffb27a;
   }
 
   .sky-page .sat-label.mine.shown {
@@ -491,6 +497,25 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 
   .sky-page .empty {
     margin: 0;
+  }
+
+  .sky-page .sky-news {
+    margin: 0 0 0.6rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 3px;
+    background: rgb(255 120 40 / 0.1);
+    color: #ffb27a;
+  }
+
+  .sky-page .sky-news::before {
+    content: "";
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.45rem;
+    border-radius: 50%;
+    background: #ff9a4a;
+    box-shadow: 0 0 6px 2px rgb(255 120 40 / 0.6);
   }
 
   .sky-page .more {

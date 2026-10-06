@@ -1,12 +1,13 @@
 ---
 import Base from "../../layouts/Base.astro";
-import { ago } from "../../lib/format.ts";
-import { BANDS } from "../../lib/orbit.ts";
+import { ago, falling, km } from "../../lib/format.ts";
+import { BANDS, fallRate, heightKm, radiusAt } from "../../lib/orbit.ts";
 import { catalogue, catalogueCounts } from "../../lib/sky.ts";
 
 // The record of everything launched (ADR 0003): what's in orbit now, or
 // everything ever, picked by a plain link so it works without JavaScript.
-// Callsigns only: a beacon is only heard over the station.
+// Callsigns only: a beacon is only heard over the station. Heights are
+// worked out from each orbit (ADR 0007), and a script keeps them falling.
 const { person } = Astro.locals;
 const show = Astro.url.searchParams.get("show") === "all" ? "all" : "live";
 const rows = catalogue(show, person);
@@ -14,7 +15,7 @@ const counts = catalogueCounts();
 const now = Date.now();
 const fates = {
   live: "In orbit",
-  decayed: "Decayed",
+  decayed: "Burned up",
   deorbited: "Deorbited",
   destroyed: "Destroyed",
 } as const;
@@ -29,6 +30,8 @@ const views = [
     <p class="lede">
       Every satellite launched into the shared sky, kept for good. Beacons
       aren't listed: they're only heard as a satellite passes over the station.
+      Every orbit slowly falls, and a satellite that falls far enough burns
+      up on re-entry; its record stays here.
     </p>
 
     <nav class="views" aria-label="Show">
@@ -43,11 +46,12 @@ const views = [
         <a href="/">Launch the first satellite</a>.
       </p>
     ) : (
-      <table>
+      <table data-server-time={now}>
         <thead>
           <tr>
             <th scope="col">Callsign</th>
-            <th scope="col">Band</th>
+            <th scope="col" class="band">Band</th>
+            <th scope="col">Height</th>
             <th scope="col">Launched</th>
             <th scope="col">Status</th>
           </tr>
@@ -60,11 +64,25 @@ const views = [
                 {o.callsign ?? "Debris"}
                 {o.mine && <span class="yours"> (yours)</span>}
               </th>
-              <td>{BANDS[o.band].label}</td>
+              <td class="band">{BANDS[o.band].label}</td>
+              {o.fate === "live" ? (
+                <td
+                  class="height"
+                  data-radius={o.radius}
+                  data-phase={o.phase}
+                  data-period={o.period}
+                  data-epoch={o.epoch}
+                >
+                  <span class="km">{km(heightKm(radiusAt(o, now)))}</span>{" "}
+                  <span class="falling">{falling(fallRate(o, now))}</span>
+                </td>
+              ) : (
+                <td class="height"><span aria-hidden="true">—</span><span class="visually-hidden">Gone</span></td>
+              )}
               <td><time datetime={new Date(o.launchedAt).toISOString()}>{ago(now - o.launchedAt)}</time></td>
               <td>
                 {fates[o.fate]}
-                {o.fateAt && <> <time datetime={new Date(o.fateAt).toISOString()}>{ago(now - o.fateAt)}</time></>}
+                {o.fateAt && <> <time class="fate-time" datetime={new Date(o.fateAt).toISOString()}>{ago(now - o.fateAt)}</time></>}
               </td>
             </tr>
           ))}
@@ -72,6 +90,36 @@ const views = [
       </table>
     )}
   </main>
+
+  <script>
+    import { falling, km } from "../../lib/format.ts";
+    import { fallRate, heightKm, radiusAt } from "../../lib/orbit.ts";
+
+    // Heights fall while you watch: each live row's height and rate, from its
+    // orbit and the server's clock, once a second.
+    const table = document.querySelector<HTMLTableElement>("table[data-server-time]");
+    if (table) {
+      const offset = Number(table.dataset.serverTime) - Date.now();
+      const rows = [...table.querySelectorAll<HTMLElement>("td.height[data-radius]")].map((cell) => ({
+        orbit: {
+          radius: Number(cell.dataset.radius),
+          phase: Number(cell.dataset.phase),
+          period: Number(cell.dataset.period),
+          epoch: Number(cell.dataset.epoch),
+        },
+        height: cell.querySelector(".km")!,
+        rate: cell.querySelector(".falling")!,
+      }));
+      const tick = () => {
+        const time = Date.now() + offset;
+        for (const { orbit, height, rate } of rows) {
+          height.textContent = km(Math.max(0, heightKm(radiusAt(orbit, time))));
+          rate.textContent = falling(fallRate(orbit, time));
+        }
+      };
+      setInterval(tick, 1000);
+    }
+  </script>
 </Base>
 
 <style>
@@ -142,6 +190,22 @@ const views = [
     color: var(--ink-dim);
   }
 
+  .height .km {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .height .falling {
+    margin-left: 0.25rem;
+    font-size: 0.85em;
+    color: #ffb27a;
+    font-variant-numeric: tabular-nums;
+  }
+
+  tr.gone .height {
+    color: var(--ink-dim);
+  }
+
   tr.mine th,
   tr.mine td {
     color: var(--amber);
@@ -169,10 +233,18 @@ const views = [
     margin: 1rem 0 0;
   }
 
-  /* a phone drops the status time before the table gets wider than the screen */
-  @media (max-width: 30rem) {
-    td time:not(:first-child) {
+  /* On a phone the table would be wider than the screen: the band goes (the
+     height says where it is now), the rate sits under the height, and the
+     status loses its time. */
+  @media (max-width: 40rem) {
+    .band,
+    .fate-time {
       display: none;
+    }
+
+    .height .falling {
+      display: block;
+      margin-left: 0;
     }
   }
 </style>

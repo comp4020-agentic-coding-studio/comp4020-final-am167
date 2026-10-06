@@ -1,8 +1,8 @@
 ---
 import Base from "../layouts/Base.astro";
-import { every } from "../lib/format.ts";
+import { every, lasting } from "../lib/format.ts";
 import { BEACON_MAX, CALLSIGN_MAX, readLaunch, type LaunchErrors, type LaunchValues } from "../lib/launch.ts";
-import { BANDS, type Band } from "../lib/orbit.ts";
+import { BANDS, lifetimeRange, type Band } from "../lib/orbit.ts";
 import { SKY_CAP, launch, liveSatelliteOf, skyIsFull } from "../lib/sky.ts";
 
 // The launchpad. The form posts here and works without JavaScript: a launch
@@ -44,9 +44,15 @@ const live = liveSatelliteOf(person);
 const full = !live && skyIsFull();
 const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 const hint: Record<Band, string> = {
-  low: "Close in and quick. Your beacon is heard most often.",
+  low: "Heard most often.",
   mid: "A middle course.",
-  high: "Far out and slow. Heard least often.",
+  high: "Heard least often.",
+};
+// everything falls (ADR 0007): the lower, the sooner, and where in the band
+// a launch lands decides how soon
+const life = (band: Band) => {
+  const { shortest, longest } = lifetimeRange(band);
+  return `Burns up in ${lasting(shortest, longest)}.`;
 };
 // the error is always referenced, even empty, so the script can fill it in
 const describe = (field: keyof LaunchErrors, help?: string) =>
@@ -134,7 +140,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
                 <input type="radio" name="band" value={band} checked={values.band === band} />
                 <span class="band-name">{b.label}</span>
                 <span class="band-period">over the station every {every(b.period)}</span>
-                <span class="band-hint">{hint[band]}</span>
+                <span class="band-hint">{hint[band]} <span class="band-life">{life(band)}</span></span>
               </label>
             ))}
             <p class="field-error" id="band-error" data-error="band">{errors.band}</p>

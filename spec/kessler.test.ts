@@ -34,6 +34,13 @@ describe("the Kessler syndrome page", () => {
     expect(main.querySelector('a[href="/"]'), "no link to the launchpad").not.toBeNull();
   });
 
+  it("no longer calls decay unbuilt", async () => {
+    const rows = [...(await page("/kessler/")).querySelectorAll(".mapping tbody tr")];
+    const decay = rows.find((tr) => /drag/i.test(tr.querySelector("th")?.textContent ?? ""));
+    expect(decay, "no row for decay").toBeDefined();
+    expect(decay!.textContent).not.toMatch(/not built yet/i);
+  });
+
   for (const [name, path] of [
     ["the launchpad", "/"],
     ["the sky", "/sky/"],

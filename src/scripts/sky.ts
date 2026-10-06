@@ -1,5 +1,18 @@
-import { ago } from "../lib/format.ts";
-import { BANDS, OVERHEAD_HALF_WIDTH, STATION_ANGLE, angleAt, isOverhead, type Band } from "../lib/orbit.ts";
+import { ago, until } from "../lib/format.ts";
+import {
+  BANDS,
+  OVERHEAD_HALF_WIDTH,
+  STATION_ANGLE,
+  angleAt,
+  bandAt,
+  burnAt,
+  isOverhead,
+  periodNow,
+  plungeAt,
+  radiusAt,
+  reentryAt,
+  type Band,
+} from "../lib/orbit.ts";
 import { countdown } from "./countdown.ts";
 
 // Keeps the shared sky live, and starts the scene that draws it. Positions
@@ -34,6 +47,28 @@ const sky = new Map(initial.sky.map((s) => [s.id, s]));
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const hue = (id: number) => (id * 137.508) % 360;
+
+// Everything falls and burns up (ADR 0007). A burned-up object stays in the
+// scene this long after, while its wake fades, but leaves the station and
+// the counts at once.
+const AFTERGLOW_MS = 8_000;
+const up = (sat: Satellite, time = serverNow()) => time < reentryAt(sat);
+const flying = () => [...sky.values()].filter((sat) => up(sat));
+// Burn-ups this page has seen, by id, from the scene or the server's event.
+interface BurnUp {
+  callsign: string;
+  at: number;
+  mine: boolean;
+}
+const burnUps = new Map<number, BurnUp>();
+const burned = (sat: Satellite) =>
+  burnUps.set(sat.id, { callsign: sat.callsign, at: reentryAt(sat), mine: sat.mine });
+// the latest, and your own
+const latest = (mine = false) => {
+  let found: BurnUp | null = null;
+  for (const b of burnUps.values()) if ((!mine || b.mine) && (!found || b.at > found.at)) found = b;
+  return found;
+};
 
 // ── the scene ─────────────────────────────────────────────────────────────
 
@@ -88,15 +123,21 @@ let heard = "";
 const SLOTS = 3;
 const PAGE_MS = 4000;
 
-// How long until a satellite next enters the station's window.
-function untilOverhead(sat: Satellite, time: number): number {
+// How long until a satellite next enters the station's window, or null if it
+// burns up first. (Its period shortens as it falls, so this is a touch long
+// for a high orbit; it's re-read four times a second.)
+function untilOverhead(sat: Satellite, time: number): number | null {
+  if (plungeAt(sat, time) !== null) return null;
   const gap = (STATION_ANGLE - OVERHEAD_HALF_WIDTH - angleAt(sat, time) + TAU) % TAU;
-  return (gap / TAU) * sat.period;
+  const ms = (gap / TAU) * periodNow(sat, time);
+  return time + ms < burnAt(sat) ? ms : null;
 }
 
 function listen() {
   const time = serverNow();
-  const over = [...sky.values()].filter((s) => isOverhead(s, time)).sort((a, b) => a.id - b.id);
+  const over = flying()
+    .filter((s) => isOverhead(s, time))
+    .sort((a, b) => a.id - b.id);
   const pages = Math.ceil(over.length / SLOTS);
   const page = pages > 1 ? Math.floor(Date.now() / PAGE_MS) % pages : 0;
   const shown = over.slice(page * SLOTS, page * SLOTS + SLOTS);
@@ -126,22 +167,74 @@ function listen() {
   if (over.length === 0) {
     // the next one to enter the station's window
     let soonest: { sat: Satellite; ms: number } | null = null;
-    for (const sat of sky.values()) {
+    for (const sat of flying()) {
       const ms = untilOverhead(sat, time);
-      if (!soonest || ms < soonest.ms) soonest = { sat, ms };
+      // one that burns up first never gets there
+      if (ms !== null && (!soonest || ms < soonest.ms)) soonest = { sat, ms };
     }
     nextPass.textContent = soonest
       ? `Next overhead: ${soonest.sat.callsign}, in ${countdown(soonest.ms)}.`
-      : "Nothing in orbit yet.";
+      : flying().length > 0
+        ? "Nothing in orbit will reach the station before it burns up."
+        : "Nothing in orbit yet.";
   }
 
-  // your own satellite: when everyone will next hear your beacon
-  const mine = [...sky.values()].find((s) => s.mine);
+  // your own satellite: when everyone will next hear your beacon, and how
+  // long it has left
+  const mine = flying().find((s) => s.mine);
+  const yours = latest(true);
   if (yourPass && mine) {
-    yourPass.textContent = isOverhead(mine, time)
-      ? `${mine.callsign} is over the station now: everyone watching can see your beacon.`
-      : `${mine.callsign} is next over the station in ${countdown(untilOverhead(mine, time))}.`;
+    const left = until(reentryAt(mine) - time);
+    const pass = untilOverhead(mine, time);
+    say(
+      plungeAt(mine, time) !== null
+        ? `${mine.callsign} is burning up on re-entry.`
+        : isOverhead(mine, time)
+          ? `${mine.callsign} is over the station now: everyone watching can see your beacon. It burns up in ${left}.`
+          : pass === null
+            ? `${mine.callsign} burns up in ${left}, before it next reaches the station.`
+            : `${mine.callsign} is next over the station in ${countdown(pass)}. It burns up in ${left}.`,
+    );
+  } else if (yourPass && yours) {
+    say(`${yours.callsign} burned up on re-entry ${ago(time - yours.at)}. `, true);
   }
+  news(time);
+}
+
+// Your satellite's line, with a way back to the pad once it's gone.
+let yourText = "";
+function say(text: string, gone = false) {
+  if (!yourPass || text === yourText) return;
+  yourText = text;
+  if (!gone) {
+    yourPass.textContent = text;
+    return;
+  }
+  const again = document.createElement("a");
+  again.href = "/";
+  again.textContent = "Launch another";
+  yourPass.replaceChildren(text, again, " once the pad reopens.");
+}
+
+// What's burning now, what burned up last, or what will burn up next: most
+// burn up out of the station's view, so the summary says so.
+const newsLine = document.getElementById("sky-news")!;
+let said = "";
+function news(time: number) {
+  const named = (sat: { callsign: string; mine: boolean }) => `${sat.callsign}${sat.mine ? " (yours)" : ""}`;
+  const falling = flying().find((sat) => plungeAt(sat, time) !== null);
+  const last = latest();
+  let text = "";
+  if (falling) text = `${named(falling)} is burning up on re-entry.`;
+  else if (last && time - last.at < 15 * 60_000) text = `${named(last)} burned up on re-entry ${ago(time - last.at)}.`;
+  else {
+    const next = flying().sort((a, b) => reentryAt(a) - reentryAt(b))[0];
+    if (next) text = `Next to burn up: ${named(next)}, in ${until(reentryAt(next) - time)}.`;
+  }
+  if (text === said) return;
+  said = text;
+  newsLine.textContent = text;
+  newsLine.hidden = text === "";
 }
 setInterval(listen, 250);
 listen();
@@ -179,13 +272,15 @@ function recentItem(sat: Satellite): HTMLLIElement {
 }
 
 function renderSummary() {
-  const sats = [...sky.values()].sort((a, b) => b.launchedAt - a.launchedAt);
+  const time = serverNow();
+  const sats = flying().sort((a, b) => b.launchedAt - a.launchedAt);
   recentList.replaceChildren(...sats.slice(0, RECENT).map(recentItem));
   const n = sats.length;
   count.textContent = `${n} satellite${n === 1 ? "" : "s"} in orbit`;
   for (const band of Object.keys(BANDS) as Band[]) {
+    // where each one is now, not the band it was launched into
     document.querySelector(`[data-band-count="${band}"]`)!.textContent = String(
-      sats.filter((s) => s.band === band).length,
+      sats.filter((s) => bandAt(radiusAt(s, time)) === band).length,
     );
   }
   empty.hidden = n > 0;
@@ -201,6 +296,25 @@ setInterval(() => {
     time.textContent = ago(serverNow() - Date.parse(time.dateTime));
   }
 }, 30_000);
+
+// Burning up needs no message: every page works out when from the orbit, so
+// they all see it at the same moment. The server's `decay` event confirms it.
+let counted = "";
+setInterval(() => {
+  const time = serverNow();
+  for (const sat of sky.values()) {
+    if (!up(sat, time)) burned(sat);
+    if (time >= reentryAt(sat) + AFTERGLOW_MS) sky.delete(sat.id);
+  }
+  // counts move as orbits fall through the bands and burn up
+  const key = flying()
+    .map((s) => `${s.id}:${bandAt(radiusAt(s, time))}`)
+    .join();
+  if (key !== counted) {
+    counted = key;
+    renderSummary();
+  }
+}, 1000);
 
 // ── the event stream ──────────────────────────────────────────────────────
 
@@ -219,7 +333,9 @@ function connect() {
   stream.addEventListener("hello", (event) => {
     const hello = JSON.parse(event.data) as { serverTime: number; sky: Satellite[] };
     offset = hello.serverTime - Date.now();
-    sky.clear();
+    // the snapshot is the live sky; keep what's burned up but still fading
+    const time = serverNow();
+    for (const sat of sky.values()) if (up(sat, time)) sky.delete(sat.id);
     for (const sat of hello.sky) sky.set(sat.id, sat);
     renderSummary();
     setConnection("live");
@@ -229,6 +345,13 @@ function connect() {
     const sat = JSON.parse(event.data) as Satellite;
     sky.set(sat.id, sat);
     renderSummary();
+  });
+
+  // the server has marked it decayed; the scene lets its wake fade first
+  stream.addEventListener("decay", (event) => {
+    const sat = JSON.parse(event.data) as Satellite;
+    burned(sat);
+    if (sky.has(sat.id)) renderSummary();
   });
 
   stream.addEventListener("error", () => {

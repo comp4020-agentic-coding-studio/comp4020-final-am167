@@ -39,6 +39,16 @@ describe("the launchpad", () => {
     }
   });
 
+  it("says how long each band stays up before it falls back and burns up", async () => {
+    const page = doc(await (await new Session(baseUrl).get("/")).text());
+    const life = (band: string) =>
+      page.querySelector(`input[name=band][value=${band}]`)?.closest("label")?.querySelector(".band-life")?.textContent ?? "";
+    // the whole spread a launch can land in, not just the band's middle
+    expect(life("low")).toMatch(/Burns up in 1 to 8 hours/);
+    expect(life("mid")).toMatch(/Burns up in 9 to 27 hours/);
+    expect(life("high")).toMatch(/Burns up in 31 hours to 3 days/);
+  });
+
   it("launches into the shared sky, where another person sees it", async () => {
     const a = new Session(baseUrl);
     const name = callsign();

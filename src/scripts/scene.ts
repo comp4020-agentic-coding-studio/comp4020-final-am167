@@ -15,13 +15,27 @@ import {
   Scene,
   ShaderMaterial,
   SphereGeometry,
-  Vector2,
+  Vector3,
   WebGLRenderer,
 } from "three";
-import { BAND_SPREAD, BANDS, OVERHEAD_HALF_WIDTH, STATION_ANGLE, angleAt, isOverhead, type Band, type Orbit } from "../lib/orbit.ts";
+import {
+  BAND_EDGES,
+  BANDS,
+  OVERHEAD_HALF_WIDTH,
+  STATION_ANGLE,
+  angleAt,
+  burnAt,
+  isOverhead,
+  periodNow,
+  radiusAt,
+  reentryAt,
+  type Band,
+  type Orbit,
+} from "../lib/orbit.ts";
 import coastline from "./coastline.json";
 import { countdown } from "./countdown.ts";
 import { attachPerformanceProfiler } from "./performance-profiler.ts";
+import { createReentry } from "./reentry.ts";
 import { PLANET_COLOURS, STAR_COLOURS, seeded } from "./starfield.ts";
 
 // The sky as seen from just above the station: the planet's limb along the
@@ -80,6 +94,11 @@ const SPARE_SKY = 0.4;
 // stars are scattered for this many pixels per scene unit (a desktop
 // screen), and thinned where the view is zoomed further out
 const STAR_SCALE = 400;
+
+// A satellite glows as it nears the top of the atmosphere, over this long
+// before its plunge begins.
+const HEATING_MS = 150_000;
+const EMBER: [number, number, number] = [1, 0.16, 0.02];
 
 // How long a trail is, in time behind the satellite, and its longest arc.
 const TRAIL_MS = 12_000;
@@ -358,17 +377,20 @@ function atmosphere(): Mesh {
 
 // ── the chart over the horizon: bands and the station's window ────────────
 
-// Each band is a soft glow, brightest at its middle and fading past its
-// edges the way launches spread (orbit.ts), drawn by height above the planet
-// so it follows the planet as the view zooms.
+// The bands are ranges of one continuous height (ADR 0007): each is a faint
+// wash from where it meets the band below to where it meets the one above,
+// with a soft line where they meet, so a falling orbit is seen to cross from
+// one into the next. Drawn by height above the planet, so they follow it as
+// the view zooms.
 function bands(): Mesh {
   const geometry = new RingGeometry(WHOLE * 0.5, display(BANDS.high.maxRadius) + 0.5, 512, 1);
   const material = new ShaderMaterial({
     uniforms: {
       colour: { value: new Color("#3a5781") },
       radius: { value: PLANET },
-      ranges: { value: Object.values(BANDS).map((b) => new Vector2(b.minRadius - 1, b.maxRadius - 1)) },
-      spread: { value: BAND_SPREAD },
+      // the heights where low meets mid and mid meets high, and the top of
+      // the high band's reach
+      edges: { value: new Vector3(BAND_EDGES.lowTop - 1, BAND_EDGES.midTop - 1, BANDS.high.maxRadius - 1) },
     },
     vertexShader: /* glsl */ `
       varying vec2 vPos;
@@ -379,18 +401,17 @@ function bands(): Mesh {
     fragmentShader: /* glsl */ `
       uniform vec3 colour;
       uniform float radius;
-      uniform vec2 ranges[3];
-      uniform float spread;
+      uniform vec3 edges;
       varying vec2 vPos;
       void main() {
         float h = length(vPos) - radius;
-        float a = 0.0;
-        for (int i = 0; i < 3; i++) {
-          vec2 r = ranges[i];
-          float sigma = (r.y - r.x) / 2.0 / spread;
-          float z = (h - (r.x + r.y) / 2.0) / sigma;
-          a = max(a, exp(-0.5 * z * z) * 0.2);
-        }
+        if (h < 0.0) discard;
+        // low, mid and high washes, the middle one a touch stronger so the
+        // three read apart, fading out over the top of the high band
+        float wash = h < edges.x ? 0.07 : h < edges.y ? 0.11 : 0.07 * (1.0 - smoothstep(edges.z - 0.2, edges.z + 0.4, h));
+        // soft lines where they meet
+        float line = exp(-pow((h - edges.x) / 0.012, 2.0)) + exp(-pow((h - edges.y) / 0.012, 2.0));
+        float a = wash + line * 0.22;
         if (a < 0.002) discard;
         gl_FragColor = vec4(colour, a);
         #include <colorspace_fragment>
@@ -489,9 +510,12 @@ function glowPoints(): Points {
 interface Placed {
   sat: SceneSatellite;
   angle: number;
+  radius: number;
   x: number;
   y: number;
   overhead: boolean;
+  // in its last plunge, drawn by reentry.ts
+  burning: boolean;
 }
 
 export function createScene(options: SceneOptions): SceneControls | null {
@@ -543,6 +567,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
     side: DoubleSide,
   }));
   const satellites = glowPoints();
+  const reentry = createReentry(reduced);
   const station = glowPoints();
   station.geometry.setAttribute("position", new Float32BufferAttribute([0, PLANET + 0.01, 8], 3));
   station.geometry.setAttribute("colour", new Float32BufferAttribute([AMBER.r, AMBER.g, AMBER.b], 3));
@@ -559,7 +584,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
   starPoints.renderOrder = 1;
   backdropScene.add(backdrop, starPoints);
   const bandRings = bands();
-  const layers = [earth, coasts, air, bandRings, beam, trails, station, satellites];
+  const layers = [earth, coasts, air, bandRings, beam, trails, ...reentry.layers, station, satellites];
   layers.forEach((layer, i) => {
     layer.renderOrder = i;
     if (layer !== earth && layer !== coasts) layer.position.z = 8;
@@ -601,6 +626,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
   let width = 0;
   let height = 0;
   let half = 1; // half the view's width, in scene units
+  let pixelRatio = 1;
   let top = TOP;
   let bottom = 0;
   let planet = PLANET;
@@ -679,6 +705,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
     const shipped = Math.min(window.devicePixelRatio || 1, 2);
     const ratio = profiler?.drawingPixelRatio(width, height, shipped) ?? shipped;
     renderer.setPixelRatio(ratio);
+    pixelRatio = ratio;
     renderer.setSize(width, height, false);
     for (const layer of [starPoints, satellites, station]) {
       (layer.material as ShaderMaterial).uniforms.ratio.value = ratio;
@@ -767,6 +794,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
 
   const opened = performance.now();
   const placed: Placed[] = [];
+  const burning: SceneSatellite[] = [];
   const ids = new Set<number>();
 
   // in view, as opposed to near enough that its trail might be
@@ -788,47 +816,57 @@ export function createScene(options: SceneOptions): SceneControls | null {
     const margin = TRAIL_MAX * display(BANDS.high.maxRadius, planet);
     placed.length = 0;
     ids.clear();
+    burning.length = 0;
     let mine: Placed | null = null;
     let count = 0;
     for (const sat of options.sky()) {
+      const falling = reentry.owns(sat, time);
+      if (falling) burning.push(sat);
+      // burned up: only its wake is left, drawn by reentry.ts
+      if (time > reentryAt(sat)) continue;
       count++;
       ids.add(sat.id);
       const angle = angleAt(sat, time);
-      const [x, y] = place(sat.radius, angle, planet);
-      const p = { sat, angle, x, y, overhead: isOverhead(sat, time) };
+      const radius = radiusAt(sat, time);
+      const [x, y] = place(radius, angle, planet);
+      const p = { sat, angle, radius, x, y, overhead: isOverhead(sat, time), burning: falling };
       if (sat.mine) mine = p;
       if (Math.abs(x) <= half + margin && y > bottom) placed.push(p);
     }
     grow(count);
+    // the burning ones are drawn by reentry.ts; the rest as points
+    const flying = placed.filter((p) => !p.burning);
 
     // the points
     const { position, colour, size, core, halo } = pointBuffers;
-    for (let i = 0; i < placed.length; i++) {
-      const p = placed[i];
+    for (let i = 0; i < flying.length; i++) {
+      const p = flying[i];
       const c = p.overhead ? amber : colourOf(p.sat.id);
+      // glowing red as it skims the top of the atmosphere
+      const heat = Math.max(0, 1 - (burnAt(p.sat) - time) / HEATING_MS) ** 2;
       position[i * 3] = p.x;
       position[i * 3 + 1] = p.y;
       position[i * 3 + 2] = 0;
-      colour[i * 3] = c[0];
-      colour[i * 3 + 1] = c[1];
-      colour[i * 3 + 2] = c[2];
-      core[i] = p.sat.mine ? 3.6 : p.overhead ? 3.2 : 2.4;
+      for (let k = 0; k < 3; k++) colour[i * 3 + k] = c[k] + (EMBER[k] - c[k]) * heat;
+      core[i] = (p.sat.mine ? 3.6 : p.overhead ? 3.2 : 2.4) + heat;
       halo[i] = p.sat.mine ? 10 : 0;
-      size[i] = p.sat.mine ? 26 : 22;
+      size[i] = (p.sat.mine ? 26 : 22) + heat * 8;
     }
     const g = satellites.geometry;
     for (const name of ["position", "colour", "size", "core", "halo"]) g.getAttribute(name).needsUpdate = true;
-    g.setDrawRange(0, placed.length);
+    g.setDrawRange(0, flying.length);
 
     // the trails: ribbons that taper and fade behind each satellite
     const thick = 3 * ((2 * half) / width);
     const tp = trailBuffers.position;
     const tt = trailBuffers.tint;
-    for (let s = 0; s < placed.length; s++) {
-      const p = placed[s];
-      const arc = Math.min(TRAIL_MAX, (TAU * TRAIL_MS) / p.sat.period);
-      const c = colourOf(p.sat.id);
-      const d = display(p.sat.radius, planet);
+    for (let s = 0; s < flying.length; s++) {
+      const p = flying[s];
+      const arc = Math.min(TRAIL_MAX, (TAU * TRAIL_MS) / periodNow(p.sat, time));
+      const base = colourOf(p.sat.id);
+      const heat = Math.max(0, 1 - (burnAt(p.sat) - time) / HEATING_MS) ** 2;
+      const c = heat > 0 ? base.map((v, k) => v + (EMBER[k] - v) * heat) : base;
+      const d = display(p.radius, planet);
       for (let i = 0; i < TRAIL_STEPS; i++) {
         const t = i / (TRAIL_STEPS - 1);
         const a = p.angle - t * arc;
@@ -854,7 +892,16 @@ export function createScene(options: SceneOptions): SceneControls | null {
     const tg = trails.geometry;
     tg.getAttribute("position").needsUpdate = true;
     tg.getAttribute("tint").needsUpdate = true;
-    tg.setDrawRange(0, placed.length * (TRAIL_STEPS - 1) * 6);
+    tg.setDrawRange(0, flying.length * (TRAIL_STEPS - 1) * 6);
+
+    reentry.draw(burning, {
+      time,
+      planet,
+      unit: (2 * half) / width,
+      // smaller with the planet as the view zooms out
+      scale: 1 - 0.5 * zoom,
+      ratio: pixelRatio,
+    });
 
     if (profiler) profiler.render(draw);
     else draw();
@@ -905,6 +952,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
       const at = `translate(${Math.round(box[0])}px, ${Math.round(box[1])}px)`;
       if (at !== entry.at) entry.el.style.transform = entry.at = at;
       entry.el.classList.toggle("overhead", p.overhead);
+      entry.el.classList.toggle("burning", p.burning);
       entry.el.classList.toggle("mine", p.sat.mine);
     }
     for (const [id, entry] of labels) {
@@ -925,10 +973,16 @@ export function createScene(options: SceneOptions): SceneControls | null {
       pointer.hidden = true;
     } else {
       pointer.hidden = false;
-      const d = display(mine.sat.radius, planet);
+      const d = display(mine.radius, planet);
       const rise = Math.acos(Math.min(1, half / d));
       const gap = (rise - mine.angle + TAU) % TAU;
-      const text = `‹ ${mine.sat.callsign} rises in ${countdown((gap / TAU) * mine.sat.period)}`;
+      const time = options.now();
+      const rises = (gap / TAU) * periodNow(mine.sat, time);
+      const text = mine.burning
+        ? `‹ ${mine.sat.callsign} is burning up out of view`
+        : time + rises >= burnAt(mine.sat)
+          ? `‹ ${mine.sat.callsign} burns up before it rises`
+          : `‹ ${mine.sat.callsign} rises in ${countdown(rises)}`;
       const [, edge] = screen(-half, Math.sqrt(d * d - half * half));
       let y = edge - 8 - pointer.offsetHeight;
       const box = (at: number): Box => [8, at, 8 + pointer.offsetWidth, at + pointer.offsetHeight];

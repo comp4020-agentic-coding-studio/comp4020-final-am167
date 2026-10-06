@@ -2,7 +2,7 @@ import type { SkyObject } from "./sky.ts";
 
 // In-process pub/sub behind the SSE endpoint. One machine, so no broker needed.
 // Events carry the full object; each stream decides what its viewer may see.
-export type SkyEvent = { type: "launch"; object: SkyObject };
+export type SkyEvent = { type: "launch"; object: SkyObject } | { type: "decay"; object: SkyObject };
 
 type Listener = (event: SkyEvent) => void;
 

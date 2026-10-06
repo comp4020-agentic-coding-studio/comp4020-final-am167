@@ -1,5 +1,6 @@
 import { JSDOM } from "jsdom";
 import { describe, expect, inject, it } from "vitest";
+import { bandAt, bandReach, heightKm, radiusAt } from "../src/lib/orbit.ts";
 import { Session, callsign } from "./session.ts";
 
 // The sky page stays one screen: the scene, what the station hears, and a
@@ -13,22 +14,29 @@ interface SkyObject {
   callsign: string;
   band: "low" | "mid" | "high";
   launchedAt: number;
+  radius: number;
+  phase: number;
+  period: number;
+  epoch: number;
 }
 
 async function skyPage(session = new Session(baseUrl)) {
   const page = doc(await (await session.get("/sky/")).text());
-  const data = JSON.parse(page.getElementById("sky-data")!.textContent!) as { sky: SkyObject[] };
-  return { page, sky: data.sky };
+  const data = JSON.parse(page.getElementById("sky-data")!.textContent!) as { serverTime: number; sky: SkyObject[] };
+  return { page, sky: data.sky, serverTime: data.serverTime };
 }
 
 describe("the sky page", () => {
   it("sums up what's in orbit per band instead of listing it", async () => {
     await new Session(baseUrl).launch({ band: "high", callsign: callsign(), beacon: "counted" });
-    const { page, sky } = await skyPage();
+    const { page, sky, serverTime } = await skyPage();
     expect(page.querySelector("table"), "the sky page still has a table").toBeNull();
+    // counted by where each one is now, since orbits fall through the bands
+    // (ADR 0007), not the band it was launched into
     for (const band of ["low", "mid", "high"] as const) {
       const shown = page.querySelector(`[data-band-count="${band}"]`)?.textContent;
-      expect(Number(shown), `${band} count`).toBe(sky.filter((o) => o.band === band).length);
+      const there = sky.filter((o) => bandAt(radiusAt(o, serverTime)) === band).length;
+      expect(Number(shown), `${band} count`).toBe(there);
     }
   });
 
@@ -63,6 +71,24 @@ describe("the catalogue", () => {
     expect(row!.textContent).toMatch(/In orbit/);
     expect(row!.textContent).toMatch(/yours/);
     expect(row!.textContent).not.toContain("in the record");
+  });
+
+  it("shows how high each satellite is now, and how fast it's falling", async () => {
+    const a = new Session(baseUrl);
+    const name = callsign();
+    await a.launch({ band: "low", callsign: name, beacon: "how high" });
+    const page = doc(await (await a.get("/catalogue/")).text());
+    const headers = [...page.querySelectorAll("thead th")].map((th) => th.textContent);
+    expect(headers).toContain("Height");
+    const row = [...page.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(name))!;
+    const text = row.querySelector(".height")?.textContent ?? "";
+    const match = text.match(/([\d,]+\.\d+) km/);
+    expect(match, `no height in "${text}"`).not.toBeNull();
+    const km = Number(match![1].replace(/,/g, ""));
+    const { min, max } = bandReach("low");
+    expect(km).toBeGreaterThanOrEqual(Math.floor(heightKm(min)) - 1);
+    expect(km).toBeLessThanOrEqual(heightKm(max));
+    expect(text).toMatch(/↓\s*[\d.]+ km\/h/);
   });
 
   it("can show everything ever launched, by a plain link", async () => {

@@ -2,17 +2,17 @@ import { and, count, desc, eq, max, ne, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { publish } from "./events.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
-import { placeInBand, type Band, type Orbit } from "./orbit.ts";
+import { placeInBand, reentryAt, type Band, type Orbit } from "./orbit.ts";
 
 const { objects } = schema;
 
 // After your satellite leaves the sky, how long before you can launch again
-// (PLAN.md, "Launch limits"). Only bites once satellites can die, in C9.
+// (PLAN.md, "Launch limits").
 export const RELAUNCH_COOLDOWN = 10 * 60_000;
 
-// The most satellites the sky holds at once (PLAN.md, "Launch limits"). In
-// C8 nothing comes down, so this is what stops the sky, and the 256 MB
-// machine holding it, growing for ever. SKY_CAP overrides it for testing.
+// The most satellites the sky holds at once (PLAN.md, "Launch limits"), so
+// the sky, and the 256 MB machine holding it, can't outgrow decay clearing
+// it. SKY_CAP overrides it for testing.
 export const SKY_CAP = Number(process.env.SKY_CAP ?? 200);
 
 // An object as the server holds it, owner included.
@@ -46,12 +46,55 @@ const columns = {
   epoch: objects.epoch,
 };
 
-export function liveSky(): SkyObject[] {
-  return db.select(columns).from(objects).where(eq(objects.fate, "live")).orderBy(objects.id).all();
+const live = (): SkyObject[] =>
+  db.select(columns).from(objects).where(eq(objects.fate, "live")).orderBy(objects.id).all();
+
+// ── decay (ADR 0007) ──────────────────────────────────────────────────────
+
+// Everything that has burned up by now leaves the sky: its fate becomes
+// `decayed`, dated to the moment it burned up (worked out from its orbit, not
+// when this ran), and everyone watching is told. Every read of the sky runs
+// this first, so a server that was stopped while things burned up catches up
+// before it answers; a timer runs it as each one burns up while it's running.
+export function settleDecay(now = Date.now()): SkyObject[] {
+  const sky = live();
+  const gone = sky.filter((object) => reentryAt(object) <= now);
+  if (gone.length > 0) {
+    db.transaction((tx) => {
+      for (const object of gone) {
+        tx.update(objects)
+          .set({ fate: "decayed", fateAt: Math.round(reentryAt(object)) })
+          .where(and(eq(objects.id, object.id), eq(objects.fate, "live")))
+          .run();
+      }
+    });
+    for (const object of gone) publish({ type: "decay", object });
+  }
+  scheduleDecay(sky.filter((object) => !gone.includes(object)));
+  return gone;
 }
 
-// A catalogue row: an object, whether it's still up, and when it came down.
-export interface CatalogueEntry {
+// Wakes for the next burn-up, or within a minute regardless, so a timer
+// never sleeps past a launch that burns up sooner.
+let wake: ReturnType<typeof setTimeout> | undefined;
+function scheduleDecay(sky: SkyObject[]): void {
+  clearTimeout(wake);
+  let next = Infinity;
+  for (const object of sky) next = Math.min(next, reentryAt(object));
+  const wait = Math.min(Math.max(next - Date.now(), 0) + 5, 60_000);
+  wake = setTimeout(() => settleDecay(), wait);
+  // never what keeps the process alive
+  wake.unref?.();
+}
+
+export function liveSky(): SkyObject[] {
+  settleDecay();
+  return live();
+}
+
+// A catalogue row: an object, its orbit, whether it's still up, and when it
+// came down.
+export interface CatalogueEntry extends Orbit {
   id: number;
   callsign: string | null;
   band: Band;
@@ -64,6 +107,7 @@ export interface CatalogueEntry {
 // The record (ADR 0003): what's in orbit now, or everything ever launched,
 // newest first. Owners stay on the server; a row only says if it's yours.
 export function catalogue(show: "live" | "all", person: string | undefined): CatalogueEntry[] {
+  settleDecay();
   const rows = db
     .select({
       id: objects.id,
@@ -73,6 +117,10 @@ export function catalogue(show: "live" | "all", person: string | undefined): Cat
       launchedAt: objects.launchedAt,
       fate: objects.fate,
       fateAt: objects.fateAt,
+      radius: objects.radius,
+      phase: objects.phase,
+      period: objects.period,
+      epoch: objects.epoch,
     })
     .from(objects)
     .where(show === "live" ? eq(objects.fate, "live") : undefined)
@@ -82,6 +130,7 @@ export function catalogue(show: "live" | "all", person: string | undefined): Cat
 }
 
 export function catalogueCounts(): { live: number; all: number } {
+  settleDecay();
   const row = db
     .select({ all: count(), live: sql<number>`sum(${objects.fate} = 'live')` })
     .from(objects)
@@ -97,6 +146,7 @@ const ALREADY_UP = (callsign: string | null) => ({
 });
 
 export function launch(person: string, input: LaunchInput, now = Date.now()): LaunchResult {
+  settleDecay(now);
   let result: LaunchResult;
   try {
     result = checkAndInsert(person, input, now);
@@ -105,7 +155,10 @@ export function launch(person: string, input: LaunchInput, now = Date.now()): La
     if ((error as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") return ALREADY_UP(null);
     throw error;
   }
-  if (result.ok) publish({ type: "launch", object: result.object });
+  if (result.ok) {
+    publish({ type: "launch", object: result.object });
+    scheduleDecay(live());
+  }
   return result;
 }
 
@@ -158,6 +211,7 @@ function checkAndInsert(person: string, input: LaunchInput, now: number): Launch
 }
 
 export function skyIsFull(): boolean {
+  settleDecay();
   const row = db.select({ n: count() }).from(objects).where(eq(objects.fate, "live")).get();
   return (row?.n ?? 0) >= SKY_CAP;
 }
@@ -165,6 +219,7 @@ export function skyIsFull(): boolean {
 // The live satellite a person owns, if any.
 export function liveSatelliteOf(person: string | undefined): SkyObject | undefined {
   if (!person) return undefined;
+  settleDecay();
   return db
     .select(columns)
     .from(objects)

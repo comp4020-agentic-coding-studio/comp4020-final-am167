@@ -1,7 +1,11 @@
 ---
 import Base from "../../layouts/Base.astro";
-import { every } from "../../lib/format.ts";
-import { BANDS } from "../../lib/orbit.ts";
+import { every, lasting } from "../../lib/format.ts";
+import { BANDS, lifetimeRange } from "../../lib/orbit.ts";
+
+// how long an orbit lasts in each band, from the bottom of the band to the top
+const low = lifetimeRange("low");
+const high = lifetimeRange("high");
 
 // What Kessler syndrome is, in plain words, for visitors who haven't heard of
 // it: the cascade, the real cases, why it's a commons problem, and how this
@@ -260,8 +264,9 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
         That's why this app is called Kessler: it's one small sky that everyone
         shares, built so the same dilemma plays out where you can watch it. So
         far it has only the first half. Crowding the low band gets your beacon
-        heard more often and costs nothing yet; collisions, which give crowding
-        its cost, come next. The parts marked “not built yet” are still to come.
+        heard more often, and the only price is a shorter life before it falls;
+        collisions, which give crowding its real cost, come next. The parts
+        marked “not built yet” are still to come.
       </p>
       <table class="mapping">
         <caption class="visually-hidden">Real orbit compared with this app's sky</caption>
@@ -294,7 +299,7 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
           </tr>
           <tr>
             <th scope="row">Drag clears low orbits in years and high ones over centuries.</th>
-            <td><span class="later">Not built yet</span> Everything slowly falls: the low band clears quickly, the high band slowly. Nothing resets the sky.</td>
+            <td>Everything slowly falls, faster the lower it is, and burns up when it meets the atmosphere: {lasting(low.shortest, low.longest)} from the low band, {lasting(high.shortest, high.longest)} from the high. Nothing resets the sky.</td>
           </tr>
           <tr>
             <th scope="row">An operator can bring a satellite down at the end of its life. Debris can't be steered.</th>

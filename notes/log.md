@@ -609,3 +609,146 @@ is now a card of its own under the intro: "New here?" above a large amber
 reads over the afterglow on a phone. The intro's line keeps the one-line
 explanation ("in a crowded orbit one collision can set off the next"). Still
 no scroll at any of the laptop sizes above.
+
+## 2026-10-06 — Orbital decay, and burning up on re-entry
+
+Worked on branch `C9` (fast-forwarded to `main` first). Advay asked for
+orbital decay: everything slowly loses height and burns up, with bands as
+ranges rather than fixed shelves, and a re-entry that looks real.
+
+**The model (ADR 0007, proposed).** Positions had to stay a pure function of
+the stored orbit and the server's clock (ADR 0004), so decay is a law with a
+closed-form answer rather than stepped drag or periodic re-saves:
+- One period for every height (`periodAt`), fitted so the low band's middle
+  still comes round once a minute and the high's every eight. Before, each
+  band had its own law, so a high satellite that fell into the low band
+  would have crawled past the low ones. Mid moves from 3 to 2.7 minutes.
+- radius^6 falls at one steady rate, so orbits fall slowly, then faster.
+  From the low band's middle an orbit lasts a day, the mid's about 8 days,
+  the high's about two months. The angle integrates in closed form.
+- At 1.06 planet radii a scripted 30-second plunge: it dives, slows hard
+  (angular speed ∝ (1 − 0.85s)³) and has burned away at 1.005.
+- Bands are ranges meeting at 1.5 and 2.05 (`bandAt`); the sky page counts
+  objects by where they are now.
+
+Test first: `spec/decay.test.ts` (13 tests: continuity at the epoch and into
+the plunge, monotone fall, lifetimes per band, speeding up as it falls, the
+plunge's length, contiguous band ranges, a high orbit drifting through mid
+and low). All failed on missing functions, then passed. HTTP tests added:
+the launchpad shows each band's lifetime, the sky's band counts follow
+current height, `/kessler/` no longer marks decay "not built yet".
+
+**Server.** `settleDecay()` in `src/lib/sky.ts` runs before every read of the
+sky and on a timer set for the next burn-up: live rows past their burn-up
+become `decayed`, dated to the burn-up itself, and a `decay` event goes out.
+A stopped server catches up on its first request. Checked by hand: demo
+satellites inserted to burn within seconds were marked with the right
+`fate_at`, and the `decay` event arrived on `/api/events`.
+
+**Client.** Every page works out burn-ups itself, so all screens see the same
+moment; the event only confirms. A burned object stays 8 s while its wake
+fades. "Sky now" says what's burning or burned up last (most happen out of
+the station's view); your own satellite's line says when it burns up. The
+launchpad's band choices say how long each lasts. Catalogue fate reads
+"Burned up".
+
+**The re-entry** (`src/scripts/reentry.ts`), modelled on photos of real
+re-entries (ATV-1, Starlink and rocket stages over the Americas, Soyuz from
+the ISS): a hot head with a bow-shock glow and a white point, a wake cooling
+white → orange → red that billows as it ages, a faint green train, a breakup
+into a string of fragments that fall behind (seeded by the object's id, so
+every screen sees the same one), sparks shed behind, and flares as pieces
+burn out. A satellite glows red in the last few minutes before its plunge.
+The bands were redrawn as contiguous washes with soft lines where they meet.
+
+How it got there, checked with frozen-clock screenshots (overriding the
+page's clock to exact moments of the plunge) and recordings:
+- First pass blew out to a white blob with a lavender halo. Two causes: the
+  colours were sRGB-ish values going through three.js's linear→sRGB
+  conversion, and pure additive blending over the bright blue haze. Fixed
+  with a linear-light blackbody ramp and premultiplied blending, so the fire
+  partly hides the haze behind it and stays orange.
+- The burn sat inside the bright green airglow line and got lost; the plunge
+  was lowered (1.06 → 1.005) to burn in the haze just above the limb.
+- At first the plunge swept 120° in 30 s, crossing the view in a few
+  seconds; the angular speed now falls as a cube, so it streaks in fast and
+  lingers while brightest.
+- Fragments bunched at the head; their lag was raised so they string out
+  behind. Late in the plunge their ribbons drew vertical smears (their
+  heading came from their own slow sinking); headings now follow the orbit.
+
+![A satellite burning up over the station: the fireball and its cooling wake (top), then breaking up as it slows (bottom)](screenshots/2026-10-06-reentry.png)
+
+Checked at 1920×1080 (horizon and whole-sky views) and iPhone 14; the
+launchpad still doesn't scroll at 1920×1080, 1280×720 or 1440×800. Checks
+green against a fresh production build (70 tests).
+
+**Adversarial review** (a fresh Sonnet agent, code read and numeric checks
+of the maths). No bug in the core maths: radius and angle are continuous
+through the burn. Acted on:
+- **The lifetimes were only true at a band's middle.** A launch lands
+  anywhere in its band's reach, so a low launch can burn up in 5 hours under
+  a page that said "about a day". The launchpad now shows each band's spread
+  (`lifetimeRange`: 5 hours to 2 days, 3 to 18 days, 3 weeks to 4 months),
+  as do `/kessler/`, the ADR and the plan. Test first: the launchpad test
+  asked for the spreads and failed on "about a day".
+- **Pass countdowns ignored the burn-up.** "Next over the station in 3 min.
+  It burns up in 1 min" for a satellite that never gets there. Countdowns
+  now return nothing when the burn-up comes first, and say so ("burns up
+  before it next reaches the station", "burns up before it rises").
+- **One remembered burn-up.** Two burn-ups close together could leave your
+  satellite's line stale. Burn-ups are now kept by id; the latest and your
+  own are looked up from them.
+- **The server's marking was untested.** `spec/decay-server.test.ts` drives
+  `settleDecay` against a throwaway database with the clock passed in:
+  marked `decayed` at the burn-up's time with a `decay` event, once only,
+  caught up on the next read after a quiet spell, and the cooldown counted
+  from the burn-up (passed first time: regression cover).
+- **Reconnecting cut a burn-up short**: the snapshot replaced the whole sky.
+  It now keeps what's burned up but still fading.
+- **"Sky now" was usually empty** between burn-ups; it now says what burns
+  up next ("Next to burn up: X, in 5 h"). Your satellite's line links back to
+  the pad once it's gone; the catalogue says what "Burned up" means.
+- `periodNow` grew for an orbit starting below the burn radius (unreachable
+  by launch, fixed anyway, with a test); each settle reads the sky once, not
+  twice.
+
+Left, and written into ADR 0007: nobody can see a burn-up on demand (the
+shortest lifetime is hours, one satellite each), so "something happens
+within ten minutes" falls to collisions; catch-up runs on the first request
+after a restart rather than at boot; and the dive's radial speed jumps at the
+plunge's start (position is continuous; no kink was visible in recordings).
+
+**Heights in the catalogue** (Advay's ask: "so we can see them slowly go
+down"). A Height column with each live object's height in km and how fast
+it's falling ("590.22 km ↓ 13 km/h"), ticking once a second from the orbit
+and the server's clock; "—" once burned up. The km scale (2,000 km per
+planet radius, ADR 0007) puts the burn-up at 120 km, where real re-entries
+begin, and the low band at 400–800 km. Test first: the catalogue test asked
+for the column and a height inside the low band's reach, and `heightKm` /
+`fallRate` got unit tests; all failed, then passed. Two decimals so a low
+orbit visibly drops every few seconds. On a phone the table overflowed:
+the Band column now drops (the height says where it is), the rate sits
+under the height, and the status time is hidden. That last rule never
+worked (`td time:not(:first-child)` matched nothing in the Status cell) and
+only showed once something had burned up; it's a class now. Checked at
+1920×1080 and iPhone 14 (no horizontal scroll).
+
+Advay asked to note "seeing a burn-up on demand" for later: in `PLAN.md`.
+
+**Decay shortened** (Advay: "high should get only a few days max"). The first
+rates (radius^6, a day from the low band's middle) let a high launch last up
+to four months. Now radius³ falls at a steady rate and the low band's middle
+lasts 4 hours: low 1 to 8 hours, mid 9 to 27 hours, high 31 hours to 3 days.
+radius³ was picked over radius² because it keeps three distinct tiers and
+still speeds up as it falls (about 1.5× faster near the air than at the low
+band). Tests first: the lifetime test now asks for hours / about a day / a
+few days at most, and that no launch lasts past 3.5 days; it failed, then
+passed. The fall-rate test's "10× faster low than high" pinned the old law;
+the contract is only "faster the lower it is". The launchpad and
+`/kessler/` read the spreads from the code, so only their tests changed.
+A side effect: a low satellite now drops about 100 km an hour, so the
+catalogue's heights visibly fall within seconds.
+
+Advay also asked to shelve **boosting a satellite** (raising your own orbit
+to stay up longer) for later: in `PLAN.md`.
