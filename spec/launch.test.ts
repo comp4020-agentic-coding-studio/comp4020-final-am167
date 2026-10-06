@@ -76,17 +76,26 @@ describe("the launchpad", () => {
     expect(body.redirect).toMatch(/^\/sky\//);
   });
 
-  it("allows one live satellite per person", async () => {
+  it("makes a person wait a short gap between launches", async () => {
     const a = new Session(baseUrl);
     const first = await a.launch({ band: "mid", callsign: callsign(), beacon: "first" });
     expect(first.status).toBe(303);
     const second = callsign();
     const res = await a.launch({ band: "mid", callsign: second, beacon: "second" });
     expect(res.status).toBe(422);
-    expect(doc(await res.text()).body.textContent).toMatch(/already/i);
+    expect(doc(await res.text()).body.textContent).toMatch(/launch again in (\d+ min )?\d+ s/i);
 
     const sky = await (await new Session(baseUrl).get("/sky/")).text();
     expect(sky).not.toContain(second);
+  });
+
+  it("keeps the pad open while your satellite is up", async () => {
+    const a = new Session(baseUrl);
+    await a.launch({ band: "low", callsign: callsign(), beacon: "still up" });
+    const page = doc(await (await a.get("/")).text());
+    expect(page.querySelector("form fieldset")).not.toBeNull();
+    // closed only for the gap, and it says so
+    expect(page.body.textContent).toMatch(/launch again in (\d+ min )?\d+ s/i);
   });
 
   it("keeps a refused launch's answers in the form, with the reason", async () => {
@@ -174,7 +183,7 @@ describe("the launch rules", () => {
 });
 
 describe("coming back", () => {
-  it("finds your satellite still yours, and the pad closed to a second launch", async () => {
+  it("finds your satellites still yours, listed on the pad", async () => {
     const a = new Session(baseUrl);
     const name = callsign();
     await a.launch({ band: "low", callsign: name, beacon: "still here" });
@@ -182,8 +191,7 @@ describe("coming back", () => {
     const pad = await a.get("/");
     expect(pad.headers.getSetCookie().some((c) => c.startsWith("kessler_person="))).toBe(false);
     const page = doc(await pad.text());
-    expect(page.body.textContent).toContain(`${name} is in orbit`);
-    expect(page.querySelector("form fieldset")?.hasAttribute("disabled")).toBe(true);
+    expect(page.querySelector(".console")?.textContent).toMatch(new RegExp(`Yours in orbit:\\s*${name}`));
 
     const catalogue = doc(await (await a.get("/catalogue/")).text());
     const row = [...catalogue.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(name));

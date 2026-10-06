@@ -101,7 +101,7 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
           <p class="more">
             <a href="/catalogue/">Full catalogue →</a>
             <a href="/kessler/">What's Kessler syndrome?</a>
-            {!mine && <a href="/">Launch a satellite</a>}
+            <a href="/">{mine ? "Launch another" : "Launch a satellite"}</a>
           </p>
         </section>
       </div>

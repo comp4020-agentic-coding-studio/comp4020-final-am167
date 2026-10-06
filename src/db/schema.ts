@@ -1,4 +1,3 @@
-import { sql } from "drizzle-orm";
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // The app's tables. `pnpm db:generate` turns changes here into a migration
@@ -14,7 +13,8 @@ export const objects = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     kind: text("kind", { enum: ["satellite", "derelict", "debris"] }).notNull(),
-    // the person cookie that launched it (ADR 0002); never sent to clients
+    // the person cookie that launched it (ADR 0009); never sent to clients.
+    // A person can have any number up, a gap apart (src/lib/sky.ts)
     owner: text("owner"),
     callsign: text("callsign"),
     beacon: text("beacon"),
@@ -38,10 +38,6 @@ export const objects = sqliteTable(
   (t) => [
     index("objects_fate").on(t.fate),
     index("objects_owner").on(t.owner),
-    // one live satellite per person (ADR 0002), enforced by the database too
-    uniqueIndex("objects_one_live_per_owner")
-      .on(t.owner)
-      .where(sql`${t.fate} = 'live' AND ${t.owner} IS NOT NULL`),
     index("objects_source_collision").on(t.sourceCollision),
   ],
 );

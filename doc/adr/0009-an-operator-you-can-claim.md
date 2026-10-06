@@ -55,14 +55,13 @@ passphrase that a person can claim, and sign in to from any device.**
   operator, after checking the passphrase in constant time. Failed attempts
   per handle are slowed in memory.
 - **Merging:** if the device signing in has its own satellites, they join
-  the operator's record too. If that leaves the operator with two live
-  satellites, both stay, and the operator can't launch again until both are
-  gone.
+  the operator's record too, live ones included.
 - **Signing out** unlinks the device and gives it a fresh cookie, so it's a
   new anonymous person; what it launched stays the operator's.
-- **One live satellite per operator** when signed in, per cookie when not.
-  The rule is checked on every launch; the database's unique index stays on
-  the cookie.
+- **The launch gap is per operator** when signed in, per cookie when not:
+  a person can have any number of satellites up, but launches five
+  minutes apart (`PLAN.md`, "Launch limits", 2026-10-06), so signing in on two
+  devices doesn't double how fast you can launch.
 - Owning a satellite means: it's the operator's, if it has one, otherwise
   it's the cookie's. The cookie id and the passphrase hash are never sent to
   a client; the handle is public.

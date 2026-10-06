@@ -1,0 +1,1 @@
+DROP INDEX `objects_one_live_per_owner`;

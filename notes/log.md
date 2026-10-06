@@ -830,10 +830,50 @@ The interesting part was tuning, with a throwaway harness simulating a day:
 
 `decay-server.test.ts` now turns derelicts off and seeds its launches, since
 random satellites can now collide. The sky page's "latest launches" lists
-people's satellites only. `pnpm check` green (101 tests).
+people's satellites only. `pnpm check` green (101 tests). Committed as `41f32ef` on branch `C9`.
 
 Advay chose **gentler** over deadly (asked with the simulated numbers): head-on
 hit distance 0.012, 2% a meeting, lapping 0.015. A quiet sky now has 1 to 5
 collisions an hour, satellites typically last 2 to 4 hours before a hit, and
 about half burn up first; a visitor may wait 15 to 30 minutes for a
 collision, which the conjunction warnings will have to carry.
+
+## 2026-10-06 — C9: launch as often as once a minute; collisions scale with satellites
+
+Two notes from Advay while the collision slice was going in: collisions
+should scale up with the number of satellites, and the wait to launch
+should be much shorter, because "the whole point is someone can send more
+satellites to send more messages but increase the risk of ruining it for
+all".
+
+Scaling, measured with a harness holding K people's satellites up (each
+relaunching as soon as allowed, under the old one-each rule): 0 or 5 people
+give 1 to 4 collisions an hour, 20 give about 20, 50 about 130. So it scales
+more than linearly, but only once people outnumber the derelict floor of 20,
+which keeps a quiet sky's rate flat. The agent offered to lower the floor to
+about 8; Advay kept 20.
+
+The launch rule: the agent read "send more satellites" as several up at
+once, which reverses "one live satellite each" (ADR 0002, 0009), and asked.
+Advay chose **any number up, a minute apart** (over a per-person cap, or one
+each with a shorter wait). Tests first: `spec/launch.test.ts` (a second
+launch inside the gap is refused with "You can launch again in N s"; the pad
+stays open, listing yours) and `spec/decay-server.test.ts` (two up at once
+a gap apart; someone else isn't held up). Migration `0002_launch_gap` drops
+the one-live unique index. The launchpad lists your satellites and counts
+the gap down; the sky page's line follows whichever of yours reaches the
+station next. ADR 0009 (still proposed) and the plan updated; the
+`/kessler/` page's "one satellite each" line changed.
+
+Measured with the new rule, people launching every two minutes: one person
+alone takes the sky from about 2 collisions an hour to about 60, and three
+take it to 160 with the sky at its 600-object cap. That's the argument made
+literal, and also what three people can do to everyone else's evening (and
+to a phone drawing 600 objects). Flagged for Advay: the gap may want to be
+longer than a minute.
+
+`README.md` still says "one live satellite each" in two places; left for
+Advay, who is rewriting it in his own words. `pnpm check` green (102 tests).
+
+Advay set the gap to **five minutes** after seeing those numbers. The wait
+now reads "You can launch again in 4 min 05 s."

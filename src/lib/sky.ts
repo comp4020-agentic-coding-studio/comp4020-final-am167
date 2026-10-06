@@ -7,9 +7,10 @@ import { BANDS, bandAt, placeInBand, reentryAt, type Band, type Orbit } from "./
 
 const { objects, collisions } = schema;
 
-// After your satellite leaves the sky, how long before you can launch again
-// (PLAN.md, "Launch limits").
-export const RELAUNCH_COOLDOWN = 10 * 60_000;
+// How long between one person's launches (PLAN.md, "Launch limits"). There's
+// no limit on how many you have up: each launch is another beacon heard, and
+// another object everyone else has to share the sky with.
+export const LAUNCH_GAP = 5 * 60_000;
 
 // The most satellites the sky holds at once (PLAN.md, "Launch limits"), so
 // the sky, and the 256 MB machine holding it, can't outgrow decay clearing
@@ -387,21 +388,28 @@ export function catalogueCounts(): { live: number; all: number } {
 
 type LaunchResult = { ok: true; object: SkyObject } | { ok: false; errors: LaunchErrors };
 
-const ALREADY_UP = (callsign: string | null) => ({
-  ok: false as const,
-  errors: { form: `${callsign ?? "Your satellite"} is already in orbit. One live satellite each.` },
-});
+// When a person can next launch: a gap after their last launch, or now.
+export function nextLaunchAt(person: string | undefined, now = Date.now()): number {
+  if (!person) return now;
+  const last = db
+    .select({ at: max(objects.launchedAt) })
+    .from(objects)
+    .where(eq(objects.owner, person))
+    .get();
+  return Math.max(now, (last?.at ?? -Infinity) + LAUNCH_GAP);
+}
+
+// "You can launch again in 4 min 05 s."
+export function waitMessage(ms: number): string {
+  const seconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `You can launch again in ${minutes > 0 ? `${minutes} min ${String(rest).padStart(2, "0")} s` : `${rest} s`}.`;
+}
 
 export function launch(person: string, input: LaunchInput, now = Date.now(), random = Math.random): LaunchResult {
   settle(now);
-  let result: LaunchResult;
-  try {
-    result = checkAndInsert(person, input, now, random);
-  } catch (error) {
-    // the database's own one-live rule (schema.ts) caught what the check missed
-    if ((error as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") return ALREADY_UP(null);
-    throw error;
-  }
+  const result = checkAndInsert(person, input, now, random);
   if (result.ok) {
     publish({ type: "launch", object: result.object });
     refreshMeetings(live());
@@ -417,12 +425,8 @@ const liveSatellites = and(eq(objects.fate, "live"), eq(objects.kind, "satellite
 // with another request's.
 function checkAndInsert(person: string, input: LaunchInput, now: number, random: () => number): LaunchResult {
   return db.transaction((tx) => {
-    const live = tx
-      .select(columns)
-      .from(objects)
-      .where(and(eq(objects.owner, person), eq(objects.fate, "live")))
-      .get();
-    if (live) return ALREADY_UP(live.callsign);
+    const ready = nextLaunchAt(person, now);
+    if (ready > now) return { ok: false as const, errors: { form: waitMessage(ready - now) } };
 
     const inOrbit = tx.select({ n: count() }).from(objects).where(liveSatellites).get();
     if ((inOrbit?.n ?? 0) >= SKY_CAP)
@@ -430,19 +434,6 @@ function checkAndInsert(person: string, input: LaunchInput, now: number, random:
         ok: false as const,
         errors: { form: `The sky is full: ${SKY_CAP} satellites in orbit, the most it holds.` },
       };
-
-    const last = tx
-      .select({ at: max(objects.fateAt) })
-      .from(objects)
-      .where(and(eq(objects.owner, person), ne(objects.fate, "live")))
-      .get();
-    if (last?.at && now - last.at < RELAUNCH_COOLDOWN) {
-      const minutes = Math.ceil((RELAUNCH_COOLDOWN - (now - last.at)) / 60_000);
-      return {
-        ok: false as const,
-        errors: { form: `Your last satellite is gone. The pad reopens in ${minutes} min.` },
-      };
-    }
 
     const object = tx
       .insert(objects)
@@ -467,14 +458,15 @@ export function skyIsFull(): boolean {
   return (row?.n ?? 0) >= SKY_CAP;
 }
 
-// The live satellite a person owns, if any.
-export function liveSatelliteOf(person: string | undefined): SkyObject | undefined {
-  if (!person) return undefined;
+// The live satellites a person owns, oldest first.
+export function satellitesOf(person: string | undefined): SkyObject[] {
+  if (!person) return [];
   settle();
-  const row = db
+  return db
     .select(columns)
     .from(objects)
     .where(and(eq(objects.owner, person), eq(objects.fate, "live")))
-    .get();
-  return row && toObject(row);
+    .orderBy(objects.id)
+    .all()
+    .map(toObject);
 }

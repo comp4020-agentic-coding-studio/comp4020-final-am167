@@ -59,7 +59,7 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 
 ## Core loop
 
-1. **Launch.** One active satellite per person. Pick an altitude band and a
+1. **Launch.** As many satellites as you like, five minutes apart. Pick an altitude band and a
    callsign, and write a short beacon line.
 2. **Be seen.** Every time your satellite passes over the shared viewing point,
    its beacon line shows to everyone watching.
@@ -81,7 +81,9 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Overhead (2026-10-04) | **One shared ground station**, a fixed point on the planet. A beacon shows to everyone when its satellite crosses that arc, so everyone reads the same line at the same moment. The station is the launchpad. |
 | Launch flow (2026-10-04) | The landing page is the **launchpad** with the launch form. Launching plays a rocket rising, then the camera **pans up** into the orbit view and the new satellite appears. C8 gets a simple version of the pan; the cinematic version is week 12 polish. Without JS the form still posts and redirects to the orbit view. |
 | Beacon rules (2026-10-04) | **At most 60 characters, plain text, no URLs, a small word blocklist.** Shown in the sky while the satellite is live; the catalogue keeps it after. |
-| Launch limits (2026-10-04) | **One live satellite per person, plus a cooldown** (starting at 10 minutes) after your satellite dies or is deorbited, so relaunching costs something. |
+| Launch limits (2026-10-04) | ~~One live satellite per person, plus a cooldown~~ (starting at 10 minutes) after your satellite dies or is deorbited, so relaunching costs something. Replaced 2026-10-06, below. |
+| Launch limits (2026-10-06) | **Any number up, five minutes apart** (first a minute; Advay set five the same day, after one person launching nonstop took the sky from 2 collisions an hour to 60, and three filled it to its cap). Advay: "someone can send more satellites to send more messages but increase the risk of ruining it for all". Each launch is another beacon heard and another object everyone shares the sky with; the gap is between your launches, not after one dies. The sky cap (200 satellites) stays as the machine's backstop. Replaces "one each keeps it fair" (ADR 0002, superseded): the commons is now tested by how much each person takes, not rationed. |
+| Collisions scale with satellites (2026-10-06) | **A requirement from Advay:** the more satellites up, the more collisions. The model does this (more than linearly, the shape of a real cascade): measured with people's satellites held steady, 0 or 5 people up give 1 to 4 collisions an hour (the derelict floor of 20 dominates), 20 give about 20, 50 give about 130. Advay kept the floor at 20 (asked 2026-10-06), so the rise only shows once people outnumber it. Re-check whenever the tuning changes. |
 | Sky cap (2026-10-04) | **At most 200 satellites in orbit at once**; launches are refused while it's full. Added after review: nothing leaves the sky in C8 and a cookieless client can launch without limit, so this protects the 256 MB machine. Revisit with decay in C9. |
 | Catalogue (2026-10-04) | **The "In orbit" table shows callsigns, not beacons.** A beacon is only heard as its satellite passes over the station, so flying low (heard more often) stays worth it. The reviewer pointed out that a permanent list of beacons made "be seen" pointless. |
 | Catalogue page (2026-10-05) | **The sky page keeps a short "Sky now" card; the full table moves to `/catalogue/`.** The card has counts per band and the latest launches, live; the catalogue lists what's in orbit or everything ever launched (a plain link), and is where debris and its lineage go. The table under the sky made the page scroll too far, and debris would make it far longer. The card is also where collisions out of view will be announced. |
@@ -217,7 +219,7 @@ _Proposed, not final: the working assumption for C8, likely to be revisited._
   a restart.
 - Stopping the server and restarting applies the collisions that fell in the
   gap.
-- One active satellite per person; dodging uses fuel; only the owner can
+- Launches five minutes apart per person; dodging uses fuel; only the owner can
   deorbit.
 
 ## Now and later
@@ -410,7 +412,8 @@ flow, beacon rules, launch limits, bands.
   set (ADR 0007: hours, about a day, a few days); revisit them once
   collisions run.
 - **C9:** how fuel works, and whether it refills.
-- **C9:** exact cooldown length (10 minutes is the starting value).
+- ~~**C9:** exact cooldown length~~: replaced by a five-minute gap between
+  launches (2026-10-06).
 - **Week 12 (or sooner):** whether, and how far, to move the sky's rendering
   to Three.js (see "Now and later").
 - **Before the final README:** the name (Kessler stays the working title).

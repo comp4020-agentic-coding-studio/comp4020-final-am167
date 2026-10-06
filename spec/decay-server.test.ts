@@ -3,11 +3,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DECAY, reentryAt } from "../src/lib/orbit.ts";
+import { reentryAt } from "../src/lib/orbit.ts";
 
 // The server's side of decay (ADR 0007): whatever has burned up leaves the
-// sky, dated to the moment it burned up, everyone watching is told, and its
-// owner can launch again once the cooldown from that moment has passed. The
+// sky, dated to the moment it burned up, and everyone watching is told. And
+// launching: a person can have several satellites up, a short gap apart. The
 // HTTP spec can't wait a day for a satellite to fall, so this drives the
 // server's own code against a throwaway database, with the clock passed in.
 
@@ -78,16 +78,18 @@ describe("burning up, on the server", () => {
     expect(row.fateAt).toBe(Math.round(reentryAt(result.object)));
   });
 
-  it("lets the owner launch again once the cooldown from the burn-up has passed", () => {
-    const first = launch("dana", { ...input, callsign: "FIRST" }, 3_000_000);
-    if (!first.ok) throw new Error(JSON.stringify(first.errors));
-    const gone = reentryAt(first.object);
-    // still up: one live satellite each
-    expect(launch("dana", { ...input, callsign: "EARLY" }, gone - DECAY.plungeMs).ok).toBe(false);
-    // burned up, but the pad hasn't reopened
-    const cooling = launch("dana", { ...input, callsign: "COOLING" }, gone + 60_000);
-    expect(cooling.ok).toBe(false);
-    if (!cooling.ok) expect(cooling.errors.form).toMatch(/reopens/);
-    expect(launch("dana", { ...input, callsign: "AGAIN" }, gone + sky.RELAUNCH_COOLDOWN + 1).ok).toBe(true);
+  it("lets a person have several up at once, a short gap apart", () => {
+    const start = 3_000_000;
+    expect(launch("dana", { ...input, callsign: "FIRST" }, start).ok).toBe(true);
+    // too soon after the last launch
+    const early = launch("dana", { ...input, callsign: "EARLY" }, start + sky.LAUNCH_GAP - 1_000);
+    expect(early.ok).toBe(false);
+    if (!early.ok) expect(early.errors.form).toMatch(/launch again in 1 s/);
+    // the gap has passed: a second one goes up while the first is still up
+    expect(launch("dana", { ...input, callsign: "SECOND" }, start + sky.LAUNCH_GAP).ok).toBe(true);
+    const up = sky.liveSky(start + sky.LAUNCH_GAP).filter((o) => o.owner === "dana");
+    expect(up.map((o) => o.callsign)).toEqual(["FIRST", "SECOND"]);
+    // someone else isn't held up by dana's gap
+    expect(launch("erin", { ...input, callsign: "OTHER" }, start + sky.LAUNCH_GAP).ok).toBe(true);
   });
 });

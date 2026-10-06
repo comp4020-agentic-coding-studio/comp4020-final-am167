@@ -183,21 +183,25 @@ function listen() {
         : "Nothing in orbit yet.";
   }
 
-  // your own satellite: when everyone will next hear your beacon, and how
-  // long it has left
-  const mine = flying().find((s) => s.mine);
+  // your own satellites: the one everyone will hear next (or is hearing
+  // now), and how long it has left
+  const yoursUp = flying().filter((s) => s.mine);
+  const soonest = (s: Satellite) => (isOverhead(s, time) ? -1 : (untilOverhead(s, time) ?? Infinity));
+  const mine = yoursUp.sort((a, b) => soonest(a) - soonest(b))[0];
   const yours = latest(true);
   if (yourPass && mine) {
     const left = until(reentryAt(mine) - time);
     const pass = untilOverhead(mine, time);
+    const count = yoursUp.length > 1 ? `You have ${yoursUp.length} up. ` : "";
     say(
-      plungeAt(mine, time) !== null
+      count +
+      (plungeAt(mine, time) !== null
         ? `${mine.callsign} is burning up on re-entry.`
         : isOverhead(mine, time)
           ? `${mine.callsign} is over the station now: everyone watching can see your beacon. It burns up in ${left}.`
           : pass === null
             ? `${mine.callsign} burns up in ${left}, before it next reaches the station.`
-            : `${mine.callsign} is next over the station in ${countdown(pass)}. It burns up in ${left}.`,
+            : `${mine.callsign} is next over the station in ${countdown(pass)}. It burns up in ${left}.`),
     );
   } else if (yourPass && yours) {
     say(`${yours.callsign} burned up on re-entry ${ago(time - yours.at)}. `, true);
@@ -217,7 +221,7 @@ function say(text: string, gone = false) {
   const again = document.createElement("a");
   again.href = "/";
   again.textContent = "Launch another";
-  yourPass.replaceChildren(text, again, " once the pad reopens.");
+  yourPass.replaceChildren(text, again, ".");
 }
 
 // What's burning now, what burned up last, or what will burn up next: most

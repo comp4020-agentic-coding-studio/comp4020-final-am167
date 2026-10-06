@@ -3,7 +3,7 @@ import Base from "../layouts/Base.astro";
 import { every, lasting } from "../lib/format.ts";
 import { BEACON_MAX, CALLSIGN_MAX, readLaunch, type LaunchErrors, type LaunchValues } from "../lib/launch.ts";
 import { BANDS, lifetimeRange, type Band } from "../lib/orbit.ts";
-import { SKY_CAP, launch, liveSatelliteOf, skyIsFull } from "../lib/sky.ts";
+import { SKY_CAP, launch, nextLaunchAt, satellitesOf, skyIsFull, waitMessage } from "../lib/sky.ts";
 
 // The launchpad. The form posts here and works without JavaScript: a launch
 // redirects to the sky, a refusal re-renders the form with the reasons. The
@@ -40,8 +40,12 @@ if (form) {
   Astro.response.status = 422;
 }
 
-const live = liveSatelliteOf(person);
-const full = !live && skyIsFull();
+// you can have any number up, a short gap apart (PLAN.md, "Launch limits")
+const mine = satellitesOf(person);
+const wait = nextLaunchAt(person) - Date.now();
+const full = skyIsFull();
+const names = (list: string[]) =>
+  list.length < 2 ? list.join("") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
 const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 const hint: Record<Band, string> = {
   low: "Heard most often.",
@@ -115,15 +119,21 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     <section class="console" aria-labelledby="launch-title">
       <h2 id="launch-title">Launch a satellite</h2>
 
-      {live && (
+      {mine.length > 0 && (
         <p class="notice">
-          <strong>{live.callsign}</strong> is in orbit. You can launch again once
-          it's gone. <a href="/sky/">Watch the sky</a>
+          {mine.length === 1 ? "Yours in orbit: " : `Yours in orbit (${mine.length}): `}
+          <strong>{names(mine.map((o) => o.callsign ?? "unnamed"))}</strong>. Another
+          launch is another beacon heard, and one more thing for everyone to share the
+          sky with. <a href="/sky/">Watch the sky</a>
         </p>
       )}
 
+      {wait > 0 && !errors.form && (
+        <p class="notice" id="launch-wait" data-wait={wait}>{waitMessage(wait)}</p>
+      )}
+
       {full && (
-        <p class="notice">
+        <p class="notice full">
           The sky is full: {SKY_CAP} satellites in orbit, the most it holds.
           <a href="/sky/">Watch the sky</a>
         </p>
@@ -132,7 +142,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       <div class="form-error" role="alert" id="form-error">{errors.form}</div>
 
       <form method="post" action="/" novalidate data-launch>
-        <fieldset disabled={Boolean(live) || full}>
+        <fieldset disabled={wait > 0 || full}>
           <fieldset class="bands" aria-describedby={describe("band")}>
             <legend>Altitude</legend>
             {bands.map(([band, b]) => (
@@ -189,6 +199,31 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       </form>
     </section>
   </main>
+
+  <script>
+    // Counts down the gap between your launches, and opens the form when
+    // it's over. Without this script, reloading the page does the same.
+    const notice = document.getElementById("launch-wait");
+    if (notice) {
+      const ready = Date.now() + Number(notice.dataset.wait);
+      const tick = setInterval(() => {
+        const left = ready - Date.now();
+        if (left > 0) {
+          // as waitMessage in src/lib/sky.ts
+          const seconds = Math.ceil(left / 1000);
+          const minutes = Math.floor(seconds / 60);
+          const rest = seconds % 60;
+          const when = minutes > 0 ? `${minutes} min ${String(rest).padStart(2, "0")} s` : `${rest} s`;
+          notice.textContent = `You can launch again in ${when}.`;
+          return;
+        }
+        clearInterval(tick);
+        notice.remove();
+        document.querySelector<HTMLFieldSetElement>("form[data-launch] > fieldset")!.disabled =
+          document.querySelector(".notice.full") !== null;
+      }, 250);
+    }
+  </script>
 
   <script>
     import type { Framing, PadControls } from "../scripts/launchpad.ts";
