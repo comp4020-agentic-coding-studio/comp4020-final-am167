@@ -484,6 +484,8 @@ Visuals only, so no new spec. Checks green against a fresh production build
 
 ## 2026-10-06 — Assignment 1's performance harness, carried over
 
+Commit `d06ee96`.
+
 Worried that two Three.js scenes (the launchpad and the sky) would perform
 badly, especially on a phone, I asked for assignment 1's performance harness
 to be carried over and made to work here, without running the full suite
