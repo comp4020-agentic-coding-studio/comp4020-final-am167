@@ -2,7 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import { ago, falling, km } from "../../lib/format.ts";
 import { BANDS, fallRate, heightKm, radiusAt } from "../../lib/orbit.ts";
-import { catalogue, catalogueCounts, recentCollisions } from "../../lib/sky.ts";
+import { CATALOGUE_MAX, catalogue, catalogueCounts, recentCollisions } from "../../lib/sky.ts";
 import { blame, collisionOf, couplet, describe, headline } from "../../lib/story.ts";
 
 // The record of everything launched (ADR 0003): what's in orbit now, or
@@ -50,6 +50,10 @@ const views = [
         <a href={v.href} aria-current={v.show === show ? "page" : undefined}>{v.label}</a>
       ))}
     </nav>
+
+    {rows.length === CATALOGUE_MAX && (
+      <p class="lede">The newest {CATALOGUE_MAX} of {show === "live" ? counts.live : counts.all}.</p>
+    )}
 
     {rows.length === 0 ? (
       <p class="empty">

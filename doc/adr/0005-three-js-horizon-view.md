@@ -1,6 +1,6 @@
 # 0005. The sky is drawn with Three.js, as a horizon view over the station
 
-**Status:** proposed (2026-10-05)
+**Status:** accepted (2026-10-07; proposed 2026-10-05)
 
 ## Context
 

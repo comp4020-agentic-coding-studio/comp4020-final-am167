@@ -115,6 +115,62 @@ describe("operators", () => {
     expect(await yours(a, name)).toBe(true);
   });
 
+  it("slows wrong passphrases from one place without locking the owner out from another", async () => {
+    const h = handle();
+    await claim(new Session(baseUrl), h);
+    // Fly puts the visitor's address in this header
+    const from = (ip: string) => ({ "fly-client-ip": ip });
+    const attacker = new Session(baseUrl);
+    for (let i = 0; i < 5; i++) await post(attacker, "/operator/", { action: "sign-in", handle: h, passphrase: "guess " + i }, from("10.9.9.9"));
+    const locked = await post(attacker, "/operator/", { action: "sign-in", handle: h, passphrase: PASS }, from("10.9.9.9"));
+    expect(doc(await locked.text()).body.textContent).toMatch(/too many tries/i);
+    const owner = new Session(baseUrl);
+    const res = await post(owner, "/operator/", { action: "sign-in", handle: h, passphrase: PASS }, from("10.1.1.1"));
+    expect(res.status).toBe(303);
+  });
+
+  it("won't claim a second handle while you're signed in to one", async () => {
+    const a = new Session(baseUrl);
+    const h = handle();
+    await claim(a, h);
+    const res = await claim(a, handle());
+    expect(res.status).toBe(422);
+    expect(doc(await res.text()).querySelector('[role="alert"]')?.textContent).toMatch(/sign out first/i);
+    expect((await page(a, "/operator/")).body.textContent).toContain(`Signed in as ${h}`);
+  });
+
+  it("gives the device a new cookie when it claims or signs in", async () => {
+    const a = new Session(baseUrl);
+    await a.get("/");
+    const anonymous = a.cookie("kessler_person");
+    const h = handle();
+    await claim(a, h);
+    const claimed = a.cookie("kessler_person");
+    expect(claimed).not.toBe(anonymous);
+    const b = new Session(baseUrl);
+    await b.get("/");
+    const before = b.cookie("kessler_person");
+    await signIn(b, h);
+    expect(b.cookie("kessler_person")).not.toBe(before);
+    expect((await page(b, "/operator/")).body.textContent).toContain(`Signed in as ${h}`);
+  });
+
+  it("never sends owners, operator ids or person ids down the stream", async () => {
+    const a = new Session(baseUrl);
+    await claim(a, handle());
+    await a.launch({ band: "low", callsign: callsign(), beacon: "on the stream" });
+    const id = a.cookie("kessler_person")!;
+    const controller = new AbortController();
+    const res = await fetch(a.url("/api/events"), { headers: a.headers(), signal: controller.signal });
+    const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+    let text = "";
+    while (!text.includes("\n\n")) text += (await reader.read()).value ?? "";
+    controller.abort();
+    expect(text).toMatch(/^event: hello/);
+    expect(text).not.toContain(id);
+    expect(text).not.toMatch(/"owner"|"operator":\s*\d/);
+  });
+
   it("never shows a passphrase or anyone's person id", async () => {
     const a = new Session(baseUrl);
     const h = handle();

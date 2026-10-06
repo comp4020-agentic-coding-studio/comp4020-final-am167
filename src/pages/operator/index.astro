@@ -5,6 +5,7 @@ import {
   HANDLE_MIN,
   PASSPHRASE_MIN,
   claim,
+  moveTo,
   readOperatorForm,
   signIn,
   signOut,
@@ -40,8 +41,14 @@ if (Astro.request.method === "POST") {
     newPerson(Astro.cookies, Astro.url, Astro.request.headers);
     return Astro.redirect("/operator/", 303);
   } else {
-    const result = read.action === "claim" ? claim(person, read) : signIn(person, read);
-    if (result.ok) return Astro.redirect("/operator/", 303);
+    // where the tries come from: Fly passes the visitor's address on
+    const from = Astro.request.headers.get("fly-client-ip") ?? Astro.clientAddress;
+    const result = read.action === "claim" ? await claim(person, read, from) : await signIn(person, read, from);
+    if (result.ok) {
+      // a new cookie for the signed-in device (its satellites are the operator's now)
+      moveTo(person, newPerson(Astro.cookies, Astro.url, Astro.request.headers));
+      return Astro.redirect("/operator/", 303);
+    }
     errors = result.errors;
     failed = read.action;
     handle = read.handle;
@@ -59,6 +66,7 @@ const errorFor = (form: "claim" | "sign-in", field: keyof OperatorErrors) => (fa
 
     {operator ? (
       <>
+        <div class="form-error" role="alert">{errors.form}</div>
         <p class="status">Signed in as <strong>{operator.handle}</strong>.</p>
         <p class="lede">
           {up === 0 ? "You have nothing in orbit." : `You have ${up} satellite${up === 1 ? "" : "s"} in orbit.`}{" "}
@@ -81,7 +89,7 @@ const errorFor = (form: "claim" | "sign-in", field: keyof OperatorErrors) => (fa
           {up > 0 && <> You have {up} satellite{up === 1 ? "" : "s"} in orbit from this device.</>}
         </p>
 
-        <div class="form-error" role="alert">{errors.form && failed === null ? errors.form : ""}</div>
+        <div class="form-error" role="alert">{errors.form && failed !== "sign-in" ? errors.form : ""}</div>
 
         <div class="forms">
           <form method="post" action="/operator/" novalidate aria-labelledby="claim-title">

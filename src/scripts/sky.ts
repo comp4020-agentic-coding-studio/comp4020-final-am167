@@ -93,7 +93,17 @@ function rebuildHits() {
     for (const id of [c.a, c.b]) hitAt.set(id, Math.min(hitAt.get(id) ?? Infinity, c.at));
   }
 }
-const stories: Story[] = [...initial.collisions];
+const stories: Story[] = [];
+// newest first, each once, however it arrived (the page, the stream, a
+// reconnect)
+function remember(story: Story): boolean {
+  if (stories.some((s) => s.id === story.id)) return false;
+  stories.push(story);
+  stories.sort((a, b) => b.at - a.at);
+  stories.length = Math.min(stories.length, 10);
+  return true;
+}
+initial.collisions.forEach(remember);
 function expect(conjunction: Conjunction) {
   coming.set(`${conjunction.a}:${conjunction.b}`, conjunction);
   rebuildHits();
@@ -295,7 +305,8 @@ function news(time: number) {
   // what's in a collision coming: "ALPHA (yours)", "a derelict", "debris"
   const who = (id: number) => {
     const sat = sky.get(id);
-    if (!sat || sat.kind === "debris") return "debris";
+    if (!sat) return "something";
+    if (sat.kind === "debris") return "debris";
     return sat.kind === "derelict" || !sat.callsign ? "a derelict" : named(sat);
   };
   const falling = speaking().find((sat) => plungeAt(sat, time) !== null);
@@ -465,7 +476,12 @@ function connect() {
   const stream = new EventSource("/api/events");
 
   stream.addEventListener("hello", (event) => {
-    const hello = JSON.parse(event.data) as { serverTime: number; sky: Satellite[]; conjunctions: Conjunction[] };
+    const hello = JSON.parse(event.data) as {
+      serverTime: number;
+      sky: Satellite[];
+      conjunctions: Conjunction[];
+      collisions: Story[];
+    };
     offset = hello.serverTime - Date.now();
     // the snapshot is the live sky; keep what's burned up but still fading
     const time = serverNow();
@@ -475,6 +491,10 @@ function connect() {
     coming.clear();
     hello.conjunctions.forEach(expect);
     rebuildHits();
+    // and any collision missed while away, told if it's fresh
+    for (const story of hello.collisions) {
+      if (remember(story) && time - story.at < CARD_MS) tell(story);
+    }
     renderSummary();
     setConnection("live");
   });
@@ -506,9 +526,7 @@ function connect() {
     for (const [key, c] of coming) if ([c.a, c.b].some((id) => id === story.a || id === story.b)) coming.delete(key);
     rebuildHits();
     for (const fragment of story.fragments) sky.set(fragment.id, fragment);
-    stories.unshift({ id: story.id, at: story.at, angle: story.angle, radius: story.radius, parties: story.parties });
-    stories.length = Math.min(stories.length, 10);
-    tell(story);
+    if (remember({ id: story.id, at: story.at, angle: story.angle, radius: story.radius, parties: story.parties })) tell(story);
     renderSummary();
   });
 

@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { subscribe } from "../../lib/events.ts";
 import type { SkyEvent } from "../../lib/events.ts";
-import { conjunctions, liveSky, toPublic } from "../../lib/sky.ts";
+import { conjunctions, liveSky, recentCollisions, toPublic, watcherArrived } from "../../lib/sky.ts";
 
 // One stream per open page (ADR 0004). It opens with the server's time, a
 // snapshot of the live sky and the collisions coming (ADR 0008), then sends
@@ -33,10 +33,13 @@ export const GET: APIRoute = ({ request, locals }) => {
       // subscribe before the snapshot so nothing falls between the two (so a
       // burn-up the snapshot catches up on arrives as a decay event first)
       const unsubscribe = subscribe((event) => send(event.type, visible(event)));
+      watcherArrived();
       send("hello", {
         serverTime: Date.now(),
         sky: liveSky().map((object) => toPublic(object, viewer)),
         conjunctions: conjunctions(),
+        // what a page that was away (asleep, offline) missed
+        collisions: recentCollisions(5),
       });
       const ping = setInterval(() => controller.enqueue(encoder.encode(": ping\n\n")), 25_000);
       cleanup = () => {

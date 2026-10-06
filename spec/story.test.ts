@@ -46,11 +46,21 @@ describe("telling a collision", () => {
   });
 
   it("names who launched what, or says nobody claimed it", () => {
-    expect(blame([alpha, bravo])).toBe("ALPHA: unclaimed operator. BRAVO: skywriter.");
+    expect(blame([alpha, bravo])).toBe("ALPHA: launched without a handle. BRAVO: skywriter.");
     expect(blame([debrisOf(alpha, bravo), charlie])).toBe(
-      "ALPHA: unclaimed operator. BRAVO: skywriter. CHARLIE: unclaimed operator.",
+      "ALPHA: launched without a handle. BRAVO: skywriter. CHARLIE: launched without a handle.",
     );
-    expect(blame([alpha, derelict])).toBe("ALPHA: unclaimed operator. The derelict was nobody's.");
+    expect(blame([alpha, derelict])).toBe("ALPHA: launched without a handle. The derelict was nobody's.");
+    expect(blame([derelict, { ...derelict, id: 51 }])).toBe("The derelicts were nobody's.");
+  });
+
+  it("names everyone however their callsign reads: a callsign can't pass for a derelict", () => {
+    const sly = satellite("The derelict x", "nothing to see", "griefer");
+    const other = satellite("The derelict y", "me neither", "griefer2");
+    const line = blame([debrisOf(sly, other), derelict]);
+    expect(line).toContain("The derelict x: griefer.");
+    expect(line).toContain("The derelict y: griefer2.");
+    expect(line).toContain("The derelict was nobody's.");
   });
 
   it("puts the two beacons side by side, when both had one", () => {

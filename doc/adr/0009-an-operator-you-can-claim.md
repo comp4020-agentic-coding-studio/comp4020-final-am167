@@ -52,8 +52,14 @@ passphrase that a person can claim, and sign in to from any device.**
   new operator, and every satellite that cookie launched becomes the
   operator's.
 - **Signing in** on another device links that device's cookie to the
-  operator, after checking the passphrase in constant time. Failed attempts
-  per handle are slowed in memory.
+  operator, after checking the passphrase in constant time. Claiming or
+  signing in gives the device a new cookie, so a cookie seen before can't
+  follow it in. Wrong passphrases are slowed per place (the visitor's
+  address and the handle tried): five, then a 30-second wait, then the
+  count starts again, so guessing from one place can't lock the owner out
+  from another. scrypt runs off the event loop, a few at a time, and
+  claims are limited per address, so a flood can't stall the sky. Claiming
+  while signed in is refused.
 - **Merging:** if the device signing in has its own satellites, they join
   the operator's record too, live ones included.
 - **Signing out** unlinks the device and gives it a fresh cookie, so it's a
@@ -80,5 +86,11 @@ passphrase that a person can claim, and sign in to from any device.**
   Said on the claim form.
 - One human can still hold several cookies and several operators; the C10
   logs will show if it matters.
+- **Signing out skips the launch gap**: sign out, launch as a new
+  anonymous person, sign back in, and that satellite merges into the
+  operator inside the five minutes. It's the same loophole as clearing
+  cookies (ADR 0002), accepted for the same reason.
+- A signed-in cookie lasts ten years and the server doesn't expire it;
+  there's no "sign out everywhere" or passphrase change yet.
 - New tables (`operators`, and the link from cookie to operator) and an
   `operator` column on objects, as a migration.

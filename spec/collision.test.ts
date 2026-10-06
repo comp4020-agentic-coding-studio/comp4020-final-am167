@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FRAGMENTS, HIT, SIZE, fragmentsOf, hitDistance, impactOf, nextMeeting } from "../src/lib/collide.ts";
+import { FRAGMENTS, HIT, SIZE, fatalMeeting, fragmentsOf, hitDistance, impactOf, nextMeeting } from "../src/lib/collide.ts";
 import { angleAt, periodAt, radiusAt, reentryAt, burnAt, type Orbit } from "../src/lib/orbit.ts";
 
 // Collisions (ADR 0008). Orbits go either way round, and two objects collide
@@ -104,6 +104,25 @@ describe("predicting a meeting", () => {
       HIT.headOn * SIZE.debris,
       12,
     );
+  });
+
+  it("hits at the first meeting when two pass dead centre, and only by chance otherwise", () => {
+    const a = { ...orbit(1.3, 0), id: 11 };
+    expect(fatalMeeting(a, { ...orbit(1.3, 2, -1), id: 12 })).toBe(1);
+    // a pass half the hit distance apart is one chance in many: over ids,
+    // the hit is usually not the first meeting
+    const draws = Array.from({ length: 50 }, (_, i) =>
+      fatalMeeting(a, { ...orbit(1.3 + HIT.headOn / 2, 2, -1), id: 100 + i }),
+    );
+    expect(draws.filter((n) => n === 1).length).toBeLessThan(10);
+  });
+
+  it("finds a meeting to well under a millisecond, at real clock times", () => {
+    const epoch = 1_790_000_000_000;
+    const a = orbit(1.3, 0, 1, epoch);
+    const b = orbit(1.3 + HIT.headOn / 2, 2, -1, epoch);
+    const at = nextMeeting(a, b, epoch)!;
+    expect(apart(angleAt(a, at), angleAt(b, at))).toBeLessThan(1e-6);
   });
 
   it("only from when both exist", () => {

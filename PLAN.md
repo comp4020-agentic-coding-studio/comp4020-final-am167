@@ -10,24 +10,24 @@ _Last updated 2026-10-06 (collisions, operators)._
 
 - **Done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
-  record in `doc/adr/` (0001–0004; 0002, the person, is still proposed).
+  record in `doc/adr/` (0001–0004; 0002, the person, superseded by 0009).
   2026-10-04: the C8 open questions resolved (scope, overhead, launch flow,
   beacon rules, launch limits, bands); the rest deferred to C9 or later, see
   "Now and later". Stack restored (`618d80a`). C8 slice built (`4be85b1`):
   launchpad, launch rules, the sky chart and catalogue, SSE; spec tests in
   `spec/launch.test.ts` and `spec/live.test.ts`.
 - **C9, in progress (branch `C9`):** the sky page redrawn with Three.js as a
-  horizon view from Advay's sketch (ADR 0005, proposed): the limb, stars, the
+  horizon view from Advay's sketch (ADR 0005, accepted 2026-10-07): the limb, stars, the
   bands over the horizon, satellites crossing with trails and labels, the
   station panel over the scene, the catalogue below (`f8f7003`). Then a
   zoom-out to the whole planet, so the rest of the sky (and C9's collisions)
   can be seen.
-  2026-10-06: the launchpad redrawn in Three.js too (ADR 0006, proposed):
+  2026-10-06: the launchpad redrawn in Three.js too (ADR 0006, accepted 2026-10-07):
   a dusk pad scene, and a launch that climbs through a gravity turn while
   the camera pulls back to the planet's limb and hands off to the sky page.
   2026-10-06: a page explaining Kessler syndrome at `/kessler/` (uncommitted),
   linked from the nav, the launchpad's intro and the sky's "Sky now" card.
-  2026-10-06: **collisions on the server** (ADR 0008, proposed): orbits
+  2026-10-06: **collisions on the server** (ADR 0008, accepted 2026-10-07): orbits
   go either way, the server predicts every collision and announces it, and
   catches up exactly after a restart. ADRs 0009 (claimable operators) and
   0010 (every screen names who caused a collision) drafted.
@@ -106,7 +106,7 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Seeding (2026-10-06) | **The server keeps a baseline of derelicts**: dead, ownerless satellites and old debris, as real orbit has, so collisions can happen when only the marker's two sessions are open. |
 | Identity (2026-10-06) | **Optional claim on top of the cookie.** You still launch anonymously within seconds (ADR 0002's reason holds); you can claim a unique operator handle with a passphrase, which keeps your record and blame across devices. No email, no personal data; passphrases hashed with Node's `scrypt`. Supersedes ADR 0002, so needs a new record. Rejected: required sign-up (marker friction), GitHub OAuth (secrets, personal data, marker needs an account), handle without a password (no cross-device). |
 | Blame (2026-10-06) | **Worked out from lineage, not stored.** Every fragment traces through its collision to the satellites at the root; their operators are who to blame. |
-| C9 scope (2026-10-06) | **Collisions + login.** Collisions, debris, lineage and blame by operator, and the optional claim. Conjunction alerts and dodging wait for C10. The C9 written decision is still to pick (see "Open questions"). |
+| C9 scope (2026-10-06) | **Collisions + login.** Collisions, debris, lineage and blame by operator, and the optional claim. Conjunction alerts and dodging wait for C10. The C9 written decision is who sees the blame (ADR 0010). |
 | Band edges (2026-10-05) | **Soft edges:** the radius is drawn from a bell curve around the band's middle, so about one launch in eight lands past the band's edges, but never far enough to reach a neighbouring band. The bands are drawn as soft glows to match. |
 
 ## The altitude trade-off

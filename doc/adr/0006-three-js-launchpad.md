@@ -1,6 +1,6 @@
 # 0006. The launchpad is a Three.js scene, and the launch hands off to the sky
 
-**Status:** proposed (2026-10-06)
+**Status:** accepted (2026-10-07; proposed 2026-10-06)
 
 ## Context
 

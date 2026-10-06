@@ -1,6 +1,6 @@
 # 0008. Collisions predicted in closed form, with orbits going both ways
 
-**Status:** proposed (2026-10-06)
+**Status:** accepted (2026-10-07; proposed 2026-10-06)
 
 ## Context
 
@@ -63,7 +63,16 @@ and every collision predicted in closed form.**
   every close pair collide within a lap of appearing. Instead each meeting
   hits with a fixed chance (higher for the rare lapping meetings), and which
   meeting hits is drawn once from the pair's ids, so it's the same on every
-  replay. Collisions come as a steady trickle rather than all at once.
+  replay. Collisions come as a steady trickle rather than all at once. A
+  pass closer than 2% of the hit distance is dead centre and always hits,
+  at the first meeting; random launches almost never pass that close.
+- **A collision to watch.** When someone has the sky open, nothing is
+  coming in the next 4 minutes, and none was staged in the last 5, the
+  server sends two derelicts at each other: same height, opposite ways, a
+  dead-centre pass that meets over the station 25 seconds later, in the
+  default view. Added after the adversarial review (2026-10-06): at the
+  gentler rate a marker's ten minutes would often see no collision at all.
+  Not into a sky already holding 150 objects.
 - **Prediction is exact and cheap.** The height gap between two objects only
   grows (radius³ gap fixed, radii shrinking), so a pair already farther apart
   than the hit distance can never collide and is skipped. For the rest, the

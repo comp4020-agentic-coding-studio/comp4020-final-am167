@@ -38,6 +38,12 @@ export const CHANCE = {
   lapping: 0.5,
 };
 
+// A pass closer than this share of the hit distance is dead centre: it
+// always hits, at the first meeting. Random launches almost never pass that
+// close; the server stages a collision this way when nothing is coming
+// (src/lib/sky.ts).
+export const DEAD_CENTRE = 0.02;
+
 export type Sized = Orbit & { kind?: keyof typeof SIZE };
 
 // What a collision leaves: a few fragments from each satellite (or
@@ -62,15 +68,19 @@ export function hitDistance(a: Sized, b: Sized): number {
   return (base * (SIZE[a.kind ?? "satellite"] + SIZE[b.kind ?? "satellite"])) / 2;
 }
 
-// The earliest time in [lo, hi] at which `reached` is true, for a test that
-// turns true once and stays true. To well under a millisecond.
-function earliest(reached: (time: number) => boolean, lo: number, hi: number): number {
-  for (let i = 0; i < 100 && hi - lo > 1e-4; i++) {
+// The earliest time in [from, to] at which `reached` is true, for a test
+// that turns true once and stays true. To well under a millisecond: it
+// bisects the offset from `from`, since clock-sized numbers (around 1.7e12)
+// can't be halved that finely.
+function earliest(reached: (time: number) => boolean, from: number, to: number): number {
+  let lo = 0;
+  let hi = to - from;
+  while (hi - lo > 1e-3) {
     const mid = (lo + hi) / 2;
-    if (reached(mid)) hi = mid;
+    if (reached(from + mid)) hi = mid;
     else lo = mid;
   }
-  return hi;
+  return from + hi;
 }
 
 // When two orbits next meet (or their nth meeting), from `from` or from
@@ -158,6 +168,8 @@ export function fragmentsOf<T extends Sized & { id: number }>(a: T, b: T, at: nu
 // Which meeting of two objects is the one that hits (1 for the first): drawn
 // from the pair's ids, so the same pair always gets the same answer.
 export function fatalMeeting(a: Sized & { id: number }, b: Sized & { id: number }): number {
+  const start = Math.max(a.epoch, b.epoch);
+  if (Math.abs(radiusAt(a, start) - radiusAt(b, start)) < hitDistance(a, b) * DEAD_CENTRE) return 1;
   const chance = directionOf(a) === directionOf(b) ? CHANCE.lapping : CHANCE.headOn;
   const [low, high] = a.id < b.id ? [a.id, b.id] : [b.id, a.id];
   const draw = seeded(low * 100_003 + high + 0x5bd1e995)();

@@ -175,11 +175,12 @@ describe("who a collision names (ADR 0010)", async () => {
   const at = Math.round(nextMeeting(alpha, bravo, T, fatalMeeting(alpha, bravo))!);
   const collisions = () => heard.flatMap((e) => (e.type === "collision" ? [e.collision] : []));
 
-  it("names both, with their beacons and their operators' handles, as a couplet", () => {
+  it("names both, with their beacons and their operators' handles, as a couplet", async () => {
     // the hit is predicted first; then bob claims a handle (ADR 0009) and
     // alice doesn't, and the collision names them as they are by then
     expect(sky.conjunctions(T).map((c) => c.at)).toEqual([at]);
-    expect(operators.claim("bob", { action: "claim", handle: "bravo_ops", passphrase: "long enough" }).ok).toBe(true);
+    const claimed = await operators.claim("bob", { action: "claim", handle: "bravo_ops", passphrase: "long enough" }, "test");
+    expect(claimed.ok).toBe(true);
     sky.settle(at + 1);
     const [collision] = collisions();
     expect(collision.parties).toEqual([
@@ -209,5 +210,29 @@ describe("who a collision names (ADR 0010)", async () => {
       ["ALPHA", null],
       ["BRAVO", "bravo_ops"],
     ]);
+  });
+});
+
+describe("a collision staged over the station", async () => {
+  const { sky } = await freshServer();
+  const { STATION_ANGLE } = await import("../src/lib/orbit.ts");
+
+  it("puts two derelicts on a head-on course to meet over the station soon, when nothing else is coming", () => {
+    const staged = sky.stageCollision(T);
+    expect(staged).not.toBeNull();
+    expect(staged!.at - T).toBeGreaterThan(10_000);
+    expect(staged!.at - T).toBeLessThan(60_000);
+    const off = Math.abs(staged!.angle - STATION_ANGLE);
+    expect(Math.min(off, 2 * Math.PI - off)).toBeLessThan(0.05);
+    const up = sky.liveSky(T);
+    expect(up.filter((o) => o.kind === "derelict").map((o) => o.id).sort()).toEqual([staged!.a, staged!.b].sort());
+  });
+
+  it("doesn't stage another while one is coming, or soon after", () => {
+    expect(sky.stageCollision(T + 1)).toBeNull();
+    const after = sky.conjunctions(T)[0].at + 1;
+    sky.settle(after);
+    expect(sky.stageCollision(after + 60_000)).toBeNull();
+    expect(sky.stageCollision(after + sky.STAGE.every)).not.toBeNull();
   });
 });

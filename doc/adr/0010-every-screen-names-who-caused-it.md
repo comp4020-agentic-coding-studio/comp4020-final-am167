@@ -19,7 +19,7 @@ stays hidden or becomes something everyone watching shares.
 
 - **Every screen, live.** When a collision happens, everyone with the sky
   open sees who was involved: both callsigns and their operators (or
-  "unclaimed operator"), and for debris, whose collision it came from. The
+  "launched without a handle"), and for debris, whose collision it came from. The
   catalogue keeps it.
 - **The catalogue only.** Collisions show live, but anonymously ("two
   objects collided at 640 km"). Who caused what is there for whoever goes
@@ -33,7 +33,7 @@ stays hidden or becomes something everyone watching shares.
 **Every open screen names who was involved, the moment it happens.**
 
 - The `collision` event carries, for each of the two objects, its callsign
-  and operator handle (or "unclaimed operator"). For a fragment, it carries
+  and operator handle (or "launched without a handle"). For a fragment, it carries
   the collision it came from and the operators at that collision's root.
 - The sky page shows it as the couplet (ADR 0008) with the names under it,
   and "Sky now" keeps the latest few.

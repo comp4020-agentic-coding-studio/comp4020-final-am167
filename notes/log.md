@@ -1005,3 +1005,34 @@ operator (and mints a cookie) on every request, assets included.
 Also in this commit: the `/kessler/` page no longer calls collisions and
 lineage "not built yet", and says the collision physics is a toy (ADR
 0008), with tests. `pnpm check` green (124 tests).
+
+## 2026-10-06 — C9: acting on the adversarial review
+
+Fixed (tests first where there was a contract; `pnpm check` green, 133):
+1. **A collision to watch**: when someone has the sky open and nothing is
+   coming within 4 minutes (none staged in the last 5), the server sends
+   two derelicts at each other, a dead-centre pass (always hits, ADR 0008)
+   meeting over the station 25 s later. Checked in Chrome on an empty sky:
+   "Collision coming ... in 22 s", then the flash over the station. A
+   viewer arriving ends the settle quiet, so it's staged at once.
+2. **Blame** is built from each object's kind, never its text; a callsign
+   "The derelict x" is named with its operator (test). "unclaimed
+   operator" became "launched without a handle".
+3. **Sign-in**: scrypt is async and capped at 4 at a time; wrong tries are
+   counted per place (address and handle), lock for 30 s after 5 and then
+   start again; claims limited per address; maps swept.
+4. **The settle timer** can't kill the process; a collision that can't be
+   written is logged and dropped.
+Also: cookie rotated on claim and sign-in; claim refused while signed in;
+the collision event's objects re-read at impact; replay's cap counts only
+objects already up; `earliest()` bisects offsets; `meetingsOf` is a set;
+settle returns at once between events; the catalogue shows the newest 500;
+stories de-duplicated and a reconnect brings missed collisions; unknown
+objects are "something", not "debris"; a test that the stream never sends
+owners or person ids. Recorded, not fixed: signing out skips the launch
+gap (ADR 0009, same loophole as clearing cookies); no server-side cookie
+expiry or "sign out everywhere". Not committed yet.
+
+2026-10-07: Advay accepted ADRs 0005 (the sky in Three.js), 0006 (the
+launchpad in Three.js) and 0008 (collisions in closed form). 0009 and 0010
+stay proposed.

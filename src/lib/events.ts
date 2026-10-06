@@ -12,6 +12,9 @@ type Listener = (event: SkyEvent) => void;
 
 const listeners = new Set<Listener>();
 
+// How many are listening: an open page's stream, or a test.
+export const listening = () => listeners.size;
+
 export function subscribe(fn: Listener): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);

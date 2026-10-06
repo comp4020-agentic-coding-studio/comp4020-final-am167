@@ -1,4 +1,5 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { blocked } from "./launch.ts";
@@ -46,11 +47,25 @@ function checkClaim({ handle, passphrase }: OperatorForm): OperatorErrors {
   return errors;
 }
 
-// scrypt with its default cost, a 16-byte salt per operator.
-const hashOf = (passphrase: string, salt: string) => scryptSync(passphrase.normalize("NFC"), salt, 64);
+// scrypt with its default cost, a 16-byte salt per operator. Off the event
+// loop, and only a few at a time, so a flood of sign-ins can't stall
+// everyone else's sky.
+const scryptAsync = promisify(scrypt) as (passphrase: string, salt: string, length: number) => Promise<Buffer>;
+const HASHING_MAX = 4;
+let hashing = 0;
+const BUSY = { ok: false as const, errors: { form: "The station is busy. Try again in a moment." } };
+async function hashOf(passphrase: string, salt: string): Promise<Buffer | null> {
+  if (hashing >= HASHING_MAX) return null;
+  hashing++;
+  try {
+    return await scryptAsync(passphrase.normalize("NFC"), salt, 64);
+  } finally {
+    hashing--;
+  }
+}
 
 // Everything this person launched while anonymous becomes the operator's.
-function link(person: string, operator: number): void {
+export function link(person: string, operator: number): void {
   db.transaction((tx) => {
     tx.insert(people).values({ person, operator }).onConflictDoUpdate({ target: people.person, set: { operator } }).run();
     tx.update(objects)
@@ -62,10 +77,34 @@ function link(person: string, operator: number): void {
 
 type Result = { ok: true; operator: Operator } | { ok: false; errors: OperatorErrors };
 
-export function claim(person: string, form: OperatorForm, now = Date.now()): Result {
+// Tries per place (an address, and the handle tried), with a lock after too
+// many: after FAILS wrong passphrases from one place, that place waits
+// LOCK_MS, and the count starts again once the lock has passed. Keyed by
+// place as well as handle, so someone guessing can't lock the owner out
+// from anywhere else. Claims are limited per address too. In memory, swept
+// as it grows; a restart forgets it.
+const FAILS = 5;
+const LOCK_MS = 30_000;
+const CLAIMS_PER_HOUR = 10;
+const tries = new Map<string, { count: number; until: number }>();
+const claims = new Map<string, number[]>();
+function sweep(now: number) {
+  if (tries.size > 1_000) for (const [key, t] of tries) if (t.until <= now && t.count < FAILS) tries.delete(key);
+  if (tries.size > 10_000) tries.clear();
+  if (claims.size > 10_000) claims.clear();
+}
+
+export async function claim(person: string, form: OperatorForm, from: string, now = Date.now()): Promise<Result> {
+  if (operatorOf(person)) return { ok: false, errors: { form: "You're signed in. Sign out first to claim another handle." } };
   const errors = checkClaim(form);
   if (Object.keys(errors).length > 0) return { ok: false, errors };
+  sweep(now);
+  const recent = (claims.get(from) ?? []).filter((at) => now - at < 3_600_000);
+  if (recent.length >= CLAIMS_PER_HOUR) return { ok: false, errors: { form: "Too many handles claimed from here. Try later." } };
   const salt = randomBytes(16).toString("hex");
+  const hash = await hashOf(form.passphrase, salt);
+  if (!hash) return BUSY;
+  claims.set(from, [...recent, now]);
   let row: Operator;
   try {
     row = db
@@ -74,7 +113,7 @@ export function claim(person: string, form: OperatorForm, now = Date.now()): Res
         handle: form.handle,
         handleKey: form.handle.toLowerCase(),
         salt,
-        hash: hashOf(form.passphrase, salt).toString("hex"),
+        hash: hash.toString("hex"),
         createdAt: now,
       })
       .returning({ id: operators.id, handle: operators.handle })
@@ -88,31 +127,30 @@ export function claim(person: string, form: OperatorForm, now = Date.now()): Res
   return { ok: true, operator: row };
 }
 
-// Failed sign-ins per handle, slowed in memory: after FAILS in a row, each
-// try waits LOCK_MS. A restart forgets them, which is fine for a toy sky.
-const FAILS = 5;
-const LOCK_MS = 30_000;
-const failures = new Map<string, { count: number; until: number }>();
-
 // The same answer for an unknown handle and a wrong passphrase, so a
 // sign-in can't be used to find out which handles exist.
 const WRONG = { ok: false as const, errors: { form: "That handle or passphrase isn't right." } };
 
-export function signIn(person: string, form: OperatorForm, now = Date.now()): Result {
-  const key = form.handle.toLowerCase();
-  const failed = failures.get(key);
-  if (failed && failed.until > now) {
-    return { ok: false, errors: { form: `Too many tries. Wait ${Math.ceil((failed.until - now) / 1000)} s.` } };
+export async function signIn(person: string, form: OperatorForm, from: string, now = Date.now()): Promise<Result> {
+  sweep(now);
+  const handleKey = form.handle.toLowerCase();
+  const key = `${from}|${handleKey}`;
+  let tried = tries.get(key);
+  if (tried && tried.until > now) {
+    return { ok: false, errors: { form: `Too many tries. Wait ${Math.ceil((tried.until - now) / 1000)} s.` } };
   }
-  const row = db.select().from(operators).where(eq(operators.handleKey, key)).get();
+  // a lock that has passed starts the count again
+  if (tried && tried.count >= FAILS) tried = undefined;
+  const row = db.select().from(operators).where(eq(operators.handleKey, handleKey)).get();
   // hash even for an unknown handle, so both take as long
-  const given = hashOf(form.passphrase, row?.salt ?? "no such operator");
+  const given = await hashOf(form.passphrase, row?.salt ?? "no such operator");
+  if (!given) return BUSY;
   if (!row || !timingSafeEqual(given, Buffer.from(row.hash, "hex"))) {
-    const count = (failed?.count ?? 0) + 1;
-    failures.set(key, { count, until: count >= FAILS ? now + LOCK_MS : 0 });
+    const count = (tried?.count ?? 0) + 1;
+    tries.set(key, { count, until: count >= FAILS ? now + LOCK_MS : 0 });
     return WRONG;
   }
-  failures.delete(key);
+  tries.delete(key);
   link(person, row.id);
   return { ok: true, operator: { id: row.id, handle: row.handle } };
 }
@@ -120,6 +158,12 @@ export function signIn(person: string, form: OperatorForm, now = Date.now()): Re
 // This device stops being the operator; the caller gives it a fresh cookie.
 export function signOut(person: string): void {
   db.delete(people).where(eq(people.person, person)).run();
+}
+
+// After claiming or signing in, the device gets a new cookie, so a cookie
+// someone saw before can't follow it into the operator.
+export function moveTo(from: string, to: string): void {
+  db.update(people).set({ person: to }).where(eq(people.person, from)).run();
 }
 
 export function operatorOf(person: string | undefined): Operator | null {

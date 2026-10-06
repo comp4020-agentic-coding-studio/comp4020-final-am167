@@ -53,13 +53,19 @@ export class Session {
 }
 
 // A form posted as a browser sends it, without JavaScript.
-export async function post(session: Session, path: string, fields: Record<string, string>): Promise<Response> {
+export async function post(
+  session: Session,
+  path: string,
+  fields: Record<string, string>,
+  headers: Record<string, string> = {},
+): Promise<Response> {
   const res = await fetch(session.url(path), {
     method: "POST",
     redirect: "manual",
     headers: session.headers({
       origin: session.url("/").origin,
       "content-type": "application/x-www-form-urlencoded",
+      ...headers,
     }),
     body: new URLSearchParams(fields).toString(),
   });

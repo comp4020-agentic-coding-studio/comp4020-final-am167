@@ -51,21 +51,23 @@ export function headline([a, b]: readonly [StoryParty, StoryParty]): string {
   return `${capital(describe(a))} and ${describe(b)} collided`;
 }
 
-// "ALPHA: unclaimed operator. BRAVO: skywriter." Everyone the collision
-// traces back to, debris resolved to its roots, each once.
+// "ALPHA: launched without a handle. BRAVO: skywriter." Everyone the
+// collision traces back to, debris resolved to its roots, each once, and the
+// derelicts, which nobody launched, said once at the end. Sorted by what each
+// object is, never by its text, so no callsign can pass for a derelict.
 export function blame(parties: readonly [StoryParty, StoryParty]): string {
   const named = new Map<number, StoryRoot>();
   for (const party of parties) {
     for (const root of party.kind === "debris" ? (party.from ?? []) : [party]) named.set(root.id, root);
   }
-  const lines = [...named.values()].map((root) =>
-    root.kind === "derelict" || !root.callsign
-      ? "The derelict was nobody's."
-      : `${root.callsign}: ${root.operator ?? "unclaimed operator"}.`,
-  );
-  // nobody's derelicts said once, after the people
-  const nobody = lines.filter((line) => line.startsWith("The derelict"));
-  return [...lines.filter((line) => !line.startsWith("The derelict")), ...nobody.slice(0, 1)].join(" ");
+  const roots = [...named.values()];
+  const people = roots
+    .filter((root) => root.kind === "satellite")
+    .map((root) => `${root.callsign ?? "A satellite"}: ${root.operator ?? "launched without a handle"}.`);
+  const derelicts = roots.filter((root) => root.kind === "derelict").length;
+  const nobody =
+    derelicts === 0 ? [] : [derelicts === 1 ? "The derelict was nobody's." : "The derelicts were nobody's."];
+  return [...people, ...nobody].join(" ");
 }
 
 // The two beacons that met, side by side (debris and derelicts are silent).

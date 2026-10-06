@@ -1,10 +1,10 @@
 import { and, count, desc, eq, inArray, max, ne, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { fatalMeeting, fragmentsOf, impactOf, nextMeeting } from "./collide.ts";
-import { publish } from "./events.ts";
+import { listening, publish } from "./events.ts";
 import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
-import { BANDS, bandAt, placeInBand, reentryAt, type Band, type Orbit } from "./orbit.ts";
+import { BANDS, STATION_ANGLE, bandAt, periodAt, placeInBand, reentryAt, type Band, type Orbit } from "./orbit.ts";
 
 const { objects, collisions } = schema;
 
@@ -160,7 +160,7 @@ interface Hit {
 const paired = new Set<number>();
 const meetings = new Map<string, Hit>();
 // the keys of each object's meetings, to forget them when it goes
-const meetingsOf = new Map<number, string[]>();
+const meetingsOf = new Map<number, Set<string>>();
 
 function forget(id: number): void {
   for (const key of meetingsOf.get(id) ?? []) meetings.delete(key);
@@ -182,7 +182,7 @@ function refreshMeetings(sky: SkyObject[]): void {
       const [a, b] = other.id < object.id ? [other, object] : [object, other];
       const key = `${a.id}:${b.id}`;
       meetings.set(key, { a, b, at: Math.round(at) });
-      for (const id of [a.id, b.id]) meetingsOf.set(id, [...(meetingsOf.get(id) ?? []), key]);
+      for (const id of [a.id, b.id]) meetingsOf.set(id, (meetingsOf.get(id) ?? new Set()).add(key));
     }
     known.push(object);
     paired.add(object.id);
@@ -243,7 +243,7 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
   const impact = impactOf(a, b, at);
   // what's still up at that moment (anything burned up by then has left,
   // whether or not it has been marked yet), less the two that met
-  const up = sky.filter((object) => reentryAt(object) > at).length - 2;
+  const up = sky.filter((object) => object.launchedAt <= at && reentryAt(object) > at).length - 2;
   const pieces = fragmentsOf(a, b, at).slice(0, Math.max(0, LIVE_CAP - up));
   const report = db.transaction((tx) => {
     const row = tx
@@ -270,13 +270,15 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
           .get(),
       ),
     );
-    return { ...row, objects: [a, b] as [SkyObject, SkyObject], fragments };
+    return { ...row, fragments };
   });
   // as they are now, not as they were when the hit was predicted: an owner
   // may have claimed a handle since (ADR 0009)
-  const now = (object: SkyObject) => toObject(db.select(columns).from(objects).where(eq(objects.id, object.id)).get()!);
-  const parties: [Party, Party] = [partyOf(now(a)), partyOf(now(b))];
-  const named = { ...report, parties };
+  const fresh = (object: SkyObject) =>
+    toObject(db.select(columns).from(objects).where(eq(objects.id, object.id)).get() ?? object);
+  const both: [SkyObject, SkyObject] = [fresh(a), fresh(b)];
+  const parties: [Party, Party] = [partyOf(both[0]), partyOf(both[1])];
+  const named = { ...report, objects: both, parties };
   publish({ type: "collision", collision: named });
   return named;
 }
@@ -379,9 +381,50 @@ export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
       .get(),
   );
   publish({ type: "launch", object });
+  unquiet();
   refreshMeetings(live());
   announce(now);
   return object;
+}
+
+// ── a collision to watch (ADR 0008) ───────────────────────────────────────
+
+// When nothing is coming, a visitor could watch for an hour and see no
+// collision. So, for someone watching, and no more often than `every`, the
+// server sends two derelicts at each other: same height, opposite ways, a
+// dead-centre pass (collide.ts) that meets over the station `lead` from now,
+// in the default view. The rest of the world launches too.
+export const STAGE = {
+  every: 5 * 60_000,
+  horizon: 4 * 60_000,
+  lead: 25_000,
+  radius: 1.3,
+  // not into a sky that's already busy
+  busy: 150,
+};
+let lastStaged = -Infinity;
+
+export function stageCollision(now = Date.now()): Conjunction | null {
+  if (now - lastStaged < STAGE.every) return null;
+  if (schedule().some((hit) => hit.at > now && hit.at - now < STAGE.horizon)) return null;
+  if (live().length >= STAGE.busy) return null;
+  lastStaged = now;
+  const period = periodAt(STAGE.radius);
+  // how far each sweeps before they meet (lead is under half a lap, so this
+  // is their first meeting)
+  const sweep = ((2 * Math.PI) / period) * STAGE.lead;
+  const way: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+  const orbit = (direction: 1 | -1) => ({
+    radius: STAGE.radius,
+    phase: STATION_ANGLE - direction * sweep,
+    period: Math.round(period),
+    epoch: now,
+    direction,
+  });
+  const a = addDerelict(orbit(way), now);
+  const b = addDerelict(orbit(-way as 1 | -1), now);
+  const hit = meetings.get(`${Math.min(a.id, b.id)}:${Math.max(a.id, b.id)}`);
+  return hit ? toConjunction(hit) : null;
 }
 
 // Tops the sky up with derelicts, each in a random band, towards `baseline`
@@ -406,23 +449,53 @@ export function keepDerelicts(now = Date.now(), baseline = DERELICT_BASELINE): v
 // Every read of the sky runs this first, so a server that was stopped catches
 // up before it answers; a timer runs it as each event comes while it's
 // running.
+//
+// Most reads come between events, with nothing to do: until the next
+// collision or burn-up (and at least every QUIET_MS, for the derelicts),
+// settling returns at once. A launch or a new derelict ends the quiet.
+const QUIET_MS = 15_000;
+let quietFrom = Infinity;
+let quietUntil = -Infinity;
+const unquiet = () => {
+  quietUntil = -Infinity;
+};
+
+// Someone has just opened the sky: settle now, so a collision can be
+// staged for them (stageCollision) without waiting out the quiet.
+export function watcherArrived(): void {
+  unquiet();
+}
+
 export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: CollisionReport[] } {
+  if (now >= quietFrom && now < quietUntil) return { decayed: [], collisions: [] };
   const applied: CollisionReport[] = [];
   let sky = live();
   refreshMeetings(sky);
   for (;;) {
     const next = nextHit();
     if (!next || next.at > now) break;
-    const report = collide(next, sky);
-    applied.push(report);
-    sky = sky.filter((object) => object.id !== next.a.id && object.id !== next.b.id).concat(report.fragments);
+    try {
+      const report = collide(next, sky);
+      applied.push(report);
+      sky = sky.filter((object) => object.id !== next.a.id && object.id !== next.b.id).concat(report.fragments);
+    } catch (error) {
+      // a collision that can't be written (a busy or full disk) is dropped,
+      // so it can't fail every read after it; the sky goes on without it
+      console.error(`collision of ${next.a.id} and ${next.b.id} failed:`, error);
+      meetings.delete(`${next.a.id}:${next.b.id}`);
+      continue;
+    }
     refreshMeetings(sky);
   }
   const decayed = markDecayed(now);
   keepDerelicts(now);
+  // only for someone watching: a collision staged for nobody is just debris
+  if (DERELICT_BASELINE > 0 && listening() > 0) stageCollision(now);
   refreshMeetings(live());
   announce(now);
-  wakeForNext();
+  const next = wakeForNext();
+  quietFrom = now;
+  quietUntil = Math.min(next, now + QUIET_MS);
   return { decayed, collisions: applied };
 }
 
@@ -430,15 +503,25 @@ export const settleDecay = (now = Date.now()): SkyObject[] => settle(now).decaye
 
 // Wakes for the next burn-up or collision, or within a minute regardless,
 // so a timer never sleeps past a launch that burns up sooner.
+// Returns when the next one is.
 let wake: ReturnType<typeof setTimeout> | undefined;
-function wakeForNext(): void {
+function wakeForNext(): number {
   clearTimeout(wake);
   let next = nextHit()?.at ?? Infinity;
   for (const object of live()) next = Math.min(next, reentryAt(object));
   const wait = Math.min(Math.max(next - Date.now(), 0) + 5, 60_000);
-  wake = setTimeout(() => settle(), wait);
+  wake = setTimeout(() => {
+    // an error here would otherwise end the process
+    try {
+      settle();
+    } catch (error) {
+      console.error("settling the sky failed:", error);
+      wakeForNext();
+    }
+  }, wait);
   // never what keeps the process alive
   wake.unref?.();
+  return next;
 }
 
 export function liveSky(now = Date.now()): SkyObject[] {
@@ -467,6 +550,9 @@ export interface CatalogueEntry extends Orbit {
   collidedWith: Party | null;
 }
 
+// The most rows the catalogue shows at once (its newest).
+export const CATALOGUE_MAX = 500;
+
 // The record (ADR 0003): what's in orbit now, or everything ever launched,
 // newest first. Owners stay on the server; a row only says if it's yours.
 export function catalogue(show: "live" | "all", who: Who): CatalogueEntry[] {
@@ -492,6 +578,8 @@ export function catalogue(show: "live" | "all", who: Who): CatalogueEntry[] {
     .from(objects)
     .where(show === "live" ? eq(objects.fate, "live") : undefined)
     .orderBy(desc(objects.launchedAt), desc(objects.id))
+    // the record only grows: the page shows the newest
+    .limit(CATALOGUE_MAX)
     .all();
   // each collision's roots once, however many fragments it made
   const roots = new Map<number, Root[]>();
@@ -554,6 +642,7 @@ export function launch(who: Viewer | string, input: LaunchInput, now = Date.now(
   const result = checkAndInsert(viewerOf(who), input, now, random);
   if (result.ok) {
     publish({ type: "launch", object: result.object });
+    unquiet();
     refreshMeetings(live());
     announce(now);
     wakeForNext();
