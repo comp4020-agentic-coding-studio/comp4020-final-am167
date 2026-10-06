@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { FRAGMENTS, HIT, fatalMeeting, nextMeeting } from "../src/lib/collide.ts";
-import { periodAt, type Orbit } from "../src/lib/orbit.ts";
+import { angleAt, periodAt, radiusAt, type Orbit } from "../src/lib/orbit.ts";
 import type { SkyEvent } from "../src/lib/events.ts";
 
 // The server's side of collisions (ADR 0008): a collision is predicted and
@@ -32,9 +32,11 @@ async function freshServer() {
   vi.resetModules();
   const sky = await import("../src/lib/sky.ts");
   const events = await import("../src/lib/events.ts");
+  const operators = await import("../src/lib/operators.ts");
+  const { db, schema } = await import("../src/db/index.ts");
   const heard: SkyEvent[] = [];
   events.subscribe((event) => heard.push(event));
-  return { sky, heard };
+  return { sky, heard, operators, db, schema };
 }
 
 const HOUR = 3_600_000;
@@ -154,5 +156,58 @@ describe("derelicts", async () => {
     expect(launches).toHaveLength(5);
     sky.keepDerelicts(T + 1, 5);
     expect(sky.liveSky(T + 1).filter((o) => o.kind === "derelict")).toHaveLength(5);
+  });
+});
+
+describe("who a collision names (ADR 0010)", async () => {
+  const { sky, heard, operators, db, schema } = await freshServer();
+  // satellites on chosen orbits, as if launched (a launch's orbit is random)
+  const put = (values: Partial<typeof schema.objects.$inferInsert> & Required<Orbit>) => {
+    const row = db
+      .insert(schema.objects)
+      .values({ kind: "satellite", band: "low", launchedAt: values.epoch, ...values })
+      .returning()
+      .get();
+    return { ...row, kind: "satellite" as const, direction: values.direction };
+  };
+  const alpha = put({ owner: "alice", callsign: "ALPHA", beacon: "hello from alpha", ...orbit(1.3, 0, 1) });
+  const bravo = put({ owner: "bob", callsign: "BRAVO", beacon: "bravo here", ...orbit(1.3 + HIT.headOn / 2, 2, -1) });
+  const at = Math.round(nextMeeting(alpha, bravo, T, fatalMeeting(alpha, bravo))!);
+  const collisions = () => heard.flatMap((e) => (e.type === "collision" ? [e.collision] : []));
+
+  it("names both, with their beacons and their operators' handles, as a couplet", () => {
+    // the hit is predicted first; then bob claims a handle (ADR 0009) and
+    // alice doesn't, and the collision names them as they are by then
+    expect(sky.conjunctions(T).map((c) => c.at)).toEqual([at]);
+    expect(operators.claim("bob", { action: "claim", handle: "bravo_ops", passphrase: "long enough" }).ok).toBe(true);
+    sky.settle(at + 1);
+    const [collision] = collisions();
+    expect(collision.parties).toEqual([
+      { id: alpha.id, kind: "satellite", callsign: "ALPHA", beacon: "hello from alpha", operator: null, from: null },
+      { id: bravo.id, kind: "satellite", callsign: "BRAVO", beacon: "bravo here", operator: "bravo_ops", from: null },
+    ]);
+  });
+
+  it("passes the blame for debris back to the satellites it came from", () => {
+    // a third satellite at a fragment's height, going the other way: the
+    // fragment (or one of its siblings) hits it
+    const [first] = collisions();
+    const fragment = first.fragments[0];
+    const start = at + 1;
+    const charlie = put({
+      owner: "carol",
+      callsign: "CHARLIE",
+      beacon: "minding my own business",
+      ...orbit(radiusAt(fragment, start), angleAt(fragment, start) + 1, fragment.direction === 1 ? -1 : 1, start),
+    });
+    sky.settle(start + 6 * HOUR);
+    const hit = collisions().find((c) => c.parties.some((p) => p.id === charlie.id));
+    expect(hit, "nothing hit CHARLIE").toBeDefined();
+    const debris = hit!.parties.find((p) => p.id !== charlie.id)!;
+    expect(debris.kind).toBe("debris");
+    expect(debris.from!.map((p) => [p.callsign, p.operator])).toEqual([
+      ["ALPHA", null],
+      ["BRAVO", "bravo_ops"],
+    ]);
   });
 });

@@ -34,11 +34,21 @@ describe("the Kessler syndrome page", () => {
     expect(main.querySelector('a[href="/"]'), "no link to the launchpad").not.toBeNull();
   });
 
-  it("no longer calls decay unbuilt", async () => {
+  it.each([
+    ["decay", /drag/i],
+    ["collisions", /collision makes fragments/i],
+    ["lineage", /traced/i],
+  ])("no longer calls %s unbuilt", async (name, heading) => {
     const rows = [...(await page("/kessler/")).querySelectorAll(".mapping tbody tr")];
-    const decay = rows.find((tr) => /drag/i.test(tr.querySelector("th")?.textContent ?? ""));
-    expect(decay, "no row for decay").toBeDefined();
-    expect(decay!.textContent).not.toMatch(/not built yet/i);
+    const row = rows.find((tr) => heading.test(tr.querySelector("th")?.textContent ?? ""));
+    expect(row, `no row for ${name}`).toBeDefined();
+    expect(row!.textContent).not.toMatch(/not built yet/i);
+  });
+
+  it("says the collision physics is a toy (ADR 0008)", async () => {
+    const text = (await page("/kessler/")).querySelector("main")!.textContent ?? "";
+    expect(text).toMatch(/opposite ways|other way/i);
+    expect(text).toMatch(/real collisions/i);
   });
 
   for (const [name, path] of [

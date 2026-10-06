@@ -7,20 +7,20 @@ import { conjunctions, liveSky, toPublic } from "../../lib/sky.ts";
 // snapshot of the live sky and the collisions coming (ADR 0008), then sends
 // each event as it happens.
 export const GET: APIRoute = ({ request, locals }) => {
-  const { person } = locals;
+  const viewer = { person: locals.person, operator: locals.operator?.id ?? null };
   // what this viewer may see of an event: objects lose their owner
   const visible = (event: SkyEvent) => {
     switch (event.type) {
       case "launch":
       case "decay":
-        return toPublic(event.object, person);
+        return toPublic(event.object, viewer);
       case "conjunction":
         return event.conjunction;
       case "collision":
         return {
           ...event.collision,
-          objects: event.collision.objects.map((object) => toPublic(object, person)),
-          fragments: event.collision.fragments.map((object) => toPublic(object, person)),
+          objects: event.collision.objects.map((object) => toPublic(object, viewer)),
+          fragments: event.collision.fragments.map((object) => toPublic(object, viewer)),
         };
     }
   };
@@ -35,7 +35,7 @@ export const GET: APIRoute = ({ request, locals }) => {
       const unsubscribe = subscribe((event) => send(event.type, visible(event)));
       send("hello", {
         serverTime: Date.now(),
-        sky: liveSky().map((object) => toPublic(object, person)),
+        sky: liveSky().map((object) => toPublic(object, viewer)),
         conjunctions: conjunctions(),
       });
       const ping = setInterval(() => controller.enqueue(encoder.encode(": ping\n\n")), 25_000);

@@ -49,9 +49,19 @@ import { PLANET_COLOURS, STAR_COLOURS, seeded } from "./starfield.ts";
 
 export interface SceneSatellite extends Orbit {
   id: number;
-  callsign: string;
+  // people's satellites are named and coloured; derelicts and debris are
+  // grey and unnamed (ADR 0008)
+  kind?: "satellite" | "derelict" | "debris";
+  callsign: string | null;
   band: Band;
   mine: boolean;
+}
+
+// A collision, coming or just happened: when, and where on the chart.
+export interface SceneImpact {
+  at: number;
+  angle: number;
+  radius: number;
 }
 
 export interface SceneControls {
@@ -69,6 +79,8 @@ export interface SceneOptions {
   reduced: boolean;
   // elements over the canvas that labels and the pointer keep clear of
   obstacles: HTMLElement[];
+  // collisions coming and just past, drawn at their moment on every screen
+  impacts?: () => Iterable<SceneImpact>;
 }
 
 const TAU = Math.PI * 2;
@@ -111,6 +123,14 @@ const place = (radius: number, angle: number, planet: number): [number, number] 
   const d = display(radius, planet);
   return [-d * Math.cos(angle), d * Math.sin(angle)];
 };
+
+// A collision: a pulsing ring where it will happen, over the last WARN_MS
+// before it, then a flash and a ring spreading out over FLASH_MS.
+const WARN_MS = 30_000;
+const FLASH_MS = 6_000;
+const GREY: [number, number, number] = [0.42, 0.45, 0.5];
+const DERELICT: [number, number, number] = [0.55, 0.5, 0.44];
+const FLASH: [number, number, number] = [1, 0.92, 0.8];
 
 const AMBER = new Color("#f2a541");
 const INK = new Color("#dbe4ef");
@@ -461,7 +481,9 @@ function stationWindow(): Mesh {
 
 // ── satellites and their trails ───────────────────────────────────────────
 
-function glowPoints(): Points {
+// With tintedRing, the ring takes the point's colour (and fades with it)
+// instead of the fixed ink.
+function glowPoints(tintedRing = false): Points {
   const geometry = new BufferGeometry();
   const material = new ShaderMaterial({
     uniforms: { ratio: { value: 1 }, ring: { value: INK } },
@@ -496,7 +518,7 @@ function glowPoints(): Points {
         float glow = exp(-r * r / (vCore * vCore * 3.0)) * 0.7 * (1.0 - smoothstep(vSize * 0.3, vSize * 0.5, r));
         // yours wears a ring
         float band = vHalo > 0.0 ? (1.0 - smoothstep(0.6, 1.4, abs(r - vHalo))) * 0.9 : 0.0;
-        vec3 colour = vColour * (core + glow) + vec3(1.0) * core * 0.35 + ring * band;
+        vec3 colour = vColour * (core + glow) + vec3(1.0) * core * 0.35 + ${tintedRing ? "vColour" : "ring"} * band;
         gl_FragColor = vec4(colour, 1.0);
         #include <colorspace_fragment>
       }`,
@@ -567,6 +589,8 @@ export function createScene(options: SceneOptions): SceneControls | null {
     side: DoubleSide,
   }));
   const satellites = glowPoints();
+  const impacts = glowPoints(true);
+  impacts.frustumCulled = false;
   const reentry = createReentry(reduced);
   const station = glowPoints();
   station.geometry.setAttribute("position", new Float32BufferAttribute([0, PLANET + 0.01, 8], 3));
@@ -584,7 +608,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
   starPoints.renderOrder = 1;
   backdropScene.add(backdrop, starPoints);
   const bandRings = bands();
-  const layers = [earth, coasts, air, bandRings, beam, trails, ...reentry.layers, station, satellites];
+  const layers = [earth, coasts, air, bandRings, beam, trails, ...reentry.layers, station, satellites, impacts];
   layers.forEach((layer, i) => {
     layer.renderOrder = i;
     if (layer !== earth && layer !== coasts) layer.position.z = 8;
@@ -782,6 +806,67 @@ export function createScene(options: SceneOptions): SceneControls | null {
     return c;
   };
   const amber: [number, number, number] = [AMBER.r, AMBER.g, AMBER.b];
+  const kindOf = (sat: SceneSatellite) => sat.kind ?? "satellite";
+  const tintOf = (sat: SceneSatellite) =>
+    kindOf(sat) === "debris" ? GREY : kindOf(sat) === "derelict" ? DERELICT : colourOf(sat.id);
+
+  // the collision layer's buffers, grown as needed
+  let impactCapacity = 0;
+  let impactBuffers: typeof pointBuffers;
+  function growImpacts(needed: number) {
+    if (needed <= impactCapacity) return;
+    impactCapacity = Math.max(needed, impactCapacity * 2, 8);
+    impactBuffers = {
+      position: new Float32Array(impactCapacity * 3),
+      colour: new Float32Array(impactCapacity * 3),
+      size: new Float32Array(impactCapacity),
+      core: new Float32Array(impactCapacity),
+      halo: new Float32Array(impactCapacity),
+    };
+    const g = impacts.geometry;
+    g.dispose();
+    for (const [name, size] of [["position", 3], ["colour", 3], ["size", 1], ["core", 1], ["halo", 1]] as const) {
+      g.setAttribute(name, new BufferAttribute(impactBuffers[name], size).setUsage(DynamicDrawUsage));
+    }
+  }
+  growImpacts(1);
+
+  // Collisions coming (a ring pulsing where they'll meet) and just happened
+  // (a flash, and a ring spreading out). All from the predicted moment, so
+  // every screen sees it at once.
+  function drawImpacts(time: number) {
+    const shown: [SceneImpact, number][] = [];
+    for (const impact of options.impacts?.() ?? []) {
+      const since = time - impact.at;
+      if (since > -WARN_MS && since < FLASH_MS) shown.push([impact, since]);
+    }
+    growImpacts(shown.length);
+    const { position, colour, size, core, halo } = impactBuffers;
+    shown.forEach(([impact, since], i) => {
+      const [x, y] = place(impact.radius, impact.angle, planet);
+      position.set([x, y, 0], i * 3);
+      if (since < 0) {
+        // coming: a faint ring, pulsing faster as it nears
+        const near = 1 + since / WARN_MS;
+        const beat = reduced ? 0.6 : 0.5 + 0.5 * Math.sin(time / (260 - 180 * near));
+        colour.set(amber.map((v) => v * (0.25 + 0.55 * near) * beat), i * 3);
+        core[i] = 0.01;
+        halo[i] = 9;
+        size[i] = 24;
+      } else {
+        // the flash, then a ring spreading out and fading
+        const t = since / FLASH_MS;
+        const fade = (1 - t) ** 2;
+        colour.set(FLASH.map((v) => v * fade * 1.6), i * 3);
+        core[i] = reduced ? 4 : 8 * (1 - t) ** 3 + 1;
+        halo[i] = reduced ? 0 : 10 + 70 * Math.sqrt(t);
+        size[i] = 2 * halo[i] + 30;
+      }
+    });
+    const g = impacts.geometry;
+    for (const name of ["position", "colour", "size", "core", "halo"]) g.getAttribute(name).needsUpdate = true;
+    g.setDrawRange(0, shown.length);
+  }
 
   // Only draw while the scene is on screen; scrolled down to the catalogue,
   // or in a background tab, it rests.
@@ -841,16 +926,19 @@ export function createScene(options: SceneOptions): SceneControls | null {
     const { position, colour, size, core, halo } = pointBuffers;
     for (let i = 0; i < flying.length; i++) {
       const p = flying[i];
-      const c = p.overhead ? amber : colourOf(p.sat.id);
+      const kind = kindOf(p.sat);
+      const c = p.overhead && kind === "satellite" ? amber : tintOf(p.sat);
       // glowing red as it skims the top of the atmosphere
       const heat = Math.max(0, 1 - (burnAt(p.sat) - time) / HEATING_MS) ** 2;
       position[i * 3] = p.x;
       position[i * 3 + 1] = p.y;
       position[i * 3 + 2] = 0;
       for (let k = 0; k < 3; k++) colour[i * 3 + k] = c[k] + (EMBER[k] - c[k]) * heat;
-      core[i] = (p.sat.mine ? 3.6 : p.overhead ? 3.2 : 2.4) + heat;
+      // debris is small, a derelict a little smaller than a working satellite
+      const small = kind === "debris" ? 0.5 : kind === "derelict" ? 0.8 : 1;
+      core[i] = ((p.sat.mine ? 3.6 : p.overhead ? 3.2 : 2.4) + heat) * small;
       halo[i] = p.sat.mine ? 10 : 0;
-      size[i] = (p.sat.mine ? 26 : 22) + heat * 8;
+      size[i] = ((p.sat.mine ? 26 : 22) + heat * 8) * small;
     }
     const g = satellites.geometry;
     for (const name of ["position", "colour", "size", "core", "halo"]) g.getAttribute(name).needsUpdate = true;
@@ -863,13 +951,17 @@ export function createScene(options: SceneOptions): SceneControls | null {
     for (let s = 0; s < flying.length; s++) {
       const p = flying[s];
       const arc = Math.min(TRAIL_MAX, (TAU * TRAIL_MS) / periodNow(p.sat, time));
-      const base = colourOf(p.sat.id);
+      const base = tintOf(p.sat);
+      // the light trails are people's; wreckage leaves a faint grey scratch
+      const faint = kindOf(p.sat) === "debris" ? 0.35 : kindOf(p.sat) === "derelict" ? 0.5 : 1;
       const heat = Math.max(0, 1 - (burnAt(p.sat) - time) / HEATING_MS) ** 2;
       const c = heat > 0 ? base.map((v, k) => v + (EMBER[k] - v) * heat) : base;
       const d = display(p.radius, planet);
+      // behind it, whichever way round it goes (ADR 0008)
+      const back = arc * (p.sat.direction ?? 1);
       for (let i = 0; i < TRAIL_STEPS; i++) {
         const t = i / (TRAIL_STEPS - 1);
-        const a = p.angle - t * arc;
+        const a = p.angle - t * back;
         const ux = -Math.cos(a);
         const uy = Math.sin(a);
         const w = (thick / 2) * (1 - t * 0.7);
@@ -880,7 +972,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
         tp[v * 3 + 3] = ux * (d - w);
         tp[v * 3 + 4] = uy * (d - w);
         tp[v * 3 + 5] = 0;
-        const alpha = 0.5 * (1 - t) ** 1.6;
+        const alpha = 0.5 * faint * (1 - t) ** 1.6;
         for (let k = 0; k < 2; k++) {
           tt[v * 4 + k * 4] = c[0];
           tt[v * 4 + k * 4 + 1] = c[1];
@@ -893,6 +985,8 @@ export function createScene(options: SceneOptions): SceneControls | null {
     tg.getAttribute("position").needsUpdate = true;
     tg.getAttribute("tint").needsUpdate = true;
     tg.setDrawRange(0, flying.length * (TRAIL_STEPS - 1) * 6);
+
+    drawImpacts(time);
 
     reentry.draw(burning, {
       time,
@@ -929,7 +1023,10 @@ export function createScene(options: SceneOptions): SceneControls | null {
     }
     const rank = (p: Placed) =>
       (p.sat.mine ? 4 : 0) + (p.overhead ? 2 : 0) + (labels.get(p.sat.id)?.shown ? 1 : 0);
-    const order = placed.filter(inView).sort((a, b) => rank(b) - rank(a));
+    // only people's satellites are named
+    const order = placed
+      .filter((p) => inView(p) && kindOf(p.sat) === "satellite" && p.sat.callsign)
+      .sort((a, b) => rank(b) - rank(a));
     const taken = [...blocked];
     const visible = new Set<number>();
     for (const p of order) {
@@ -964,9 +1061,10 @@ export function createScene(options: SceneOptions): SceneControls | null {
     }
   }
 
-  // Your satellite, when it's out of view: a pointer at the left edge, where
-  // it will rise (moved below the panel if that's in the way). Plus a pulse
-  // on a satellite you've only just launched.
+  // Your satellite, when it's out of view: a pointer at the edge where it
+  // will rise, the left for most, the right for one going the other way
+  // (moved below the panel if that's in the way). Plus a pulse on a
+  // satellite you've only just launched.
   let pointed = "";
   function point(mine: Placed | null, blocked: Box[]) {
     if (!mine || inView(mine)) {
@@ -975,23 +1073,27 @@ export function createScene(options: SceneOptions): SceneControls | null {
       pointer.hidden = false;
       const d = display(mine.radius, planet);
       const rise = Math.acos(Math.min(1, half / d));
-      const gap = (rise - mine.angle + TAU) % TAU;
+      const retrograde = mine.sat.direction === -1;
+      // a retrograde orbit rises at the mirror image of the prograde rise
+      const gap = retrograde ? (mine.angle - (Math.PI - rise) + TAU) % TAU : (rise - mine.angle + TAU) % TAU;
       const time = options.now();
       const rises = (gap / TAU) * periodNow(mine.sat, time);
-      const text = mine.burning
-        ? `‹ ${mine.sat.callsign} is burning up out of view`
+      const what = mine.burning
+        ? `${mine.sat.callsign} is burning up out of view`
         : time + rises >= burnAt(mine.sat)
-          ? `‹ ${mine.sat.callsign} burns up before it rises`
-          : `‹ ${mine.sat.callsign} rises in ${countdown(rises)}`;
+          ? `${mine.sat.callsign} burns up before it rises`
+          : `${mine.sat.callsign} rises in ${countdown(rises)}`;
+      const text = retrograde ? `${what} ›` : `‹ ${what}`;
       const [, edge] = screen(-half, Math.sqrt(d * d - half * half));
       let y = edge - 8 - pointer.offsetHeight;
-      const box = (at: number): Box => [8, at, 8 + pointer.offsetWidth, at + pointer.offsetHeight];
+      const x = retrograde ? width - 8 - pointer.offsetWidth : 8;
+      const box = (at: number): Box => [x, at, x + pointer.offsetWidth, at + pointer.offsetHeight];
       for (const b of blocked) if (overlaps(box(y), b)) y = b[3] + 8;
-      const state = `${text}|${Math.round(y)}`;
+      const state = `${text}|${Math.round(x)}|${Math.round(y)}`;
       if (state !== pointed) {
         pointed = state;
         pointer.textContent = text;
-        pointer.style.transform = `translate(0.5rem, ${Math.round(y)}px)`;
+        pointer.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
       }
     }
 

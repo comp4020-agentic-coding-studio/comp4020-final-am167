@@ -30,6 +30,9 @@ export const objects = sqliteTable(
     direction: integer("direction").notNull().default(1),
     // for debris, the collision it came from: its lineage (ADR 0003)
     sourceCollision: integer("source_collision"),
+    // the operator it belongs to, once its person has claimed or signed in
+    // to one (ADR 0009); until then it's the owner cookie's
+    operator: integer("operator"),
     fate: text("fate", { enum: ["live", "decayed", "deorbited", "destroyed"] })
       .notNull()
       .default("live"),
@@ -39,8 +42,32 @@ export const objects = sqliteTable(
     index("objects_fate").on(t.fate),
     index("objects_owner").on(t.owner),
     index("objects_source_collision").on(t.sourceCollision),
+    index("objects_operator").on(t.operator),
   ],
 );
+
+// Operators (ADR 0009): a handle anyone can claim, with a passphrase, so a
+// person's satellites (and the blame for them) follow them across devices.
+// No email, no real names: the passphrase is kept only as an scrypt hash.
+export const operators = sqliteTable(
+  "operators",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    handle: text("handle").notNull(),
+    // lowercased, so a handle is taken whatever its case
+    handleKey: text("handle_key").notNull(),
+    salt: text("salt").notNull(),
+    hash: text("hash").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [uniqueIndex("operators_handle_key").on(t.handleKey)],
+);
+
+// Which operator each person (cookie) is signed in as, if any.
+export const people = sqliteTable("people", {
+  person: text("person").primaryKey(),
+  operator: integer("operator").notNull(),
+});
 
 // Every collision, kept forever (ADR 0003, 0008): when, which two objects,
 // and where (angle and height, in planet radii). Its fragments point back

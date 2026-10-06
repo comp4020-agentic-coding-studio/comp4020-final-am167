@@ -8,7 +8,8 @@ import { SKY_CAP, launch, nextLaunchAt, satellitesOf, skyIsFull, waitMessage } f
 // The launchpad. The form posts here and works without JavaScript: a launch
 // redirects to the sky, a refusal re-renders the form with the reasons. The
 // page's script asks for JSON instead, so it can play the launch first.
-const { person } = Astro.locals;
+const { person, operator } = Astro.locals;
+const viewer = { person, operator: operator?.id ?? null };
 const wantsJson = Astro.request.headers.get("accept")?.includes("application/json");
 
 let errors: LaunchErrors = {};
@@ -27,7 +28,7 @@ if (Astro.request.method === "POST") {
 
 if (form) {
   const read = readLaunch(form);
-  const result = read.ok ? launch(person, read.input) : read;
+  const result = read.ok ? launch(viewer, read.input) : read;
   if (result.ok) {
     const redirect = `/sky/?launched=${result.object.id}`;
     if (wantsJson) return Response.json({ id: result.object.id, redirect }, { status: 201 });
@@ -41,8 +42,8 @@ if (form) {
 }
 
 // you can have any number up, a short gap apart (PLAN.md, "Launch limits")
-const mine = satellitesOf(person);
-const wait = nextLaunchAt(person) - Date.now();
+const mine = satellitesOf(viewer);
+const wait = nextLaunchAt(viewer) - Date.now();
 const full = skyIsFull();
 const names = (list: string[]) =>
   list.length < 2 ? list.join("") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;

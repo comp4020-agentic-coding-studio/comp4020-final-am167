@@ -1,0 +1,276 @@
+---
+import Base from "../../layouts/Base.astro";
+import {
+  HANDLE_MAX,
+  HANDLE_MIN,
+  PASSPHRASE_MIN,
+  claim,
+  readOperatorForm,
+  signIn,
+  signOut,
+  type OperatorErrors,
+} from "../../lib/operators.ts";
+import { newPerson } from "../../lib/person.ts";
+import { satellitesOf } from "../../lib/sky.ts";
+
+// Your operator (ADR 0009). Anyone can launch without one; claiming a handle
+// with a passphrase keeps your satellites, and the blame for them, on every
+// device you sign in on. Forms that work without JavaScript: a success
+// redirects back here, a refusal re-renders with the reasons.
+const { person, operator } = Astro.locals;
+
+let errors: OperatorErrors = {};
+let failed: "claim" | "sign-in" | null = null;
+let handle = "";
+
+if (Astro.request.method === "POST") {
+  let form: FormData | null = null;
+  try {
+    form = await Astro.request.formData();
+  } catch {
+    // unreadable: shown as an error below
+  }
+  const read = form && readOperatorForm(form);
+  if (!read) {
+    errors = { form: "That form couldn't be read. Try again." };
+    Astro.response.status = 400;
+  } else if (read.action === "sign-out") {
+    signOut(person);
+    // a new anonymous person on this device; what it launched stays the operator's
+    newPerson(Astro.cookies, Astro.url, Astro.request.headers);
+    return Astro.redirect("/operator/", 303);
+  } else {
+    const result = read.action === "claim" ? claim(person, read) : signIn(person, read);
+    if (result.ok) return Astro.redirect("/operator/", 303);
+    errors = result.errors;
+    failed = read.action;
+    handle = read.handle;
+    Astro.response.status = 422;
+  }
+}
+
+const viewer = { person, operator: operator?.id ?? null };
+const up = satellitesOf(viewer).length;
+const errorFor = (form: "claim" | "sign-in", field: keyof OperatorErrors) => (failed === form ? errors[field] : undefined);
+---
+<Base title="Kessler: your operator" current="operator">
+  <main class="operator-page">
+    <h1>Your operator</h1>
+
+    {operator ? (
+      <>
+        <p class="status">Signed in as <strong>{operator.handle}</strong>.</p>
+        <p class="lede">
+          {up === 0 ? "You have nothing in orbit." : `You have ${up} satellite${up === 1 ? "" : "s"} in orbit.`}{" "}
+          Everything you launch is yours on every device you sign in on, and
+          when it collides, every screen names {operator.handle} with it.
+        </p>
+        <form method="post" action="/operator/">
+          <input type="hidden" name="action" value="sign-out" />
+          <button type="submit" class="secondary">Sign out on this device</button>
+        </form>
+      </>
+    ) : (
+      <>
+        <p class="lede">
+          You don't need one to launch. Claim a handle to keep your satellites
+          on another device, or after clearing your cookies: everything you've
+          launched here becomes the handle's. A handle is public: when your
+          satellites collide, every screen names it. No email, so a forgotten
+          passphrase can't be recovered.
+          {up > 0 && <> You have {up} satellite{up === 1 ? "" : "s"} in orbit from this device.</>}
+        </p>
+
+        <div class="form-error" role="alert">{errors.form && failed === null ? errors.form : ""}</div>
+
+        <div class="forms">
+          <form method="post" action="/operator/" novalidate aria-labelledby="claim-title">
+            <h2 id="claim-title">Claim a handle</h2>
+            <input type="hidden" name="action" value="claim" />
+            <div class="field">
+              <label for="claim-handle">Handle</label>
+              <input
+                id="claim-handle"
+                name="handle"
+                required
+                minlength={HANDLE_MIN}
+                maxlength={HANDLE_MAX}
+                autocomplete="username"
+                spellcheck="false"
+                value={failed === "claim" ? handle : ""}
+                aria-invalid={errorFor("claim", "handle") ? "true" : undefined}
+                aria-describedby="claim-handle-help claim-handle-error"
+              />
+              <p class="help" id="claim-handle-help">
+                {HANDLE_MIN} to {HANDLE_MAX} letters, numbers, hyphens or underscores.
+              </p>
+              <p class="field-error" id="claim-handle-error">{errorFor("claim", "handle")}</p>
+            </div>
+            <div class="field">
+              <label for="claim-passphrase">Passphrase</label>
+              <input
+                id="claim-passphrase"
+                name="passphrase"
+                type="password"
+                required
+                minlength={PASSPHRASE_MIN}
+                autocomplete="new-password"
+                aria-invalid={errorFor("claim", "passphrase") ? "true" : undefined}
+                aria-describedby="claim-passphrase-help claim-passphrase-error"
+              />
+              <p class="help" id="claim-passphrase-help">At least {PASSPHRASE_MIN} characters.</p>
+              <p class="field-error" id="claim-passphrase-error">{errorFor("claim", "passphrase")}</p>
+            </div>
+            <button type="submit">Claim</button>
+          </form>
+
+          <form method="post" action="/operator/" novalidate aria-labelledby="sign-in-title">
+            <h2 id="sign-in-title">Sign in</h2>
+            <input type="hidden" name="action" value="sign-in" />
+            <div class="form-error" role="alert">{errorFor("sign-in", "form")}</div>
+            <div class="field">
+              <label for="sign-in-handle">Handle</label>
+              <input
+                id="sign-in-handle"
+                name="handle"
+                required
+                autocomplete="username"
+                spellcheck="false"
+                value={failed === "sign-in" ? handle : ""}
+              />
+            </div>
+            <div class="field">
+              <label for="sign-in-passphrase">Passphrase</label>
+              <input id="sign-in-passphrase" name="passphrase" type="password" required autocomplete="current-password" />
+            </div>
+            <button type="submit">Sign in</button>
+          </form>
+        </div>
+      </>
+    )}
+  </main>
+</Base>
+
+<style>
+  .operator-page {
+    max-width: 48rem;
+    margin: 0 auto;
+    padding: 1.5rem var(--gutter) 3rem;
+  }
+
+  h1 {
+    margin: 0 0 0.5rem;
+    font-size: var(--step-2);
+    font-weight: 800;
+    font-variation-settings: "wdth" 112;
+  }
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: var(--step-1);
+    font-weight: 700;
+  }
+
+  .lede {
+    margin: 0 0 1.5rem;
+    color: var(--ink-dim);
+    max-width: 38rem;
+  }
+
+  .status {
+    margin: 0 0 0.5rem;
+    font-size: var(--step-1);
+  }
+
+  .status strong {
+    color: var(--amber);
+  }
+
+  .forms {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1.5rem;
+  }
+
+  .forms form {
+    padding: 1rem;
+    border: 1px solid var(--grid);
+    border-radius: 4px;
+  }
+
+  .field {
+    margin-bottom: 1rem;
+  }
+
+  .field label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+
+  .field input {
+    width: 100%;
+    padding: 0.6rem 0.7rem;
+    font: inherit;
+    color: var(--ink);
+    background: var(--night-deep);
+    border: 1px solid var(--grid-strong);
+    border-radius: 3px;
+  }
+
+  .field input[aria-invalid="true"] {
+    border-color: var(--danger);
+  }
+
+  .help,
+  .field-error {
+    margin: 0.35rem 0 0;
+    font-size: var(--step--1);
+  }
+
+  .help {
+    color: var(--ink-dim);
+  }
+
+  .field-error,
+  .form-error {
+    color: var(--danger);
+  }
+
+  .form-error {
+    margin: 0 0 1rem;
+  }
+
+  .field-error:empty,
+  .form-error:empty {
+    display: none;
+  }
+
+  button {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    font: inherit;
+    font-weight: 800;
+    color: var(--night-deep);
+    background: var(--amber);
+    border: 0;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: #ffbb5c;
+  }
+
+  button.secondary {
+    width: auto;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--grid-strong);
+  }
+
+  button.secondary:hover {
+    border-color: var(--amber);
+    background: transparent;
+  }
+</style>

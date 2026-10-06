@@ -262,11 +262,10 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
       <h2 id="mapping-title">How this sky plays it</h2>
       <p>
         That's why this app is called Kessler: it's one small sky that everyone
-        shares, built so the same dilemma plays out where you can watch it. So
-        far it has only the first half. Crowding the low band gets your beacon
-        heard more often, and the only price is a shorter life before it falls;
-        collisions, which give crowding its real cost, come next. The parts
-        marked “not built yet” are still to come.
+        shares, built so the same dilemma plays out where you can watch it.
+        Crowding the low band gets your beacon heard more often; the price is
+        a shorter life before it falls, and a crowd to collide with. The part
+        marked “not built yet” is still to come.
       </p>
       <table class="mapping">
         <caption class="visually-hidden">Real orbit compared with this app's sky</caption>
@@ -295,7 +294,15 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
           </tr>
           <tr>
             <th scope="row">A collision makes fragments that hit other things.</th>
-            <td><span class="later">Not built yet</span> Two objects that meet become a cloud of debris, and the debris can hit other satellites.</td>
+            <td>
+              Some orbits go the other way round, and two objects going opposite
+              ways at nearly the same height can meet head-on. Each pass is a
+              small chance; when one hits, both break into fragments, and a
+              fragment that hits a satellite destroys it too. The more of you
+              crowd a height, the more collisions there are. (Real collisions come
+              from orbits crossing at an angle, and are far rarer per pass; this
+              sky is flat and tuned so you can watch one happen.)
+            </td>
           </tr>
           <tr>
             <th scope="row">Drag clears low orbits in years and high ones over centuries.</th>
@@ -311,7 +318,11 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
           </tr>
           <tr>
             <th scope="row">Each piece of debris can be traced to the event that made it.</th>
-            <td><span class="later">Not built yet</span> Every fragment traces back to the launches that made it.</td>
+            <td>
+              Every fragment traces back to the launches that made it, and every
+              collision names who launched what, on every screen as it happens and
+              in the <a href="/catalogue/#collisions">catalogue</a>.
+            </td>
           </tr>
         </tbody>
       </table>

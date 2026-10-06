@@ -1,28 +1,32 @@
 ---
 import Base from "../../layouts/Base.astro";
 import { ago, embed } from "../../lib/format.ts";
+import { skyCount } from "../../lib/story.ts";
 import { BANDS, bandAt, radiusAt, type Band } from "../../lib/orbit.ts";
-import { liveSky, toPublic } from "../../lib/sky.ts";
+import { conjunctions, liveSky, recentCollisions, toPublic } from "../../lib/sky.ts";
 
 // The shared sky. The server renders a summary of what's in orbit (counts per
 // band and the latest launches), so the page is complete without JavaScript;
 // the full list is the catalogue's. The script draws the sky over the station
 // from the same orbits and keeps everything live over the event stream
 // (ADR 0004).
-const { person } = Astro.locals;
+const { person, operator } = Astro.locals;
+const viewer = { person, operator: operator?.id ?? null };
 const now = Date.now();
 const sky = liveSky()
-  .map((object) => toPublic(object, person))
+  .map((object) => toPublic(object, viewer))
   .sort((a, b) => b.launchedAt - a.launchedAt);
 const launchedParam = Number(Astro.url.searchParams.get("launched"));
 const launched = sky.find((o) => o.id === launchedParam && o.mine) ?? null;
 const mine = sky.find((o) => o.mine) ?? null;
-const count = (n: number) => `${n} satellite${n === 1 ? "" : "s"} in orbit`;
 // how many of the latest launches the summary lists (sky.ts keeps it live):
 // people's, not the derelicts the server adds or debris
 const RECENT = 6;
 const recent = sky.filter((o) => o.kind === "satellite").slice(0, RECENT);
 const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
+// collisions coming, and the latest that happened (ADR 0008, 0010)
+const coming = conjunctions(now);
+const collided = recentCollisions(5);
 ---
 <Base title="Kessler: the sky" current="sky">
   <main class="sky-page">
@@ -32,7 +36,7 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
         <canvas
           id="chart"
           role="img"
-          aria-label={`The sky over the station: ${count(sky.length)}. Satellites rise on the left and set on the right.`}
+          aria-label={`The sky over the station: ${skyCount(sky)}. Most rise on the left and set on the right; some go the other way.`}
         ></canvas>
         <div id="scene-labels" class="scene-labels" aria-hidden="true"></div>
         <button type="button" id="zoom" class="zoom" hidden>See the whole sky</button>
@@ -48,6 +52,10 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
           orbit is listed in the <a href="/catalogue/">catalogue</a>.
         </p>
       </div>
+
+      <!-- a collision, as it happens: the two beacons and who launched what
+           (ADR 0010); over the scene, or under it on a phone -->
+      <div id="collision-card" class="collision-card" role="status" hidden></div>
 
       {launched && (
         <p class="notice launched" id="launched-notice" role="status">
@@ -75,7 +83,7 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
             <h2 id="summary-title">Sky now</h2>
             <span id="connection" class="connection" data-state="offline">Not live</span>
           </div>
-          <p class="count" id="count">{count(sky.length)}</p>
+          <p class="count" id="count">{skyCount(sky)}</p>
           <dl class="band-counts">
             {bands.map(([band, b]) => (
               <div>
@@ -109,7 +117,7 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 
   </main>
 
-  <script type="application/json" id="sky-data" set:html={embed({ serverTime: now, sky, launched: launched?.id ?? null })} />
+  <script type="application/json" id="sky-data" set:html={embed({ serverTime: now, sky, launched: launched?.id ?? null, conjunctions: coming, collisions: collided })} />
   <script>
     import "../../scripts/sky.ts";
   </script>
@@ -307,6 +315,50 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 
   .sky-page .notice.fading {
     opacity: 0;
+  }
+
+  /* A collision, as it happens (ADR 0010): over the bottom right of the
+     scene, clear of the station panel; the script fades it after a while. */
+  .sky-page .collision-card {
+    position: absolute;
+    right: var(--gutter);
+    bottom: 1.25rem;
+    z-index: 1;
+    width: min(26rem, 40vw);
+    padding: 0.75rem 1rem;
+    border-left: 3px solid #ff7a45;
+    background: rgb(24 10 6 / 0.85);
+    backdrop-filter: blur(6px);
+    transition: opacity 0.8s;
+  }
+
+  .sky-page .collision-card.fading {
+    opacity: 0;
+  }
+
+  .sky-page .collision-card p {
+    margin: 0;
+  }
+
+  .sky-page .collision-title {
+    font-weight: 800;
+    color: #ffb27a;
+  }
+
+  .sky-page .collision-card .collision-beacon {
+    margin-top: 0.35rem;
+    color: var(--ink-dim);
+  }
+
+  .sky-page .collision-beacon q {
+    color: var(--ink);
+    font-style: italic;
+  }
+
+  .sky-page .collision-card .collision-blame {
+    margin-top: 0.5rem;
+    color: var(--ink-dim);
+    font-size: var(--step--1);
   }
 
   /* The panel never changes height: three beacon slots, each a callsign and
@@ -564,6 +616,15 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
       width: auto;
       margin: 1rem var(--gutter) 0;
       transform: none;
+    }
+
+    /* under the scene, like the notice: over it, a long one hides the station */
+    .sky-page .collision-card {
+      position: static;
+      width: auto;
+      margin: 1rem var(--gutter) 0;
+      padding: 0.6rem 0.8rem;
+      font-size: var(--step--1);
     }
   }
 </style>

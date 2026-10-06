@@ -1,0 +1,72 @@
+import { describe, expect, it } from "vitest";
+import { blame, couplet, headline, skyCount, type StoryParty } from "../src/lib/story.ts";
+
+// How a collision is told on every screen and in the catalogue (ADR 0010):
+// both sides named, neither singled out, debris passing the blame back to
+// the satellites it came from, and the two beacons side by side. Pure
+// wording, so it runs without the app.
+
+let ids = 0;
+const satellite = (callsign: string, beacon: string, operator: string | null = null): StoryParty => ({
+  id: ++ids,
+  kind: "satellite",
+  callsign,
+  beacon,
+  operator,
+  from: null,
+});
+const derelict: StoryParty = { id: 50, kind: "derelict", callsign: null, beacon: null, operator: null, from: null };
+const debrisOf = (...roots: StoryParty[]): StoryParty => ({
+  id: 99,
+  kind: "debris",
+  callsign: null,
+  beacon: null,
+  operator: null,
+  from: roots.map(({ id, kind, callsign, operator }) => ({ id, kind, callsign, operator })),
+});
+
+const alpha = satellite("ALPHA", "hello from alpha");
+const bravo = satellite("BRAVO", "bravo here", "skywriter");
+const charlie = satellite("CHARLIE", "minding my business");
+
+describe("telling a collision", () => {
+  it("names both sides and blames neither", () => {
+    expect(headline([alpha, bravo])).toBe("ALPHA and BRAVO collided");
+    expect(headline([alpha, derelict])).toBe("ALPHA and a derelict collided");
+  });
+
+  it("passes the blame for debris back to the collision it came from", () => {
+    expect(headline([debrisOf(alpha, bravo), charlie])).toBe("Debris from ALPHA and BRAVO's collision destroyed CHARLIE");
+    expect(headline([charlie, debrisOf(alpha, derelict)])).toBe(
+      "Debris from ALPHA and a derelict's collision destroyed CHARLIE",
+    );
+    expect(headline([debrisOf(alpha, bravo), debrisOf(charlie, derelict)])).toBe(
+      "Debris from ALPHA and BRAVO's collision and debris from CHARLIE and a derelict's collision collided",
+    );
+  });
+
+  it("names who launched what, or says nobody claimed it", () => {
+    expect(blame([alpha, bravo])).toBe("ALPHA: unclaimed operator. BRAVO: skywriter.");
+    expect(blame([debrisOf(alpha, bravo), charlie])).toBe(
+      "ALPHA: unclaimed operator. BRAVO: skywriter. CHARLIE: unclaimed operator.",
+    );
+    expect(blame([alpha, derelict])).toBe("ALPHA: unclaimed operator. The derelict was nobody's.");
+  });
+
+  it("puts the two beacons side by side, when both had one", () => {
+    expect(couplet([alpha, bravo])).toEqual([
+      { callsign: "ALPHA", beacon: "hello from alpha" },
+      { callsign: "BRAVO", beacon: "bravo here" },
+    ]);
+    expect(couplet([alpha, derelict])).toEqual([{ callsign: "ALPHA", beacon: "hello from alpha" }]);
+  });
+});
+
+describe("counting the sky", () => {
+  it("counts people's satellites, derelicts and fragments apart", () => {
+    const sky = [{ kind: "satellite" }, { kind: "satellite" }, { kind: "derelict" }, { kind: "debris" }] as const;
+    expect(skyCount(sky)).toBe("2 satellites, 1 derelict and 1 fragment in orbit");
+    expect(skyCount([{ kind: "satellite" }])).toBe("1 satellite in orbit");
+    expect(skyCount([])).toBe("Nothing in orbit");
+  });
+});

@@ -13,6 +13,7 @@ import {
   reentryAt,
   type Band,
 } from "../lib/orbit.ts";
+import { blame, couplet, headline, skyCount, type StoryParty } from "../lib/story.ts";
 import { countdown } from "./countdown.ts";
 
 // Keeps the shared sky live, and starts the scene that draws it. Positions
@@ -23,8 +24,8 @@ interface Satellite {
   id: number;
   // people launch satellites; derelicts and debris are nobody's (ADR 0008)
   kind: "satellite" | "derelict" | "debris";
-  callsign: string;
-  beacon: string;
+  callsign: string | null;
+  beacon: string | null;
   band: Band;
   launchedAt: number;
   radius: number;
@@ -36,12 +37,32 @@ interface Satellite {
   mine: boolean;
 }
 
+// A collision coming, as the server predicted it (ADR 0008).
+interface Conjunction {
+  a: number;
+  b: number;
+  at: number;
+  angle: number;
+  radius: number;
+}
+
+// A collision that happened, and who it names (ADR 0010).
+interface Story {
+  id: number;
+  at: number;
+  angle: number;
+  radius: number;
+  parties: [StoryParty, StoryParty];
+}
+
 const TAU = Math.PI * 2;
 
 const initial = JSON.parse(document.getElementById("sky-data")!.textContent!) as {
   serverTime: number;
   sky: Satellite[];
   launched: number | null;
+  conjunctions: Conjunction[];
+  collisions: Story[];
 };
 
 // Server time minus local time; refined when the stream says hello.
@@ -56,7 +77,31 @@ const hue = (id: number) => (id * 137.508) % 360;
 // scene this long after, while its wake fades, but leaves the station and
 // the counts at once.
 const AFTERGLOW_MS = 8_000;
-const up = (sat: Satellite, time = serverNow()) => time < reentryAt(sat);
+
+// Collisions coming, by pair, and when each object was (or will be) hit. A
+// collision is drawn at its predicted moment on every screen; the server's
+// `collision` event confirms it and brings the fragments.
+const coming = new Map<string, Conjunction>();
+// collisions the server has confirmed, by object
+const destroyed = new Map<number, number>();
+// when each object is hit, from both: rebuilt whenever either changes
+const hitAt = new Map<number, number>();
+function rebuildHits() {
+  hitAt.clear();
+  for (const [id, at] of destroyed) hitAt.set(id, at);
+  for (const c of coming.values()) {
+    for (const id of [c.a, c.b]) hitAt.set(id, Math.min(hitAt.get(id) ?? Infinity, c.at));
+  }
+}
+const stories: Story[] = [...initial.collisions];
+function expect(conjunction: Conjunction) {
+  coming.set(`${conjunction.a}:${conjunction.b}`, conjunction);
+  rebuildHits();
+}
+initial.conjunctions.forEach(expect);
+const hit = (sat: Satellite, time: number) => time >= (hitAt.get(sat.id) ?? Infinity);
+
+const up = (sat: Satellite, time = serverNow()) => time < reentryAt(sat) && !hit(sat, time);
 const flying = () => [...sky.values()].filter((sat) => up(sat));
 // Burn-ups this page has seen, by id, from the scene or the server's event.
 interface BurnUp {
@@ -65,8 +110,10 @@ interface BurnUp {
   mine: boolean;
 }
 const burnUps = new Map<number, BurnUp>();
-const burned = (sat: Satellite) =>
-  burnUps.set(sat.id, { callsign: sat.callsign, at: reentryAt(sat), mine: sat.mine });
+// people's satellites only: wreckage burning up isn't news
+const burned = (sat: Satellite) => {
+  if (sat.kind === "satellite" && sat.callsign) burnUps.set(sat.id, { callsign: sat.callsign, at: reentryAt(sat), mine: sat.mine });
+};
 // the latest, and your own
 const latest = (mine = false) => {
   let found: BurnUp | null = null;
@@ -88,7 +135,12 @@ import("./scene.ts")
     const started = createScene({
       canvas,
       overlay: document.getElementById("scene-labels")!,
-      sky: () => sky.values(),
+      // a collision takes both out of the scene at once: the flash covers it
+      sky: () => {
+        const time = serverNow();
+        return [...sky.values()].filter((sat) => !hit(sat, time));
+      },
+      impacts: () => [...coming.values(), ...stories],
       now: serverNow,
       launched: initial.launched,
       reduced,
@@ -96,6 +148,7 @@ import("./scene.ts")
         document.querySelector<HTMLElement>(".sky-page .panels")!,
         document.getElementById("zoom")!,
         ...(document.getElementById("launched-notice") ? [document.getElementById("launched-notice")!] : []),
+        document.getElementById("collision-card")!,
       ],
     });
     if (!started) return noScene();
@@ -132,14 +185,23 @@ const PAGE_MS = 4000;
 // for a high orbit; it's re-read four times a second.)
 function untilOverhead(sat: Satellite, time: number): number | null {
   if (plungeAt(sat, time) !== null) return null;
-  const gap = (STATION_ANGLE - OVERHEAD_HALF_WIDTH - angleAt(sat, time) + TAU) % TAU;
+  // a retrograde orbit comes at the window from the other side (ADR 0008)
+  const angle = angleAt(sat, time);
+  const gap =
+    sat.direction === -1
+      ? (angle - (STATION_ANGLE + OVERHEAD_HALF_WIDTH) + TAU) % TAU
+      : (STATION_ANGLE - OVERHEAD_HALF_WIDTH - angle + TAU) % TAU;
   const ms = (gap / TAU) * periodNow(sat, time);
   return time + ms < burnAt(sat) ? ms : null;
 }
 
+// what the station hears: satellites with a beacon (derelicts and debris
+// are silent)
+const speaking = () => flying().filter((sat) => sat.beacon);
+
 function listen() {
   const time = serverNow();
-  const over = flying()
+  const over = speaking()
     .filter((s) => isOverhead(s, time))
     .sort((a, b) => a.id - b.id);
   const pages = Math.ceil(over.length / SLOTS);
@@ -171,21 +233,21 @@ function listen() {
   if (over.length === 0) {
     // the next one to enter the station's window
     let soonest: { sat: Satellite; ms: number } | null = null;
-    for (const sat of flying()) {
+    for (const sat of speaking()) {
       const ms = untilOverhead(sat, time);
       // one that burns up first never gets there
       if (ms !== null && (!soonest || ms < soonest.ms)) soonest = { sat, ms };
     }
     nextPass.textContent = soonest
       ? `Next overhead: ${soonest.sat.callsign}, in ${countdown(soonest.ms)}.`
-      : flying().length > 0
+      : speaking().length > 0
         ? "Nothing in orbit will reach the station before it burns up."
-        : "Nothing in orbit yet.";
+        : "No satellites in orbit yet.";
   }
 
   // your own satellites: the one everyone will hear next (or is hearing
   // now), and how long it has left
-  const yoursUp = flying().filter((s) => s.mine);
+  const yoursUp = speaking().filter((s) => s.mine);
   const soonest = (s: Satellite) => (isOverhead(s, time) ? -1 : (untilOverhead(s, time) ?? Infinity));
   const mine = yoursUp.sort((a, b) => soonest(a) - soonest(b))[0];
   const yours = latest(true);
@@ -229,15 +291,29 @@ function say(text: string, gone = false) {
 const newsLine = document.getElementById("sky-news")!;
 let said = "";
 function news(time: number) {
-  const named = (sat: { callsign: string; mine: boolean }) => `${sat.callsign}${sat.mine ? " (yours)" : ""}`;
-  const falling = flying().find((sat) => plungeAt(sat, time) !== null);
+  const named = (sat: { callsign: string | null; mine: boolean }) => `${sat.callsign}${sat.mine ? " (yours)" : ""}`;
+  // what's in a collision coming: "ALPHA (yours)", "a derelict", "debris"
+  const who = (id: number) => {
+    const sat = sky.get(id);
+    if (!sat || sat.kind === "debris") return "debris";
+    return sat.kind === "derelict" || !sat.callsign ? "a derelict" : named(sat);
+  };
+  const falling = speaking().find((sat) => plungeAt(sat, time) !== null);
   const last = latest();
+  const story = stories.reduce<Story | null>((a, b) => (a && a.at > b.at ? a : b), null);
+  const next = [...coming.values()].filter((c) => c.at > time).sort((a, b) => a.at - b.at)[0];
+  const since = (at: number | undefined) => (at === undefined ? Infinity : time - at);
   let text = "";
-  if (falling) text = `${named(falling)} is burning up on re-entry.`;
-  else if (last && time - last.at < 15 * 60_000) text = `${named(last)} burned up on re-entry ${ago(time - last.at)}.`;
+  if (story && since(story.at) < 2 * 60_000) text = `${headline(story.parties)} ${ago(since(story.at))}.`;
+  else if (falling) text = `${named(falling)} is burning up on re-entry.`;
+  else if (next && next.at - time < 10 * 60_000)
+    text = `Collision coming: ${who(next.a)} and ${who(next.b)}, in ${countdown(next.at - time)}.`;
+  else if (story && since(story.at) < 15 * 60_000) text = `${headline(story.parties)} ${ago(since(story.at))}.`;
+  else if (last && since(last.at) < 15 * 60_000) text = `${named(last)} burned up on re-entry ${ago(since(last.at))}.`;
+  else if (next) text = `Next collision: ${who(next.a)} and ${who(next.b)}, in ${until(next.at - time)}.`;
   else {
-    const next = flying().sort((a, b) => reentryAt(a) - reentryAt(b))[0];
-    if (next) text = `Next to burn up: ${named(next)}, in ${until(reentryAt(next) - time)}.`;
+    const soonest = speaking().sort((a, b) => reentryAt(a) - reentryAt(b))[0];
+    if (soonest) text = `Next to burn up: ${named(soonest)}, in ${until(reentryAt(soonest) - time)}.`;
   }
   if (text === said) return;
   said = text;
@@ -285,7 +361,7 @@ function renderSummary() {
   const launches = sats.filter((sat) => sat.kind === "satellite");
   recentList.replaceChildren(...launches.slice(0, RECENT).map(recentItem));
   const n = sats.length;
-  count.textContent = `${n} satellite${n === 1 ? "" : "s"} in orbit`;
+  count.textContent = skyCount(sats);
   for (const band of Object.keys(BANDS) as Band[]) {
     // where each one is now, not the band it was launched into
     document.querySelector(`[data-band-count="${band}"]`)!.textContent = String(
@@ -295,9 +371,45 @@ function renderSummary() {
   empty.hidden = n > 0;
   canvas.setAttribute(
     "aria-label",
-    `The sky over the station: ${count.textContent}. Satellites rise on the left and set on the right.`,
+    `The sky over the station: ${count.textContent}. Most rise on the left and set on the right; some go the other way.`,
   );
 }
+
+// ── collisions ────────────────────────────────────────────────────────────
+
+// The card over the scene when a collision happens: what met, the two
+// beacons side by side, and who launched what (ADR 0010). It stays a while,
+// then fades; "Sky now" keeps the line.
+const card = document.getElementById("collision-card")!;
+const CARD_MS = 20_000;
+let cardTimer: ReturnType<typeof setTimeout> | undefined;
+function tell(story: Story) {
+  const title = document.createElement("p");
+  title.className = "collision-title";
+  title.textContent = headline(story.parties);
+  const lines = couplet(story.parties).map(({ callsign, beacon }) => {
+    const line = document.createElement("p");
+    line.className = "collision-beacon";
+    const quote = document.createElement("q");
+    quote.textContent = beacon;
+    line.append(quote, ` ${callsign}`);
+    return line;
+  });
+  const who = document.createElement("p");
+  who.className = "collision-blame";
+  who.textContent = blame(story.parties);
+  card.replaceChildren(title, ...lines, who);
+  card.hidden = false;
+  card.classList.remove("fading");
+  clearTimeout(cardTimer);
+  cardTimer = setTimeout(() => card.classList.add("fading"), CARD_MS);
+}
+card.addEventListener("transitionend", () => {
+  if (card.classList.contains("fading")) card.hidden = true;
+});
+// a collision that happened just before the page opened
+const fresh = stories.find((story) => serverNow() - story.at < CARD_MS);
+if (fresh) tell(fresh);
 
 // keep "5 min ago" honest
 setInterval(() => {
@@ -312,9 +424,22 @@ let counted = "";
 setInterval(() => {
   const time = serverNow();
   for (const sat of sky.values()) {
+    if (hit(sat, time)) {
+      // gone in a collision: the flash covers it
+      if (time > (hitAt.get(sat.id) ?? 0) + 1000) sky.delete(sat.id);
+      continue;
+    }
     if (!up(sat, time)) burned(sat);
     if (time >= reentryAt(sat) + AFTERGLOW_MS) sky.delete(sat.id);
   }
+  // a collision the stream never confirmed (it was offline): the next hello
+  // brings the sky as it is
+  let stale = false;
+  for (const [key, c] of coming) {
+    if (time > c.at + 60_000) stale = coming.delete(key);
+  }
+  for (const [id, at] of destroyed) if (time > at + 60_000) destroyed.delete(id);
+  if (stale) rebuildHits();
   // counts move as orbits fall through the bands and burn up
   const key = flying()
     .map((s) => `${s.id}:${bandAt(radiusAt(s, time))}`)
@@ -340,12 +465,16 @@ function connect() {
   const stream = new EventSource("/api/events");
 
   stream.addEventListener("hello", (event) => {
-    const hello = JSON.parse(event.data) as { serverTime: number; sky: Satellite[] };
+    const hello = JSON.parse(event.data) as { serverTime: number; sky: Satellite[]; conjunctions: Conjunction[] };
     offset = hello.serverTime - Date.now();
     // the snapshot is the live sky; keep what's burned up but still fading
     const time = serverNow();
     for (const sat of sky.values()) if (up(sat, time)) sky.delete(sat.id);
     for (const sat of hello.sky) sky.set(sat.id, sat);
+    // and the collisions coming
+    coming.clear();
+    hello.conjunctions.forEach(expect);
+    rebuildHits();
     renderSummary();
     setConnection("live");
   });
@@ -361,6 +490,26 @@ function connect() {
     const sat = JSON.parse(event.data) as Satellite;
     burned(sat);
     if (sky.has(sat.id)) renderSummary();
+  });
+
+  // a collision coming: every screen draws it at the same moment
+  stream.addEventListener("conjunction", (event) => {
+    expect(JSON.parse(event.data) as Conjunction);
+  });
+
+  // it happened: both are gone, the fragments go up, and everyone is told
+  // who was involved
+  stream.addEventListener("collision", (event) => {
+    const story = JSON.parse(event.data) as Story & { a: number; b: number; fragments: Satellite[] };
+    for (const id of [story.a, story.b]) destroyed.set(id, story.at);
+    // this one has happened, and anything else either was to meet won't
+    for (const [key, c] of coming) if ([c.a, c.b].some((id) => id === story.a || id === story.b)) coming.delete(key);
+    rebuildHits();
+    for (const fragment of story.fragments) sky.set(fragment.id, fragment);
+    stories.unshift({ id: story.id, at: story.at, angle: story.angle, radius: story.radius, parties: story.parties });
+    stories.length = Math.min(stories.length, 10);
+    tell(story);
+    renderSummary();
   });
 
   stream.addEventListener("error", () => {

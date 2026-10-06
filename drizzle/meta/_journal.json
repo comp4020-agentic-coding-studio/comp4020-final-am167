@@ -22,6 +22,13 @@
       "when": 1791281181462,
       "tag": "0002_launch_gap",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791282247241,
+      "tag": "0003_operators",
+      "breakpoints": true
     }
   ]
 }

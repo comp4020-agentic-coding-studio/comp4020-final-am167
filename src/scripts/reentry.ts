@@ -352,15 +352,17 @@ export function createReentry(reduced: boolean): Reentry {
     const burn = burnAt(orbit);
     const s = Math.min(1, Math.max(0, (time - burn) / PLUNGE));
     const since = Math.max(0, s - piece.start);
-    const angle = angleAt(orbit, time) - piece.lag * since * since;
+    // a retrograde orbit (ADR 0008) runs the other way, and so do its pieces
+    const dir = orbit.direction ?? 1;
+    const angle = angleAt(orbit, time) - dir * piece.lag * since * since;
     const radius = radiusAt(orbit, time) - piece.sink * since ** 1.5;
     const d = planet + radius - 1;
     out[0] = -d * Math.cos(angle);
     out[1] = d * Math.sin(angle);
     // the way it's flying: along the orbit (the dive is too shallow to
     // show, and a slow piece's own drift is too small to point by)
-    out[2] = Math.sin(angle);
-    out[3] = Math.cos(angle);
+    out[2] = dir * Math.sin(angle);
+    out[3] = dir * Math.cos(angle);
   }
 
   const here = [0, 0, 0, 0];

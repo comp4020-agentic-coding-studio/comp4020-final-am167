@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-06 (decay)._
+_Last updated 2026-10-06 (collisions, operators)._
 
 - **Done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -30,9 +30,20 @@ _Last updated 2026-10-06 (decay)._
   2026-10-06: **collisions on the server** (ADR 0008, proposed): orbits
   go either way, the server predicts every collision and announces it, and
   catches up exactly after a restart. ADRs 0009 (claimable operators) and
-  0010 (every screen names who caused a collision) drafted. Still to do: the
-  sky page drawing collisions, the couplet and blame, the catalogue's
-  lineage, login.
+  0010 (every screen names who caused a collision) drafted.
+  2026-10-06: launches **any number up, five minutes apart** (`5cf1247`).
+  The sky page draws collisions (a ring where one is coming, a flash when
+  it happens, on every screen at once), a card tells each one with both
+  beacons and who launched what, and the catalogue keeps each fragment's
+  lineage and a record of collisions. **Operators** (ADR 0009): claim a
+  handle with a passphrase, sign in on another device; collisions name
+  handles. Adversarial review recorded in `notes/log.md` (2026-10-06), not
+  yet acted on. **Next:** its four must-fixes (a collision a marker can
+  see in ten minutes; blame dodged by a "The derelict" callsign; sign-in
+  throttling that locks people out and blocks the event loop; the settle
+  timer crashing the process), then the should-fixes, then `PROCESS.md`
+  and `reflections/crit-9.md`. `README.md` still says "one live satellite
+  each" (Advay's rewrite).
   2026-10-06: **orbital decay** (ADR 0007, accepted): every
   orbit falls, faster the lower it is, and ends in a 30-second burn-up drawn
   as a real re-entry (fireball, cooling wake, breakup, sparks). Bands are

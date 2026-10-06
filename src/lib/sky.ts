@@ -2,6 +2,7 @@ import { and, count, desc, eq, inArray, max, ne, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { fatalMeeting, fragmentsOf, impactOf, nextMeeting } from "./collide.ts";
 import { publish } from "./events.ts";
+import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
 import { BANDS, bandAt, placeInBand, reentryAt, type Band, type Orbit } from "./orbit.ts";
 
@@ -38,6 +39,8 @@ export interface SkyObject extends Orbit {
   id: number;
   kind: Kind;
   owner: string | null;
+  // its operator, once its person claimed or signed in to one (ADR 0009)
+  operator: number | null;
   callsign: string | null;
   beacon: string | null;
   band: Band;
@@ -47,18 +50,42 @@ export interface SkyObject extends Orbit {
   sourceCollision: number | null;
 }
 
-// What a client sees of an object: never the owner, only whether it's theirs.
-export type PublicObject = Omit<SkyObject, "owner"> & { mine: boolean };
+// Who is looking: their person cookie, and the operator they're signed in
+// as, if any (ADR 0009). A bare string is a person who isn't signed in.
+export interface Viewer {
+  person: string | undefined;
+  operator: number | null;
+}
+type Who = Viewer | string | undefined;
+const viewerOf = (who: Who): Viewer => (typeof who === "object" ? who : { person: who, operator: null });
 
-export const toPublic = ({ owner, ...object }: SkyObject, person: string | undefined): PublicObject => ({
+// Whether an object is the viewer's: its operator's, once it has one,
+// otherwise the cookie's that launched it.
+const ownedBy = (object: { owner: string | null; operator: number | null }, who: Who) => {
+  const viewer = viewerOf(who);
+  if (object.operator !== null) return object.operator === viewer.operator;
+  return object.owner !== null && object.owner === viewer.person;
+};
+
+// What a client sees of an object: never the owner, only whether it's theirs.
+export type PublicObject = Omit<SkyObject, "owner" | "operator"> & { mine: boolean };
+
+export const toPublic = ({ owner, operator, ...object }: SkyObject, who: Who): PublicObject => ({
   ...object,
-  mine: owner !== null && owner === person,
+  mine: ownedBy({ owner, operator }, who),
 });
+
+// The objects a viewer owns, as a query condition.
+const ownerIs = (who: Who) => {
+  const viewer = viewerOf(who);
+  return viewer.operator !== null ? eq(objects.operator, viewer.operator) : eq(objects.owner, viewer.person ?? "");
+};
 
 const columns = {
   id: objects.id,
   kind: objects.kind,
   owner: objects.owner,
+  operator: objects.operator,
   callsign: objects.callsign,
   beacon: objects.beacon,
   band: objects.band,
@@ -93,9 +120,31 @@ export interface Conjunction {
   radius: number;
 }
 
-// A collision that has happened: what met, and what it left.
+// Who a collision names, on every screen (ADR 0010): each object's
+// callsign, beacon and operator (null until operators exist, ADR 0009, and
+// for anyone unclaimed). For debris, the satellites at the root of the
+// collision it came from, so the blame passes back to them.
+// a satellite or derelict a collision traces back to
+export interface Root {
+  id: number;
+  kind: Kind;
+  callsign: string | null;
+  operator: string | null;
+}
+
+export interface Party {
+  id: number;
+  kind: Kind;
+  callsign: string | null;
+  beacon: string | null;
+  operator: string | null;
+  from: Root[] | null;
+}
+
+// A collision that has happened: what met, who it names, and what it left.
 export interface CollisionReport extends CollisionRow {
   objects: [SkyObject, SkyObject];
+  parties: [Party, Party];
   fragments: SkyObject[];
 }
 
@@ -223,8 +272,75 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
     );
     return { ...row, objects: [a, b] as [SkyObject, SkyObject], fragments };
   });
-  publish({ type: "collision", collision: report });
-  return report;
+  // as they are now, not as they were when the hit was predicted: an owner
+  // may have claimed a handle since (ADR 0009)
+  const now = (object: SkyObject) => toObject(db.select(columns).from(objects).where(eq(objects.id, object.id)).get()!);
+  const parties: [Party, Party] = [partyOf(now(a)), partyOf(now(b))];
+  const named = { ...report, parties };
+  publish({ type: "collision", collision: named });
+  return named;
+}
+
+// The satellites and derelicts at the root of a collision: its two objects,
+// or for debris, the roots of the collision that made it.
+export function rootsOf(collision: number): Root[] {
+  // operator ids until the end, when they become handles
+  const roots = new Map<number, Omit<Root, "operator"> & { operator: number | null }>();
+  const seen = new Set<number>();
+  const walk = (id: number) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    const row = db.select().from(collisions).where(eq(collisions.id, id)).get();
+    if (!row) return;
+    for (const objectId of [row.a, row.b]) {
+      const object = db
+        .select({
+          id: objects.id,
+          kind: objects.kind,
+          callsign: objects.callsign,
+          operator: objects.operator,
+          source: objects.sourceCollision,
+        })
+        .from(objects)
+        .where(eq(objects.id, objectId))
+        .get();
+      if (!object) continue;
+      if (object.kind === "debris" && object.source !== null) walk(object.source);
+      else roots.set(object.id, { id: object.id, kind: object.kind, callsign: object.callsign, operator: object.operator });
+    }
+  };
+  walk(collision);
+  const found = [...roots.values()];
+  const names = handles(found.map((root) => root.operator));
+  return found
+    .map((root) => ({ ...root, operator: root.operator === null ? null : (names.get(root.operator) ?? null) }))
+    .sort((a, b) => a.id - b.id);
+}
+
+const partyOf = (object: SkyObject): Party => ({
+  id: object.id,
+  kind: object.kind,
+  callsign: object.callsign,
+  beacon: object.beacon,
+  operator: object.operator === null ? null : (handles([object.operator]).get(object.operator) ?? null),
+  from: object.kind === "debris" && object.sourceCollision !== null ? rootsOf(object.sourceCollision) : null,
+});
+
+// A collision as the page tells it: when, where, and who it names.
+export interface CollisionStory extends CollisionRow {
+  parties: [Party, Party];
+}
+
+// The latest collisions, newest first.
+export function recentCollisions(n: number): CollisionStory[] {
+  settle();
+  const rows = db.select().from(collisions).orderBy(desc(collisions.at), desc(collisions.id)).limit(n).all();
+  return rows.map((row) => {
+    const [a, b] = [row.a, row.b].map((id) =>
+      toObject(db.select(columns).from(objects).where(eq(objects.id, id)).get()!),
+    );
+    return { ...row, parties: [partyOf(a), partyOf(b)] };
+  });
 }
 
 // Every collision ever, oldest first.
@@ -345,17 +461,22 @@ export interface CatalogueEntry extends Orbit {
   fate: "live" | "decayed" | "deorbited" | "destroyed";
   fateAt: number | null;
   mine: boolean;
+  // its lineage (ADR 0003): for debris, the satellites at the root of the
+  // collision it came from; for anything destroyed, what it collided with
+  from: Root[] | null;
+  collidedWith: Party | null;
 }
 
 // The record (ADR 0003): what's in orbit now, or everything ever launched,
 // newest first. Owners stay on the server; a row only says if it's yours.
-export function catalogue(show: "live" | "all", person: string | undefined): CatalogueEntry[] {
+export function catalogue(show: "live" | "all", who: Who): CatalogueEntry[] {
   settle();
   const rows = db
     .select({
       id: objects.id,
       kind: objects.kind,
       owner: objects.owner,
+      operator: objects.operator,
       callsign: objects.callsign,
       band: objects.band,
       launchedAt: objects.launchedAt,
@@ -372,7 +493,27 @@ export function catalogue(show: "live" | "all", person: string | undefined): Cat
     .where(show === "live" ? eq(objects.fate, "live") : undefined)
     .orderBy(desc(objects.launchedAt), desc(objects.id))
     .all();
-  return rows.map(({ owner, ...row }) => ({ ...toObject(row), mine: owner !== null && owner === person }));
+  // each collision's roots once, however many fragments it made
+  const roots = new Map<number, Root[]>();
+  const rootsFor = (collision: number) => roots.get(collision) ?? roots.set(collision, rootsOf(collision)).get(collision)!;
+  // what each destroyed object met
+  const met = new Map<number, number>();
+  for (const c of db.select({ a: collisions.a, b: collisions.b }).from(collisions).all()) {
+    met.set(c.a, c.b);
+    met.set(c.b, c.a);
+  }
+  const partyById = (id: number) => {
+    const row = db.select(columns).from(objects).where(eq(objects.id, id)).get();
+    if (!row) return null;
+    const object = toObject(row);
+    return { ...partyOf({ ...object, sourceCollision: null }), from: object.sourceCollision === null ? null : rootsFor(object.sourceCollision) };
+  };
+  return rows.map(({ owner, operator, ...row }) => ({
+    ...toObject(row),
+    mine: ownedBy({ owner, operator }, who),
+    from: row.kind === "debris" && row.sourceCollision !== null ? rootsFor(row.sourceCollision) : null,
+    collidedWith: row.fate === "destroyed" && met.has(row.id) ? partyById(met.get(row.id)!) : null,
+  }));
 }
 
 export function catalogueCounts(): { live: number; all: number } {
@@ -389,12 +530,13 @@ export function catalogueCounts(): { live: number; all: number } {
 type LaunchResult = { ok: true; object: SkyObject } | { ok: false; errors: LaunchErrors };
 
 // When a person can next launch: a gap after their last launch, or now.
-export function nextLaunchAt(person: string | undefined, now = Date.now()): number {
-  if (!person) return now;
+// (Per operator when signed in, so a second device doesn't double it.)
+export function nextLaunchAt(who: Who, now = Date.now()): number {
+  if (!viewerOf(who).person) return now;
   const last = db
     .select({ at: max(objects.launchedAt) })
     .from(objects)
-    .where(eq(objects.owner, person))
+    .where(ownerIs(who))
     .get();
   return Math.max(now, (last?.at ?? -Infinity) + LAUNCH_GAP);
 }
@@ -407,9 +549,9 @@ export function waitMessage(ms: number): string {
   return `You can launch again in ${minutes > 0 ? `${minutes} min ${String(rest).padStart(2, "0")} s` : `${rest} s`}.`;
 }
 
-export function launch(person: string, input: LaunchInput, now = Date.now(), random = Math.random): LaunchResult {
+export function launch(who: Viewer | string, input: LaunchInput, now = Date.now(), random = Math.random): LaunchResult {
   settle(now);
-  const result = checkAndInsert(person, input, now, random);
+  const result = checkAndInsert(viewerOf(who), input, now, random);
   if (result.ok) {
     publish({ type: "launch", object: result.object });
     refreshMeetings(live());
@@ -423,9 +565,9 @@ const liveSatellites = and(eq(objects.fate, "live"), eq(objects.kind, "satellite
 
 // better-sqlite3 is synchronous, so the check and the insert can't interleave
 // with another request's.
-function checkAndInsert(person: string, input: LaunchInput, now: number, random: () => number): LaunchResult {
+function checkAndInsert(viewer: Viewer, input: LaunchInput, now: number, random: () => number): LaunchResult {
   return db.transaction((tx) => {
-    const ready = nextLaunchAt(person, now);
+    const ready = nextLaunchAt(viewer, now);
     if (ready > now) return { ok: false as const, errors: { form: waitMessage(ready - now) } };
 
     const inOrbit = tx.select({ n: count() }).from(objects).where(liveSatellites).get();
@@ -439,7 +581,8 @@ function checkAndInsert(person: string, input: LaunchInput, now: number, random:
       .insert(objects)
       .values({
         kind: "satellite",
-        owner: person,
+        owner: viewer.person,
+        operator: viewer.operator,
         callsign: input.callsign,
         beacon: input.beacon,
         band: input.band,
@@ -459,13 +602,13 @@ export function skyIsFull(): boolean {
 }
 
 // The live satellites a person owns, oldest first.
-export function satellitesOf(person: string | undefined): SkyObject[] {
-  if (!person) return [];
+export function satellitesOf(who: Who): SkyObject[] {
+  if (!viewerOf(who).person) return [];
   settle();
   return db
     .select(columns)
     .from(objects)
-    .where(and(eq(objects.owner, person), eq(objects.fate, "live")))
+    .where(and(ownerIs(who), eq(objects.fate, "live")))
     .orderBy(objects.id)
     .all()
     .map(toObject);

@@ -4,7 +4,7 @@ import "../styles/global.css";
 interface Props {
   title: string;
   description?: string;
-  current?: "launchpad" | "sky" | "catalogue" | "kessler" | "readme";
+  current?: "launchpad" | "sky" | "catalogue" | "kessler" | "readme" | "operator";
 }
 
 const {
@@ -13,6 +13,8 @@ const {
   current,
 } = Astro.props;
 const here = (page: Props["current"]) => (page === current ? "page" : undefined);
+// signed in: your handle; otherwise a way to claim one (ADR 0009)
+const { operator } = Astro.locals;
 ---
 <!doctype html>
 <html lang="en">
@@ -38,6 +40,9 @@ const here = (page: Props["current"]) => (page === current ? "page" : undefined)
         <a href="/catalogue/" aria-current={here("catalogue")}>Catalogue</a>
         <a href="/kessler/" aria-current={here("kessler")}>Kessler syndrome</a>
         <a href="/readme/" aria-current={here("readme")}>README</a>
+        <a href="/operator/" class="operator-link" aria-current={here("operator")}>
+          {operator ? operator.handle : "Sign in"}
+        </a>
       </nav>
     </header>
     <slot />

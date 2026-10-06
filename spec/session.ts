@@ -52,6 +52,20 @@ export class Session {
   }
 }
 
+// A form posted as a browser sends it, without JavaScript.
+export async function post(session: Session, path: string, fields: Record<string, string>): Promise<Response> {
+  const res = await fetch(session.url(path), {
+    method: "POST",
+    redirect: "manual",
+    headers: session.headers({
+      origin: session.url("/").origin,
+      "content-type": "application/x-www-form-urlencoded",
+    }),
+    body: new URLSearchParams(fields).toString(),
+  });
+  return session.keep(res);
+}
+
 // A callsign no other test run has used, so a test can find its own satellite.
 export function callsign(prefix = "T"): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;

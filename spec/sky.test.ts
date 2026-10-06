@@ -104,3 +104,17 @@ describe("the catalogue", () => {
     expect(await everything.text()).toContain(name);
   });
 });
+
+describe("the catalogue's collisions", () => {
+  it("keeps a record of collisions, each told with who it names", async () => {
+    const page = doc(await (await new Session(baseUrl).get("/catalogue/")).text());
+    const section = page.getElementById("collisions");
+    expect(section, "no collisions section").not.toBeNull();
+    expect(section!.querySelector("h2")?.textContent).toBe("Collisions");
+    // each one told with what met and who launched what (ADR 0010)
+    for (const li of section!.querySelectorAll("li")) {
+      expect(li.querySelector(".collision-title")?.textContent).toMatch(/collided|destroyed/);
+      expect(li.querySelector(".collision-blame")?.textContent).toMatch(/operator|nobody's|:/);
+    }
+  });
+});

@@ -62,7 +62,7 @@ function words(text: string): string[] {
   return [...tokens, ...spaced];
 }
 
-const blocked = (text: string) =>
+export const blocked = (text: string) =>
   words(text).some(
     (word) =>
       BLOCKED.some((bad) => ENDINGS.some((end) => word === bad + end)) ||

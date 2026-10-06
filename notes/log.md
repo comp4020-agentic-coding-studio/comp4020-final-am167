@@ -876,4 +876,132 @@ longer than a minute.
 Advay, who is rewriting it in his own words. `pnpm check` green (102 tests).
 
 Advay set the gap to **five minutes** after seeing those numbers. The wait
-now reads "You can launch again in 4 min 05 s."
+now reads "You can launch again in 4 min 05 s." Committed as `5cf1247`.
+
+## 2026-10-06 — C9: collisions on the sky page and in the catalogue
+
+The sky page now shows collisions as they happen, on every screen at the
+same moment, since each one is predicted (ADR 0008): a pulsing amber ring
+where two objects will meet over the last 30 seconds, then a flash and a
+ring spreading out at the moment of impact. Both objects leave the scene at
+once (the flash covers it); the server's `collision` event brings the
+fragments. Debris draws as small grey points with faint trails, derelicts
+dim, and only people's satellites are named. A card over the scene (under
+it on a phone) tells the collision: what met, the two beacons side by side,
+and who launched what (ADR 0010). "Sky now" counts satellites, derelicts
+and fragments apart, and says what's coming ("Collision coming: SAT-12 and
+debris, in 0:40") or what just happened.
+
+![The whole sky zoomed out, mid-collision: the flash and its ring at the bottom of the low band, the news line and the card telling a debris-on-debris collision with every operator it traces back to](screenshots/2026-10-06-collision-flash-and-card.png)
+
+The wording is its own module (`src/lib/story.ts`), tested in
+`spec/story.test.ts`: "A and B collided" (never "A hit B"), "Debris from A
+and B's collision destroyed C", and the blame line naming every operator at
+the root ("unclaimed operator" until login exists). The server's collision
+event now carries these parties, with debris traced back to its roots
+(`spec/collision-server.test.ts`). The catalogue shows each fragment's
+lineage and what each destroyed object met, and a new Collisions section
+keeps the latest 50, told the same way.
+
+Fixed on the way: several places assumed every orbit runs anticlockwise
+(trails, the "rises in" pointer, the next-overhead countdown, the re-entry
+breakup); a retrograde satellite now trails behind itself, rises on the
+right, and its pointer sits at the right edge.
+
+Checked in Chrome against a seeded sky (40 satellites crowded into one
+shell, so collisions came every minute or two) at 1920x1080 and iPhone 14.
+On the phone the card first covered half the scene, station included, so
+it moved under the scene there; the catalogue's lineage broke callsigns at
+their hyphens in the narrow column, so those hyphens are now non-breaking.
+`pnpm check` green (110 tests).
+
+## 2026-10-06 — C9: operators you can claim (login)
+
+Built ADR 0009 test-first (`spec/operator.test.ts`, 11 tests over HTTP): no
+sign-up to launch; claiming a handle keeps what you launched before; a
+handle is taken whatever its case; bad handles and short passphrases are
+refused with reasons; signing in on another device makes your satellites
+yours there; a wrong passphrase and an unknown handle get the same answer;
+the five-minute gap is per operator, not per device; signing out gives the
+device a fresh anonymous cookie; no page shows a passphrase or a person id.
+
+`src/lib/operators.ts` keeps operators (handle, scrypt hash and salt) and
+which cookie is signed in as which operator; claiming or signing in moves
+that cookie's anonymous satellites to the operator. Failed sign-ins are
+slowed per handle in memory. The middleware puts the operator in
+`locals`; ownership ("yours"), the launch gap and the launchpad's list of
+yours all go by operator when signed in. The nav's last link is "Sign in",
+or your handle. Migration `0003_operators`.
+
+Collisions now name operators' handles (ADR 0010). Writing that test found
+a real bug: the server caches each predicted hit with the objects as they
+were when predicted, so a satellite whose owner claimed a handle after the
+prediction was still named "unclaimed operator". It now re-reads both
+objects at impact; the test predicts first, then claims, and fails without
+the fix.
+
+Checked in Chrome at 1920x1080 and iPhone 14: the operator page (a failed
+sign-in shows its reason on its own form; after claiming, the nav shows the
+handle) and the launchpad (your satellites listed, the gap counting down).
+`pnpm check` green (121 tests).
+
+## 2026-10-06 — C9: adversarial review (not yet acted on)
+
+A fresh Sonnet reviewer, with no shared context, attacked the C9 work (collisions, the
+sky page and catalogue, operators) against the C9 spec and the ten-minute
+marker visit. Advay was low on usage, so its findings are recorded here to
+act on next session; nothing below is fixed yet.
+
+Must fix:
+1. **A marker will likely see no collision in ten minutes.** The gentler
+   tuning gives 1 to 5 an hour in a quiet sky, and "Next collision: ... in
+   2 h" makes the feature look dead. Suggested: a launch gets a head-on
+   partner (a derelict) whose fatal meeting falls 2 to 4 minutes out, or
+   raise the quiet-sky rate.
+2. **Blame can be dodged by callsign.** `blame()` in `src/lib/story.ts`
+   matches lines by the text "The derelict", and callsigns may contain
+   spaces, so a satellite called "The derelict x" gets sorted with the
+   derelicts and cut. Use the object's kind, never the text.
+3. **Sign-in throttling can lock anyone out for good, and can stall the
+   server.** It's keyed by the (public) handle; the count never resets, so
+   one bad try every 30 s keeps a victim locked out. `scryptSync` blocks
+   the event loop for each unauthenticated claim or sign-in with no
+   global limit, and failures for unknown handles grow memory without
+   bound. Suggested: async scrypt, a global/per-IP cap, locks that decay,
+   and expiring entries.
+4. **The settle timer has no try/catch** (`src/lib/sky.ts`): one thrown
+   error (a busy or full disk inside `collide`) kills the process, and the
+   failed hit stays first in the schedule.
+
+Should fix:
+5. Sessions: no cookie rotation on sign-in or claim; ten-year cookies with
+   no server-side expiry; no "sign out everywhere"; `claim` while signed in
+   silently re-links. CSRF is covered by Astro's `checkOrigin`.
+6. Signing out (or clearing cookies) skips the five-minute gap: launch
+   anonymously, then sign back in and it merges.
+7. The `collision` event's `objects` are still the prediction-time copies,
+   so `mine` can be wrong for an owner who claimed a handle since (the
+   parties were fixed; the objects weren't).
+8. Scaling: the catalogue's "all" view has no limit and does several
+   queries per destroyed row; every read runs `settle()`, several table
+   scans each, three times on `/sky/`.
+9. `earliest()` in `collide.ts` bisects to 1e-4 ms on epoch-sized numbers,
+   below a double's resolution there, so it always runs all 100 steps;
+   bisect on the offset from `start` instead.
+10. SSE: events from the snapshot's own settle arrive before `hello`;
+   collision stories aren't de-duplicated; a reconnect doesn't bring the
+   collisions missed while away.
+11. Replay near the live cap isn't strictly deterministic (the cap counts
+   objects launched after the hit).
+12. Wording: "unclaimed operator" is jargon ("launched without a handle"?);
+   the client calls any unknown object "debris"; ADRs 0008 to 0010 are
+   still "proposed".
+
+Test gaps: no tests of the lockout, claiming while signed in, a hostile
+callsign in the blame line, or owner/operator leaks in the SSE payloads.
+Nitpicks: `meetingsOf` keeps duplicate keys; the middleware queries the
+operator (and mints a cookie) on every request, assets included.
+
+Also in this commit: the `/kessler/` page no longer calls collisions and
+lineage "not built yet", and says the collision physics is a toy (ADR
+0008), with tests. `pnpm check` green (124 tests).

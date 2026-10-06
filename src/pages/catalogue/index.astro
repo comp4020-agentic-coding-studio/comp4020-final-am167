@@ -2,17 +2,26 @@
 import Base from "../../layouts/Base.astro";
 import { ago, falling, km } from "../../lib/format.ts";
 import { BANDS, fallRate, heightKm, radiusAt } from "../../lib/orbit.ts";
-import { catalogue, catalogueCounts } from "../../lib/sky.ts";
+import { catalogue, catalogueCounts, recentCollisions } from "../../lib/sky.ts";
+import { blame, collisionOf, couplet, describe, headline } from "../../lib/story.ts";
 
 // The record of everything launched (ADR 0003): what's in orbit now, or
 // everything ever, picked by a plain link so it works without JavaScript.
 // Callsigns only: a beacon is only heard over the station. Heights are
 // worked out from each orbit (ADR 0007), and a script keeps them falling.
-const { person } = Astro.locals;
+// Every fragment traces back to the collision that made it, and every
+// collision is told with who it names (ADR 0010).
+const { person, operator } = Astro.locals;
 const show = Astro.url.searchParams.get("show") === "all" ? "all" : "live";
-const rows = catalogue(show, person);
+const rows = catalogue(show, { person, operator: operator?.id ?? null });
 const counts = catalogueCounts();
 const now = Date.now();
+// the latest collisions, told the way the sky page tells them
+const COLLISIONS = 50;
+const collided = recentCollisions(COLLISIONS);
+const kinds = { satellite: "", derelict: "Derelict", debris: "Fragment" } as const;
+// a lineage in a narrow column: callsigns keep their hyphens on one line
+const whole = (text: string) => text.replaceAll("-", "\u2011");
 const fates = {
   live: "In orbit",
   decayed: "Burned up",
@@ -28,10 +37,12 @@ const views = [
   <main class="catalogue-page">
     <h1>The catalogue</h1>
     <p class="lede">
-      Every satellite launched into the shared sky, kept for good. Beacons
-      aren't listed: they're only heard as a satellite passes over the station.
-      Every orbit slowly falls, and a satellite that falls far enough burns
-      up on re-entry; its record stays here.
+      Everything that has been in the shared sky, kept for good: people's
+      satellites, the derelicts that drift in, and every fragment, traced
+      back to the collision that made it. Beacons aren't listed: they're only
+      heard as a satellite passes over the station (and in the collisions
+      below). Every orbit slowly falls and burns up in the end; its record
+      stays here.
     </p>
 
     <nav class="views" aria-label="Show">
@@ -49,7 +60,7 @@ const views = [
       <table data-server-time={now}>
         <thead>
           <tr>
-            <th scope="col">Callsign</th>
+            <th scope="col">Object</th>
             <th scope="col" class="band">Band</th>
             <th scope="col">Height</th>
             <th scope="col">Launched</th>
@@ -60,9 +71,10 @@ const views = [
           {rows.map((o) => (
             <tr class:list={{ mine: o.mine, gone: o.fate !== "live" }}>
               <th scope="row">
-                <span class="swatch" style={`--hue: ${(o.id * 137.508) % 360}`}></span>
-                {o.callsign ?? "Debris"}
+                <span class:list={["swatch", o.kind]} style={`--hue: ${(o.id * 137.508) % 360}`}></span>
+                {o.kind === "satellite" ? o.callsign : kinds[o.kind]}
                 {o.mine && <span class="yours"> (yours)</span>}
+                {o.from && <span class="lineage"> from {whole(collisionOf(o.from))}</span>}
               </th>
               <td class="band">{BANDS[o.band].label}</td>
               {o.fate === "live" ? (
@@ -82,6 +94,7 @@ const views = [
               <td><time datetime={new Date(o.launchedAt).toISOString()}>{ago(now - o.launchedAt)}</time></td>
               <td>
                 {fates[o.fate]}
+                {o.collidedWith && <span class="lineage"> with {whole(describe(o.collidedWith))}</span>}
                 {o.fateAt && <> <time class="fate-time" datetime={new Date(o.fateAt).toISOString()}>{ago(now - o.fateAt)}</time></>}
               </td>
             </tr>
@@ -89,6 +102,34 @@ const views = [
         </tbody>
       </table>
     )}
+
+    <section class="collisions" id="collisions" aria-labelledby="collisions-title">
+      <h2 id="collisions-title">Collisions</h2>
+      {collided.length === 0 ? (
+        <p class="empty">Nothing has collided yet.</p>
+      ) : (
+        <>
+          <p class="lede">
+            {collided.length < COLLISIONS ? "Every collision so far" : `The latest ${COLLISIONS} collisions`}, newest
+            first: what met, the beacons that met, and who launched what.
+          </p>
+          <ol class="collision-list">
+            {collided.map((c) => (
+              <li>
+                <p class="collision-title">
+                  {headline(c.parties)}{" "}
+                  <time datetime={new Date(c.at).toISOString()}>{ago(now - c.at)}</time>
+                </p>
+                {couplet(c.parties).map(({ callsign, beacon }) => (
+                  <p class="collision-beacon"><q>{beacon}</q> {callsign}</p>
+                ))}
+                <p class="collision-blame">{blame(c.parties)}</p>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+    </section>
   </main>
 
   <script>
@@ -229,8 +270,81 @@ const views = [
     background: oklch(0.8 0.13 var(--hue));
   }
 
+  .swatch.derelict,
+  .swatch.debris {
+    background: oklch(0.6 0.02 250);
+  }
+
+  .swatch.debris {
+    width: 0.4rem;
+    height: 0.4rem;
+    margin-inline: 0.1rem 0.5rem;
+  }
+
+  /* where a fragment came from, and what a destroyed object met: on its own
+     line, so long lineages wrap instead of widening the table */
+  .lineage {
+    display: block;
+    font-weight: 400;
+    font-size: 0.9em;
+    color: var(--ink-dim);
+    white-space: normal;
+  }
+
+  td:last-child {
+    white-space: normal;
+  }
+
   .empty {
     margin: 1rem 0 0;
+  }
+
+  .collisions {
+    margin-top: 2.5rem;
+  }
+
+  .collisions h2 {
+    margin: 0 0 0.5rem;
+    font-size: var(--step-1);
+    font-weight: 700;
+    font-variation-settings: "wdth" 112;
+  }
+
+  .collision-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .collision-list li {
+    padding: 0.6rem 0 0.6rem 0.75rem;
+    border-left: 3px solid #ff7a45;
+    margin-bottom: 0.75rem;
+  }
+
+  .collision-list p {
+    margin: 0;
+  }
+
+  .collision-title {
+    font-weight: 700;
+  }
+
+  .collision-title time,
+  .collision-beacon,
+  .collision-blame {
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+  }
+
+  .collision-title time {
+    font-weight: 400;
+    margin-left: 0.25rem;
+  }
+
+  .collision-beacon q {
+    color: var(--ink);
+    font-style: italic;
   }
 
   /* On a phone the table would be wider than the screen: the band goes (the
