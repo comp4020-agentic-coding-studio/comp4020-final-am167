@@ -537,3 +537,75 @@ time loading the sky on desktop, which didn't recur on the second run; a
 lead for when the full suite is run, not a conclusion. Chrome 154 headless
 also calibrated at 60 Hz where assignment 1's runs saw 120 Hz, which matters
 when comparing reports across the two projects.
+
+## 2026-10-06 — A page explaining Kessler syndrome
+
+Built the explainer from `PLAN.md` at `/kessler/` (`src/pages/kessler/`),
+server-rendered so it reads the same without JavaScript:
+
+- **What it is** in plain words, with a three-step diagram (two satellites on
+  crossing orbits around a small Earth, the burst where they meet, then the
+  fragments on orbits of their own hitting a third). The diagram is SVG worked
+  out at build time, so the collisions sit exactly where the orbits cross.
+- **Why it doesn't clear:** drag times by altitude (NASA's debris FAQ), and
+  Kessler and Cour-Palais (1978).
+- **The real cases:** Fengyun-1C (2007) and Iridium 33 / Kosmos-2251 (2009),
+  from NASA's *Orbital Debris Quarterly News* for each, plus ESA's 2025
+  figures (about 40,000 tracked, more than 1.2 million over a centimetre, and
+  debris growing even with no more launches).
+- **The commons:** Hardin, the FCC's 2022 five-year rule and how little of
+  the sky it reaches, and Ostrom.
+- **How this sky plays it:** a table mapping real orbit onto the app, with
+  collisions, decay, deorbiting and debris lineage tagged "not built yet",
+  since none of them exist yet. The band times come from `BANDS`, so they
+  can't drift from the launchpad's.
+- **Linked** from a new "Kessler syndrome" nav item (the nav now wraps on a
+  phone), the launchpad's intro and the sky's "Sky now" card.
+
+Every figure was checked against its source before it went on the page.
+Test first: `spec/kessler.test.ts` (the page answers, names the two cases and
+the 1978 paper, links back to the sky and the launchpad, and both of those
+link to it in their content). All five failed (a 404 and no links), then
+passed.
+
+**Adversarial review** (a fresh Sonnet agent, against the plan, the sources
+and the running build). Acted on:
+- **The diagram's "crossing" orbits only touched.** The first draft had two
+  arcs meeting tangentially, with no planet and no direction of travel. Redrawn as
+  tilted ellipses around an Earth, with trails on the satellites.
+- **Overclaims.** "It has already started" (neither case set off a runaway)
+  became "The debris is already up there", with a line saying so. "Run on the
+  same logic" became an honest account: the app has the incentive half of the
+  dilemma (crowding low gets you heard) and none of the cost yet.
+- **Sources stretched.** Kessler 1978 said a belt "could begin to form within
+  this century" and that launch limits could delay it, not "within decades".
+  The FCC rule covers only satellites launched after 29 September 2024, and
+  25 years was a guideline, not an FCC rule. "Switched off since 1995" and
+  "nobody aimed either" weren't in the cited source, so they're gone. The
+  drag times were unsourced (now NASA's FAQ). Ostrom was reduced to
+  monitoring (now also own limits and answering to each other).
+- **Plain language and accessibility:** the page now says why the app is
+  called Kessler; "In Kessler" became "In this sky", so it can't be read as
+  the syndrome; the diagrams are hidden from screen readers (their numbered
+  captions carry the meaning); the phone table labels both halves of each
+  pair; the catalogue row was split so built and unbuilt aren't in one cell.
+- **The launchpad link explained nothing**, so its line now says what the
+  term means: "in a crowded orbit one collision can set off the next: Kessler
+  syndrome". That was an open question in the plan; it's there for me to
+  keep or cut.
+
+Left: the nav label stays "Kessler syndrome" (the reviewer suggested "What is
+Kessler?"), and the mobile table loses table semantics in Safari once it's
+display:block, accepted for now.
+
+Checked in Chrome at 1920×1080 and iPhone 14. The launchpad still doesn't
+scroll at 1920×1080, 1536×770, 1440×800, 1280×720 or 1280×680 with its
+longer line, and the sky page is still one screen at 1920×1080. Checks green
+(55 tests).
+
+Then I found the launchpad's in-sentence link too easy to miss, twice over. It
+is now a card of its own under the intro: "New here?" above a large amber
+"What is Kessler syndrome? →", with a dark backing and a soft glow so it
+reads over the afterglow on a phone. The intro's line keeps the one-line
+explanation ("in a crowded orbit one collision can set off the next"). Still
+no scroll at any of the laptop sizes above.

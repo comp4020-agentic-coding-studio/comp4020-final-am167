@@ -4,7 +4,7 @@ import "../styles/global.css";
 interface Props {
   title: string;
   description?: string;
-  current?: "launchpad" | "sky" | "catalogue" | "readme";
+  current?: "launchpad" | "sky" | "catalogue" | "kessler" | "readme";
 }
 
 const {
@@ -36,6 +36,7 @@ const here = (page: Props["current"]) => (page === current ? "page" : undefined)
         <a href="/" aria-current={here("launchpad")}>Launchpad</a>
         <a href="/sky/" aria-current={here("sky")}>Sky</a>
         <a href="/catalogue/" aria-current={here("catalogue")}>Catalogue</a>
+        <a href="/kessler/" aria-current={here("kessler")}>Kessler syndrome</a>
         <a href="/readme/" aria-current={here("readme")}>README</a>
       </nav>
     </header>

@@ -97,6 +97,7 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
           </ol>
           <p class="more">
             <a href="/catalogue/">Full catalogue →</a>
+            <a href="/kessler/">What's Kessler syndrome?</a>
             {!mine && <a href="/">Launch a satellite</a>}
           </p>
         </section>
@@ -494,8 +495,9 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 
   .sky-page .more {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.25rem 1rem;
     margin: 0.75rem 0 0;
   }
 

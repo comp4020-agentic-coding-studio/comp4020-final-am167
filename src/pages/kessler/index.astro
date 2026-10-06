@@ -1,0 +1,658 @@
+---
+import Base from "../../layouts/Base.astro";
+import { every } from "../../lib/format.ts";
+import { BANDS } from "../../lib/orbit.ts";
+
+// What Kessler syndrome is, in plain words, for visitors who haven't heard of
+// it: the cascade, the real cases, why it's a commons problem, and how this
+// app's mechanics map onto it. Figures are from the sources at the bottom.
+
+// The cascade diagram: tilted elliptical orbits around a small Earth, worked
+// out here so the collisions sit exactly where the orbits cross. Fragments
+// come from a seeded random source, so every render draws the same picture.
+type Point = [number, number];
+interface Ellipse {
+  rx: number;
+  ry: number;
+  tilt: number;
+}
+const centre: Point = [80, 50];
+const deg = Math.PI / 180;
+const at = ({ rx, ry, tilt }: Ellipse, angle: number): Point => [
+  centre[0] + rx * Math.cos(angle) * Math.cos(tilt * deg) - ry * Math.sin(angle) * Math.sin(tilt * deg),
+  centre[1] + rx * Math.cos(angle) * Math.sin(tilt * deg) + ry * Math.sin(angle) * Math.cos(tilt * deg),
+];
+// below zero inside the ellipse, above zero outside
+const outside = ({ rx, ry, tilt }: Ellipse, [x, y]: Point) => {
+  const dx = x - centre[0];
+  const dy = y - centre[1];
+  const u = dx * Math.cos(tilt * deg) + dy * Math.sin(tilt * deg);
+  const v = -dx * Math.sin(tilt * deg) + dy * Math.cos(tilt * deg);
+  return (u / rx) ** 2 + (v / ry) ** 2 - 1;
+};
+// the angles on `a` where it crosses `b`
+function crossings(a: Ellipse, b: Ellipse): number[] {
+  const found: number[] = [];
+  const steps = 720;
+  for (let i = 0; i < steps; i++) {
+    let lo = (i / steps) * 2 * Math.PI;
+    let hi = ((i + 1) / steps) * 2 * Math.PI;
+    if (Math.sign(outside(b, at(a, lo))) === Math.sign(outside(b, at(a, hi)))) continue;
+    for (let k = 0; k < 30; k++) {
+      const mid = (lo + hi) / 2;
+      if (Math.sign(outside(b, at(a, mid))) === Math.sign(outside(b, at(a, lo)))) lo = mid;
+      else hi = mid;
+    }
+    found.push(lo);
+  }
+  return found;
+}
+const ellipse = (e: Ellipse) => ({
+  cx: centre[0],
+  cy: centre[1],
+  rx: e.rx.toFixed(1),
+  ry: e.ry.toFixed(1),
+  transform: `rotate(${e.tilt.toFixed(1)} ${centre[0]} ${centre[1]})`,
+});
+const arc = (e: Ellipse, from: number, to: number) =>
+  "M" + Array.from({ length: 13 }, (_, i) => at(e, from + ((to - from) * i) / 12).map((v) => v.toFixed(1))).join("L");
+
+const orbitA: Ellipse = { rx: 68, ry: 30, tilt: -12 };
+const orbitB: Ellipse = { rx: 56, ry: 34, tilt: 24 };
+const orbitC: Ellipse = { rx: 42, ry: 40, tilt: 0 };
+// the first collision: where A and B cross nearest the top of the picture
+const meetAngleA = crossings(orbitA, orbitB).sort((p, q) => at(orbitA, p)[1] - at(orbitA, q)[1])[0];
+const meet = at(orbitA, meetAngleA);
+const meetAngleB = crossings(orbitB, orbitA).sort(
+  (p, q) => Math.hypot(...minus(at(orbitB, p), meet)) - Math.hypot(...minus(at(orbitB, q), meet)),
+)[0];
+function minus([x, y]: Point, [u, v]: Point): Point {
+  return [x - u, y - v];
+}
+// the two satellites a moment before they meet, each with a trail behind it
+const lead = 0.55;
+const satA = at(orbitA, meetAngleA - lead);
+const satB = at(orbitB, meetAngleB + lead);
+const trailA = arc(orbitA, meetAngleA - lead - 0.5, meetAngleA - lead);
+const trailB = arc(orbitB, meetAngleB + lead + 0.5, meetAngleB + lead);
+// later, the fragments hit two satellites on a third orbit, where it crosses A
+const hits = crossings(orbitC, orbitA)
+  .map((angle) => at(orbitC, angle))
+  .sort((p, q) => Math.hypot(...minus(q, meet)) - Math.hypot(...minus(p, meet)))
+  .slice(0, 2);
+
+let seed = 4020;
+const random = () => {
+  seed = (seed * 1664525 + 1013904223) % 4294967296;
+  return seed / 4294967296;
+};
+const jitter = (spread: number) => (random() - 0.5) * spread;
+const around = ([x, y]: Point, n: number, r: number): Point[] =>
+  Array.from({ length: n }, () => {
+    const angle = random() * 2 * Math.PI;
+    const d = Math.sqrt(random()) * r;
+    return [x + Math.cos(angle) * d, y + Math.sin(angle) * d];
+  });
+// each fragment's own orbit: close to the one it came from, a little bigger
+// or smaller, a little more tilted
+const fragmentOrbit = (from: Ellipse): Ellipse => ({
+  rx: from.rx + jitter(14),
+  ry: from.ry + jitter(10),
+  tilt: from.tilt + jitter(14),
+});
+const fragmentOrbits = [orbitA, orbitB, orbitA, orbitB, orbitA, orbitB, orbitA, orbitB].map(fragmentOrbit);
+const firstCloud: Point[] = [
+  ...around(meet, 14, 7),
+  ...Array.from({ length: 8 }, () => at(orbitA, meetAngleA + jitter(0.7))),
+  ...Array.from({ length: 8 }, () => at(orbitB, meetAngleB + jitter(0.7))),
+];
+const spreadCloud: Point[] = [
+  ...fragmentOrbits.flatMap((o) => Array.from({ length: 6 }, () => at(o, random() * 2 * Math.PI))),
+  ...hits.flatMap((p) => around(p, 9, 7)),
+];
+const burst = ([x, y]: Point, r: number) =>
+  `M${x} ${y - r}v${2 * r}M${x - r} ${y}h${2 * r}M${x - r * 0.7} ${y - r * 0.7}l${r * 1.4} ${r * 1.4}M${x + r * 0.7} ${y - r * 0.7}l${-r * 1.4} ${r * 1.4}`;
+const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
+---
+<Base
+  title="Kessler: what Kessler syndrome is"
+  description="Kessler syndrome in plain words: how one collision in orbit makes the debris that causes the next, the real cases, and how this app plays it."
+  current="kessler"
+>
+  <main class="kessler-page">
+    <header class="hero">
+      <p class="eyebrow">Where the name comes from</p>
+      <h1>Kessler syndrome</h1>
+      <p class="lede">
+        When an orbit gets crowded enough, one collision makes the debris that
+        causes the next. Fragments then pile up faster than they fall out of the
+        sky, and the orbit fills with wreckage nobody can clear.
+      </p>
+    </header>
+
+    <section aria-labelledby="cascade-title">
+      <h2 id="cascade-title">One collision makes the next</h2>
+      <p>
+        Most satellites fly in low orbit, up to about 2,000 km above the ground,
+        where everything moves at about seven or eight kilometres a second. Two
+        objects on crossing orbits can meet at more than ten kilometres a second.
+        Nothing survives a hit like that: both shatter into a cloud of fragments,
+        and each fragment flies on an orbit of its own, a little higher or lower,
+        a little tilted, so the cloud spreads until it crosses other orbits.
+      </p>
+
+      <ol class="cascade">
+        <li>
+          <svg viewBox="0 0 160 100" aria-hidden="true">
+            <ellipse class="orbit" {...ellipse(orbitA)} />
+            <ellipse class="orbit" {...ellipse(orbitB)} />
+            <circle class="earth" cx={centre[0]} cy={centre[1]} r="11" />
+            <circle class="meet" {...dot(meet)} r="5" />
+            <path class="trail" d={trailA} />
+            <path class="trail" d={trailB} />
+            <circle class="sat" {...dot(satA)} r="3" />
+            <circle class="sat" {...dot(satB)} r="3" />
+          </svg>
+          <p>Two satellites on orbits that cross reach the crossing at the same moment.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 160 100" aria-hidden="true">
+            <ellipse class="orbit" {...ellipse(orbitA)} />
+            <ellipse class="orbit" {...ellipse(orbitB)} />
+            <circle class="earth" cx={centre[0]} cy={centre[1]} r="11" />
+            {firstCloud.map((p) => <circle class="bit" {...dot(p)} r="1.2" />)}
+            <path class="burst" d={burst(meet, 7)} />
+          </svg>
+          <p>Both shatter. Every fragment flies on an orbit of its own, close to the one it came from.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 160 100" aria-hidden="true">
+            {fragmentOrbits.map((o) => <ellipse class="fragment-orbit" {...ellipse(o)} />)}
+            <ellipse class="orbit" {...ellipse(orbitC)} />
+            <circle class="earth" cx={centre[0]} cy={centre[1]} r="11" />
+            {spreadCloud.map((p) => <circle class="bit" {...dot(p)} r="1.2" />)}
+            {hits.map((p) => <path class="burst" d={burst(p, 6)} />)}
+          </svg>
+          <p>The fragments spread around the planet and cross other orbits. Every hit makes another cloud.</p>
+        </li>
+      </ol>
+
+      <p>
+        The only thing that clears an orbit is the thin top of the atmosphere,
+        which drags objects down until they burn up. Below about 600 km that
+        takes several years. At 800 km, where many satellites fly, it can take
+        centuries, and above 1,000 km a thousand years or more. Past a certain
+        crowding, collisions make debris faster than drag removes it, and the
+        count keeps rising even if nobody launches anything again.
+      </p>
+      <p>
+        Two NASA scientists, Donald Kessler and Burton Cour-Palais, worked this
+        out in 1978. They warned that, as launches went on, a belt of debris could
+        begin to form around the Earth before the end of the century, and that
+        limits on launches could delay it. The effect was later named after
+        Kessler.
+      </p>
+    </section>
+
+    <section aria-labelledby="cases-title">
+      <h2 id="cases-title">The debris is already up there</h2>
+      <article class="case">
+        <h3><time datetime="2007-01-11">11 January 2007</time>: Fengyun-1C</h3>
+        <p>
+          China tested an anti-satellite missile on one of its own retired weather
+          satellites, Fengyun-1C, about 860 km up. NASA called the result “the
+          single worst contamination of low Earth orbit (LEO) during the past 50
+          years”. Within three months more than 1,600 pieces were being tracked,
+          and NASA estimated there were up to 35,000 of a centimetre or more. Most
+          were thrown into orbits that last decades or even centuries.
+        </p>
+      </article>
+      <article class="case">
+        <h3><time datetime="2009-02-10">10 February 2009</time>: Iridium 33 and Kosmos-2251</h3>
+        <p>
+          A working American phone satellite and a retired Russian one crossed
+          paths over Siberia, 790 km up, at more than 11 km/s. It was the first
+          accidental collision between two whole satellites, and both were
+          destroyed. Within seven weeks 823 pieces had been catalogued, with many
+          more too small to track.
+        </p>
+      </article>
+      <p>
+        Neither set off a runaway on its own. But each added thousands of pieces
+        that can hit something else, and that is how a cascade begins.
+      </p>
+      <p>
+        About 40,000 objects in orbit are tracked today. ESA estimates there are
+        more than 1.2 million larger than a centimetre: most too small to track,
+        all big enough to wreck a satellite. ESA's summary of its 2025 report
+        says that even with no more launches, the amount of debris would keep
+        growing, because break-ups add fragments faster than the atmosphere
+        takes them away.
+      </p>
+    </section>
+
+    <section aria-labelledby="commons-title">
+      <h2 id="commons-title">Nobody owns the sky</h2>
+      <p>
+        Low orbit is a commons: it belongs to no one and is open to all. Whoever
+        launches a satellite gets all the good of it, but the risk of the debris
+        it might one day make is shared by everyone in orbit, including people
+        who haven't launched yet. Garrett Hardin called this the tragedy of the
+        commons (1968): each person acting sensibly for themselves can ruin a
+        shared resource for everyone.
+      </p>
+      <p>
+        There are rules, but they reach only part of the sky. In 2022 the US
+        Federal Communications Commission ruled that satellites it licenses in
+        low orbit, if launched after September 2024, must be disposed of within
+        five years of their mission ending; the guideline before it allowed
+        twenty-five. Satellites outside its reach, and debris already up there,
+        aren't covered, and nothing yet removes debris at scale. Elinor Ostrom
+        (1990) studied commons that didn't collapse, and found they last when the
+        people using them set their own limits, can see how the resource and each
+        other are doing, and answer to each other when someone takes too much.
+      </p>
+    </section>
+
+    <section aria-labelledby="mapping-title">
+      <h2 id="mapping-title">How this sky plays it</h2>
+      <p>
+        That's why this app is called Kessler: it's one small sky that everyone
+        shares, built so the same dilemma plays out where you can watch it. So
+        far it has only the first half. Crowding the low band gets your beacon
+        heard more often and costs nothing yet; collisions, which give crowding
+        its cost, come next. The parts marked “not built yet” are still to come.
+      </p>
+      <table class="mapping">
+        <caption class="visually-hidden">Real orbit compared with this app's sky</caption>
+        <thead>
+          <tr>
+            <th scope="col">In real orbit</th>
+            <th scope="col">In this sky</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Low orbit is open to every country and company.</th>
+            <td>One sky, open to everyone who visits, with one satellite each. Nobody owns it.</td>
+          </tr>
+          <tr>
+            <th scope="row">Operators launch for what orbit gives them: coverage, pictures, signal.</th>
+            <td>You launch to be heard: your beacon is shown to everyone watching each time your satellite passes over the ground station.</td>
+          </tr>
+          <tr>
+            <th scope="row">The most useful altitudes are the most crowded.</th>
+            <td>
+              The low band passes over the station about every {every(BANDS.low.period)},
+              the high band about every {every(BANDS.high.period)}. To be heard more
+              often, you crowd the low band.
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">A collision makes fragments that hit other things.</th>
+            <td><span class="later">Not built yet</span> Two objects that meet become a cloud of debris, and the debris can hit other satellites.</td>
+          </tr>
+          <tr>
+            <th scope="row">Drag clears low orbits in years and high ones over centuries.</th>
+            <td><span class="later">Not built yet</span> Everything slowly falls: the low band clears quickly, the high band slowly. Nothing resets the sky.</td>
+          </tr>
+          <tr>
+            <th scope="row">An operator can bring a satellite down at the end of its life. Debris can't be steered.</th>
+            <td><span class="later">Not built yet</span> You can bring your own satellite down, giving up your beacon to leave the sky cleaner. Nobody can clear debris.</td>
+          </tr>
+          <tr>
+            <th scope="row">Every tracked object has a catalogue entry.</th>
+            <td>The <a href="/catalogue/">catalogue</a> keeps every launch for good.</td>
+          </tr>
+          <tr>
+            <th scope="row">Each piece of debris can be traced to the event that made it.</th>
+            <td><span class="later">Not built yet</span> Every fragment traces back to the launches that made it.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="go">
+        <a class="primary" href="/">Launch a satellite</a>
+        <a href="/sky/">Watch the sky</a>
+      </p>
+    </section>
+
+    <section aria-labelledby="sources-title" class="sources">
+      <h2 id="sources-title">Sources</h2>
+      <ul>
+        <li>
+          Kessler, D. J. and Cour-Palais, B. G. (1978). Collision frequency of
+          artificial satellites: the creation of a debris belt.
+          <cite>Journal of Geophysical Research</cite> 83(A6), 2637–2646.
+          <a href="https://doi.org/10.1029/JA083iA06p02637">doi:10.1029/JA083iA06p02637</a>
+        </li>
+        <li>
+          NASA Orbital Debris Program Office (2007). Chinese anti-satellite test
+          creates most severe orbital debris cloud in history.
+          <cite>Orbital Debris Quarterly News</cite> 11(2), 2–3.
+          <a href="https://orbitaldebris.jsc.nasa.gov/quarterly-news/pdfs/odqnv11i2.pdf">PDF</a>
+        </li>
+        <li>
+          NASA Orbital Debris Program Office (2009). Satellite collision leaves
+          significant debris clouds. <cite>Orbital Debris Quarterly News</cite> 13(2), 1–2.
+          <a href="https://orbitaldebris.jsc.nasa.gov/quarterly-news/pdfs/odqnv13i2.pdf">PDF</a>
+        </li>
+        <li>
+          NASA Orbital Debris Program Office. Frequently asked questions (how
+          long debris stays in orbit).
+          <a href="https://orbitaldebris.jsc.nasa.gov/faq/">orbitaldebris.jsc.nasa.gov</a>
+        </li>
+        <li>
+          European Space Agency (2025). ESA Space Environment Report 2025 (summary).
+          <a href="https://www.esa.int/Space_Safety/Space_Debris/ESA_Space_Environment_Report_2025">esa.int</a>
+        </li>
+        <li>
+          Federal Communications Commission (2022). Space Innovation; Mitigation
+          of Orbital Debris in the New Space Age. Second Report and Order, FCC 22-74.
+          <a href="https://docs.fcc.gov/public/attachments/FCC-22-74A1.pdf">PDF</a>
+        </li>
+        <li>
+          Hardin, G. (1968). The tragedy of the commons. <cite>Science</cite>
+          162(3859), 1243–1248.
+          <a href="https://doi.org/10.1126/science.162.3859.1243">doi:10.1126/science.162.3859.1243</a>
+        </li>
+        <li>
+          Ostrom, E. (1990). <cite>Governing the Commons: The Evolution of
+          Institutions for Collective Action</cite>. Cambridge University Press.
+          <a href="https://doi.org/10.1017/CBO9780511807763">doi:10.1017/CBO9780511807763</a>
+        </li>
+      </ul>
+    </section>
+  </main>
+</Base>
+
+<style>
+  .kessler-page {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 1.5rem var(--gutter) 4rem;
+    line-height: 1.6;
+  }
+
+  .hero {
+    margin-bottom: 2.5rem;
+  }
+
+  .eyebrow {
+    margin: 0 0 0.5rem;
+    color: var(--amber);
+    font-size: var(--step--1);
+    font-weight: 700;
+    font-variation-settings: "wdth" 118;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    margin: 0 0 1.25rem;
+    font-size: var(--step-4);
+    font-weight: 800;
+    font-variation-settings: "wdth" 125;
+    line-height: 0.95;
+  }
+
+  .lede {
+    margin: 0;
+    font-size: var(--step-1);
+    line-height: 1.45;
+  }
+
+  section {
+    margin-top: 3rem;
+  }
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: var(--step-2);
+    font-weight: 700;
+    font-variation-settings: "wdth" 112;
+    line-height: 1.15;
+  }
+
+  h3 {
+    margin: 0 0 0.25rem;
+    font-size: var(--step-1);
+    font-weight: 700;
+    font-variation-settings: "wdth" 108;
+    line-height: 1.3;
+  }
+
+  h3 time {
+    color: var(--amber);
+  }
+
+  p {
+    margin: 0 0 1rem;
+  }
+
+  /* three steps across on a wide screen, wider than the text and centred on
+     it; stacked on a phone */
+  .cascade {
+    position: relative;
+    left: 50%;
+    translate: -50% 0;
+    width: min(66rem, calc(100vw - 2 * var(--gutter) - 1rem));
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: step;
+  }
+
+  .cascade li {
+    counter-increment: step;
+    padding: 0.75rem;
+    border: 1px solid var(--grid);
+    border-radius: 4px;
+    background: var(--night-deep);
+  }
+
+  .cascade svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .cascade p {
+    margin: 0.5rem 0 0;
+    color: var(--ink-dim);
+    font-size: var(--step-0);
+    line-height: 1.45;
+  }
+
+  .cascade p::before {
+    content: counter(step) ". ";
+    color: var(--amber);
+    font-weight: 700;
+  }
+
+  .orbit {
+    fill: none;
+    stroke: #4d6f9e;
+    stroke-width: 1;
+  }
+
+  .fragment-orbit {
+    fill: none;
+    stroke: #4d6f9e;
+    stroke-width: 0.6;
+    opacity: 0.45;
+  }
+
+  .earth {
+    fill: #17294a;
+    stroke: #5b7fae;
+    stroke-width: 0.8;
+  }
+
+  .meet {
+    fill: none;
+    stroke: var(--amber);
+    stroke-width: 1;
+    stroke-dasharray: 2 2;
+  }
+
+  .trail {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    opacity: 0.45;
+  }
+
+  .sat {
+    fill: var(--ink);
+  }
+
+  .bit {
+    fill: var(--ink-dim);
+  }
+
+  .burst {
+    stroke: var(--amber);
+    stroke-width: 1.4;
+    stroke-linecap: round;
+  }
+
+  .case {
+    margin: 0 0 1.25rem;
+    padding-left: 1rem;
+    border-left: 3px solid var(--amber-dim);
+  }
+
+  .case p {
+    margin: 0;
+  }
+
+  .mapping {
+    width: 100%;
+    margin: 1.25rem 0 1.5rem;
+    border-collapse: collapse;
+    font-size: var(--step--1);
+    line-height: 1.5;
+  }
+
+  .mapping th,
+  .mapping td {
+    padding: 0.6rem 0.75rem 0.6rem 0;
+    border-bottom: 1px solid var(--grid);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .mapping thead th {
+    color: var(--ink-dim);
+    font-weight: 600;
+  }
+
+  .mapping tbody th {
+    width: 45%;
+    color: var(--ink-dim);
+    font-weight: 400;
+  }
+
+  .later {
+    display: inline-block;
+    margin-right: 0.35rem;
+    padding: 0 0.4rem;
+    border: 1px solid var(--amber-dim);
+    border-radius: 3px;
+    color: var(--amber);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  .go {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.5rem;
+  }
+
+  .go .primary {
+    padding: 0.6rem 1rem;
+    border-radius: 3px;
+    background: var(--amber);
+    color: var(--night-deep);
+    font-weight: 800;
+    font-variation-settings: "wdth" 118;
+    text-decoration: none;
+  }
+
+  .go .primary:hover {
+    background: #ffbb5c;
+  }
+
+  .sources ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+  }
+
+  .sources li {
+    margin-bottom: 0.5rem;
+  }
+
+  .sources a {
+    color: var(--ink-dim);
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 40rem) {
+    .cascade {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cascade li {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .cascade p {
+      margin: 0;
+      font-size: var(--step--1);
+    }
+
+    /* each row reads as a pair, labelled, since the column headings are gone */
+    .mapping thead {
+      display: none;
+    }
+
+    .mapping tr,
+    .mapping th,
+    .mapping td {
+      display: block;
+    }
+
+    .mapping tbody th {
+      width: auto;
+      padding-bottom: 0.2rem;
+      border-bottom: 0;
+    }
+
+    .mapping td {
+      padding-top: 0;
+    }
+
+    .mapping tbody th::before {
+      content: "In real orbit: ";
+    }
+
+    .mapping td::before {
+      content: "In this sky: ";
+      color: var(--ink);
+      font-weight: 700;
+    }
+  }
+</style>

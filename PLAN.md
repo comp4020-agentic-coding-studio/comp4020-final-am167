@@ -25,6 +25,8 @@ _Last updated 2026-10-06._
   2026-10-06: the launchpad redrawn in Three.js too (ADR 0006, proposed):
   a dusk pad scene, and a launch that climbs through a gravity turn while
   the camera pulls back to the planet's limb and hands off to the sky page.
+  2026-10-06: a page explaining Kessler syndrome at `/kessler/` (uncommitted),
+  linked from the nav, the launchpad's intro and the sky's "Sky now" card.
 - **C8 cutoff:** Tue 6 Oct 2026, 12:00 (moved from Monday for Labour Day).
 - **Next, in order:**
   1. Advay rewrites the agent's README draft (`README.md`, published at
@@ -233,16 +235,18 @@ _Proposed, not final: the working assumption for C8, likely to be revisited._
   missed time, orbital decay, deorbiting your own satellite (and the
   cooldown taking effect), conjunction alerts and dodging with fuel. Decide
   the deferred tuning (below) with the sim running.
-- **A page explaining Kessler syndrome (added 2026-10-06, not yet
-  scheduled).** People Advay has shown the app to don't know what Kessler
+- **A page explaining Kessler syndrome (added 2026-10-06; built
+  2026-10-06).** People Advay has shown the app to don't know what Kessler
   syndrome is, so the name and the argument don't land. A short plain-language
-  page (e.g. `/kessler/`): what it is, how one collision makes the debris
+  page at `/kessler/`: what it is, how one collision makes the debris
   that causes the next, the real cases (the 2007 FY-1C test, the 2009
   Iridium 33 / Kosmos-2251 collision), why it's a commons problem, and how
-  the app's mechanics map onto it. Linked from the launchpad and the sky, and
-  drawing on "Sources to read" below. To decide: when it ships, and whether
-  the launchpad also gets a one-line explanation so nobody has to click
-  through.
+  the app's mechanics map onto it, with "not built yet" on collisions, decay,
+  deorbiting and lineage. Linked from the nav, the launchpad and the sky.
+  The launchpad's intro now carries a one-line explanation ("in a crowded
+  orbit one collision can set off the next: Kessler syndrome"), for Advay to
+  confirm. When collisions land in C9, drop the page's "not built yet" tags
+  for whatever is built.
 - **C10 (week 11):** server-side logs as evidence (launches per band,
   collisions, dodges, deorbits), and the catalogue's lineage.
 - **Week 12:** visual polish (light trails, collision effects), README and

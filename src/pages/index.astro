@@ -96,7 +96,14 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
         write it a beacon: one line, broadcast to everyone watching each time it
         passes over the ground station.
       </p>
-      <p class="lede">Nobody owns the sky. Every launch makes it more crowded.</p>
+      <p class="lede">
+        Nobody owns the sky. Every launch makes it more crowded, and in a crowded
+        orbit one collision can set off the next.
+      </p>
+      <a class="explainer" href="/kessler/">
+        <span class="explainer-kicker">New here?</span>
+        <span>What is Kessler syndrome? <span aria-hidden="true">→</span></span>
+      </a>
     </section>
 
     <section class="console" aria-labelledby="launch-title">
@@ -452,6 +459,48 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
 
   .lede + .lede {
     color: var(--ink-dim);
+  }
+
+  /* the way into the explainer, for anyone who doesn't know the name */
+  .explainer {
+    display: inline-grid;
+    gap: 0.15rem;
+    margin-top: 0.75rem;
+    padding: 0.8rem 1.4rem 0.9rem;
+    border: 2px solid var(--amber);
+    border-radius: 6px;
+    /* dark behind the amber, so it reads over the afterglow too */
+    background: linear-gradient(rgb(242 165 65 / 0.16), rgb(242 165 65 / 0.16)), rgb(6 11 24 / 0.85);
+    box-shadow: 0 0 1.75rem rgb(242 165 65 / 0.35);
+    color: var(--amber);
+    font-size: var(--step-2);
+    font-weight: 800;
+    font-variation-settings: "wdth" 112;
+    line-height: 1.15;
+    text-decoration: none;
+    text-shadow: none;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+
+  .explainer:hover {
+    background: linear-gradient(rgb(242 165 65 / 0.3), rgb(242 165 65 / 0.3)), rgb(6 11 24 / 0.85);
+    box-shadow: 0 0 2.5rem rgb(242 165 65 / 0.5);
+    color: #ffbb5c;
+  }
+
+  .explainer-kicker {
+    color: var(--ink);
+    font-size: var(--step--1);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 30rem) {
+    .explainer {
+      font-size: var(--step-1);
+      padding: 0.7rem 1rem 0.8rem;
+    }
   }
 
   .console {
