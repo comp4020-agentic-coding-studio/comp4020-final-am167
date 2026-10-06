@@ -230,6 +230,16 @@ _Proposed, not final: the working assumption for C8, likely to be revisited._
   missed time, orbital decay, deorbiting your own satellite (and the
   cooldown taking effect), conjunction alerts and dodging with fuel. Decide
   the deferred tuning (below) with the sim running.
+- **A page explaining Kessler syndrome (added 2026-10-06, not yet
+  scheduled).** People Advay has shown the app to don't know what Kessler
+  syndrome is, so the name and the argument don't land. A short plain-language
+  page (e.g. `/kessler/`): what it is, how one collision makes the debris
+  that causes the next, the real cases (the 2007 FY-1C test, the 2009
+  Iridium 33 / Kosmos-2251 collision), why it's a commons problem, and how
+  the app's mechanics map onto it. Linked from the launchpad and the sky, and
+  drawing on "Sources to read" below. To decide: when it ships, and whether
+  the launchpad also gets a one-line explanation so nobody has to click
+  through.
 - **C10 (week 11):** server-side logs as evidence (launches per band,
   collisions, dodges, deorbits), and the catalogue's lineage.
 - **Week 12:** visual polish (light trails, collision effects), README and

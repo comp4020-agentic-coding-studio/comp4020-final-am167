@@ -407,3 +407,11 @@ satellite's score, debris taking the station's airtime as static, and a
 question from the station that beacons answer (which also gives colliding
 messages a connection). The fourth, a shared sky-health number on every
 screen, was left out for now.
+
+## 2026-10-06 — Future work: explain Kessler syndrome
+
+Advay found that people don't know what Kessler syndrome means, so the name
+and the argument don't land. Added a plain-language explainer page (e.g.
+`/kessler/`) to "Later" in `PLAN.md`: what it is, the real cases, the
+commons angle and how the app's mechanics map onto it, linked from the
+launchpad and the sky. Not scheduled yet.
