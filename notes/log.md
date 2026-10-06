@@ -1089,3 +1089,20 @@ the sparks and the return to the station; and on an iPhone 14. Found on the
 way: the collision layer never got the device pixel ratio, so on a retina
 screen its rings were drawn at half size. `pnpm check` green. Committed as
 `90dfab9`.
+
+## 2026-10-07 — C9: the "in orbit" notice, and nudging towards a handle
+
+The sky's "*callsign* is in orbit" notice outlived its satellite (on a
+phone it stays in the page); it now goes as soon as the satellite is hit or
+burns up. Checked by launching in a seeded sky and sending a derelict at it:
+the notice showed until the hit, then went. Committed as `811236f`, then
+`C9` was fast-forwarded into `main` and pushed (Advay's say-so), which
+deploys.
+
+Advay wanted to nudge people to sign up when they launch. Kept to a nudge,
+never a gate (ADR 0009: anyone can launch), and not a pop-up on the Launch
+button, which would cut into the launch animation: a line under the button
+("Launching without a handle. Claim one to keep your satellites on any
+device, and your name on what they do", or "Launching as *handle*"), and
+the same offer on the notice straight after launching, which then stays up
+twice as long on desktop. Tests in `spec/operator.test.ts`.

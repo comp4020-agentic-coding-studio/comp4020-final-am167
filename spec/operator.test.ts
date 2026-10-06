@@ -183,3 +183,35 @@ describe("operators", () => {
     }
   });
 });
+
+describe("nudging an anonymous launcher towards a handle", () => {
+  const nudge = (page: Document) =>
+    [...page.querySelectorAll('a[href^="/operator/"]')].filter((a) => !a.closest("nav"));
+
+  it("on the launchpad, without getting in the way of launching", async () => {
+    const page = doc(await (await new Session(baseUrl).get("/")).text());
+    expect(page.querySelector(".console")?.textContent).toMatch(/without a handle/i);
+    expect(nudge(page).length).toBeGreaterThan(0);
+    expect(page.querySelector("form[data-launch] fieldset")?.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("right after launching, on the sky's notice", async () => {
+    const a = new Session(baseUrl);
+    const res = await a.launch({ band: "low", callsign: callsign(), beacon: "nudge me" });
+    const sky = doc(await (await a.get(res.headers.get("location")!)).text());
+    const notice = sky.getElementById("launched-notice")!;
+    expect(notice.querySelector('a[href^="/operator/"]'), "no nudge on the notice").not.toBeNull();
+  });
+
+  it("not once you have a handle: it says who you're launching as", async () => {
+    const a = new Session(baseUrl);
+    const h = handle();
+    await claim(a, h);
+    const pad = doc(await (await a.get("/")).text());
+    expect(pad.querySelector(".console")?.textContent).toContain(`Launching as ${h}`);
+    expect(nudge(pad)).toHaveLength(0);
+    const res = await a.launch({ band: "low", callsign: callsign(), beacon: "no nudge" });
+    const sky = doc(await (await a.get(res.headers.get("location")!)).text());
+    expect(sky.getElementById("launched-notice")!.querySelector('a[href^="/operator/"]')).toBeNull();
+  });
+});

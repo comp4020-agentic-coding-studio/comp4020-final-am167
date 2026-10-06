@@ -342,7 +342,8 @@ listen();
 // a few seconds (on a phone it sits in the page and stays).
 const notice = document.getElementById("launched-notice");
 if (notice && getComputedStyle(notice).position === "absolute") {
-  setTimeout(() => notice.classList.add("fading"), 6000);
+  // longer when it asks something of you (claiming a handle)
+  setTimeout(() => notice.classList.add("fading"), notice.querySelector("a") ? 12_000 : 6000);
   notice.addEventListener("transitionend", () => (notice.hidden = true));
 }
 
