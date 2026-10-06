@@ -40,6 +40,14 @@ Dockerfile image and points the suite at that.
 `spec/README.md`, `PROCESS.md` and `reflections/README.md` say what they are
 for.
 
+### Performance
+
+Run the performance tests **only when I ask for them**; they're not part of
+`pnpm check`. `pnpm test:performance:budgets` checks bundle sizes;
+`pnpm test:performance` adds the real-Chrome suite (`scripts/performance/run.ts`),
+which starts its own server and database and writes reports to the ignored
+`performance-results/`. Don't commit the reports.
+
 ## How to work in here
 
 - Keep the app running locally while working, and kill any dev or preview

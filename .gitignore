@@ -22,3 +22,6 @@ mise.local.toml
 .claude/
 .astro
 data/
+
+# the deep performance suite's reports (scripts/performance/run.ts)
+performance-results/

@@ -481,3 +481,57 @@ touched.
 
 Visuals only, so no new spec. Checks green against a fresh production build
 (50 tests), checked at 1920×1080, 1440×800, 1536×770, 1280×680 and iPhone 14.
+
+## 2026-10-06 — Assignment 1's performance harness, carried over
+
+Worried that two Three.js scenes (the launchpad and the sky) would perform
+badly, especially on a phone, I asked for assignment 1's performance harness
+to be carried over and made to work here, without running the full suite
+yet. The harness was the part of assignment 1 that taught me to distrust a
+smooth frame rate: a vsync-clamped 60 or 120 fps hides whether a frame used
+a tenth of the GPU or all of it, and assignment 1's PR #20 drew a false
+conclusion from exactly that.
+
+What carried over unchanged: the report maths (`scripts/performance/report.ts`,
+with its tests), Chrome driven through `playwright-core`, the three named
+profiles (marking desktop, a throttled phone, a throttled laptop), the
+long-task, layout-shift and frame-miss sampling, the blank-page refresh
+calibration, and the GPU saturation probe that raises the drawing buffer until
+frames miss vsync and fits cost from those points only.
+
+What had to change, because this is a different kind of app:
+- **A server, not a folder.** Assignment 1 served `dist/` statically. Kessler
+  is server-rendered with a database, so the runner starts the built server
+  itself on a free port and a throwaway SQLite file, as the Dockerfile runs it
+  (production bundles, not the dev server). It never touches `data/app.db` or
+  the running app. Pointed at a deployed sky (`PERF_URL`), it launches nothing.
+- **A crowded sky.** The sky's per-frame cost (points, trails, label
+  placement) grows with what's in orbit, so the runner seeds 150 satellites,
+  one cookieless visitor each, since the server allows one live satellite per
+  person.
+- **Two scenes, and a real launch.** The in-page probe now names which scene
+  it is attached to, and hooks into both `launchpad.ts` and `scene.ts`. The
+  phases are the app's own: the launchpad idling behind the form, the launch
+  sampled frame by frame from ignition until the page fades to the sky, then
+  the sky's station view, zoom out, whole sky, and scrolled away.
+- **No fixed pixel cap.** Assignment 1 capped its globe at 1.25 Mpx and
+  predicted GPU cost there; neither scene here caps beyond a device pixel ratio
+  of 2, so cost is predicted at the buffer each profile actually allocated.
+- **The launchpad's 30 fps idle throttle** would read as a saturated GPU
+  (a steady 33 ms frame), so the GPU probe lifts it while measuring.
+- **Budgets for a lazy scene.** The fast layer now checks `dist/client` byte
+  budgets per chunk, and that three.js is never in a page script's static
+  import graph: both pages are meant to work before the scene arrives.
+
+First smoke run (desktop profile only, headless, M4): no frame misses or long
+tasks in any phase with 150 satellites; the launchpad idles at 30 renders/s
+as designed. The first GPU ladder (to 20 Mpx, assignment 1's) never saturated
+either scene, so there was no slope at all: these scenes are much cheaper than
+assignment 1's procedural planet. Extending it to 36 Mpx gave the sky a fit
+(0.85 ms/Mpx) but only from two points, which always shows R² 1.000, so the
+suite now flags a fit that thin rather than letting it look authoritative. The
+launchpad still didn't saturate twice. One run also flagged 432 ms of blocking
+time loading the sky on desktop, which didn't recur on the second run; a
+lead for when the full suite is run, not a conclusion. Chrome 154 headless
+also calibrated at 60 Hz where assignment 1's runs saw 120 Hz, which matters
+when comparing reports across the two projects.

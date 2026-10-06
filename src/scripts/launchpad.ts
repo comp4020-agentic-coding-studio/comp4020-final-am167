@@ -35,6 +35,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
+import { attachPerformanceProfiler, forcesContinuousRendering } from "./performance-profiler.ts";
 import { PLANET_COLOURS, STAR_COLOURS, seeded } from "./starfield.ts";
 
 // The launchpad at dusk: a rocket on its pad by a lattice tower, under
@@ -1045,6 +1046,8 @@ export function createPad(options: PadOptions): PadControls | null {
   renderer.setClearColor(PLANET_COLOURS.space);
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
+  // absent unless scripts/performance/run.ts asked for it
+  const profiler = attachPerformanceProfiler(renderer, canvas, "launchpad");
   const gl = renderer.getContext();
   const pointLimit = (gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array)[1] || 64;
 
@@ -1112,6 +1115,7 @@ export function createPad(options: PadOptions): PadControls | null {
     height = canvas.clientHeight;
     if (!width || !height) return;
     ratio = Math.min(window.devicePixelRatio || 1, 2);
+    ratio = profiler?.drawingPixelRatio(width, height, ratio) ?? ratio;
     renderer.setPixelRatio(ratio);
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
@@ -1325,7 +1329,8 @@ export function createPad(options: PadOptions): PadControls | null {
     for (const a of [gp, gc, gs, gl]) a.needsUpdate = true;
 
     (steam.points.material as ShaderMaterial).uniforms.scale.value = focal() * ratio;
-    renderer.render(scene, camera);
+    if (profiler) profiler.render(() => renderer.render(scene, camera));
+    else renderer.render(scene, camera);
 
     if (t >= 0 && report) {
       const speed = t < LIFTOFF ? 0 : (travelled(τ + 0.05) - s) / 0.05;
@@ -1348,12 +1353,14 @@ export function createPad(options: PadOptions): PadControls | null {
   canvas.addEventListener("webglcontextlost", stop);
   renderer.debug.onShaderError = stop;
 
+  // the GPU saturation probe needs every frame the GPU can manage
+  const unthrottled = forcesContinuousRendering(profiler?.config);
   function frame() {
     if (stopped) return;
     requestAnimationFrame(frame);
     const now = performance.now() / 1000;
     // while the form is being filled in, thirty frames a second will do
-    if (flight === null && now - last < 1 / 31) return;
+    if (flight === null && !unthrottled && now - last < 1 / 31) return;
     // a long pause (a background tab) shouldn't fling the smoke
     const dt = Math.min(0.05, now - last);
     last = now;

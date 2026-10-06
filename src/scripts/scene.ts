@@ -21,6 +21,7 @@ import {
 import { BAND_SPREAD, BANDS, OVERHEAD_HALF_WIDTH, STATION_ANGLE, angleAt, isOverhead, type Band, type Orbit } from "../lib/orbit.ts";
 import coastline from "./coastline.json";
 import { countdown } from "./countdown.ts";
+import { attachPerformanceProfiler } from "./performance-profiler.ts";
 import { PLANET_COLOURS, STAR_COLOURS, seeded } from "./starfield.ts";
 
 // The sky as seen from just above the station: the planet's limb along the
@@ -503,6 +504,8 @@ export function createScene(options: SceneOptions): SceneControls | null {
   }
   renderer.setClearColor(PLANET_COLOURS.space);
   renderer.autoClear = false;
+  // absent unless scripts/performance/run.ts asked for it
+  const profiler = attachPerformanceProfiler(renderer, canvas, "sky");
 
   // The stars are a backdrop with their own camera, which zooms by less than
   // the planet's: a far-off sky the planet pulls back against.
@@ -673,7 +676,8 @@ export function createScene(options: SceneOptions): SceneControls | null {
     height = rect.height;
     if (width === 0 || height === 0) return;
     // read each time: zoom or a move to another screen changes it
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const shipped = Math.min(window.devicePixelRatio || 1, 2);
+    const ratio = profiler?.drawingPixelRatio(width, height, shipped) ?? shipped;
     renderer.setPixelRatio(ratio);
     renderer.setSize(width, height, false);
     for (const layer of [starPoints, satellites, station]) {
@@ -852,13 +856,18 @@ export function createScene(options: SceneOptions): SceneControls | null {
     tg.getAttribute("tint").needsUpdate = true;
     tg.setDrawRange(0, placed.length * (TRAIL_STEPS - 1) * 6);
 
-    renderer.clear();
-    renderer.render(backdropScene, backdropCamera);
-    renderer.render(scene, camera);
+    if (profiler) profiler.render(draw);
+    else draw();
     // read the panels' boxes before any label is moved, so layout runs once
     const blocked = [...fixed, ...options.obstacles.map(boxOf)];
     label(blocked);
     point(mine, blocked);
+  }
+
+  function draw() {
+    renderer.clear();
+    renderer.render(backdropScene, backdropCamera);
+    renderer.render(scene, camera);
   }
 
   // Every satellite in view is named, unless its label would sit on one
