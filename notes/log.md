@@ -612,6 +612,9 @@ no scroll at any of the laptop sizes above.
 
 ## 2026-10-06 — Orbital decay, and burning up on re-entry
 
+Committed as `fb51cae` (everything below, including the review's fixes, the
+catalogue heights and the shorter decay), pushed to `C9`.
+
 Worked on branch `C9` (fast-forwarded to `main` first). Advay asked for
 orbital decay: everything slowly loses height and burns up, with bands as
 ranges rather than fixed shelves, and a re-entry that looks real.
