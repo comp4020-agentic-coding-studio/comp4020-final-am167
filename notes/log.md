@@ -397,3 +397,13 @@ band's beacons before you write, and aiming a "reply" launch, probably
 rejected as it makes debris intentional), plus the questions to settle first.
 It touches the debris data model, so it's flagged to decide before C9's debris
 table.
+
+## 2026-10-06 — Future work: a purpose
+
+The app had an incentive (be seen) but no goal and nothing shared to lose.
+Brainstormed four ideas with Advay; three went into `PLAN.md` under "A
+purpose" as future work he wants to think over: a "heard by" count as each
+satellite's score, debris taking the station's airtime as static, and a
+question from the station that beacons answer (which also gives colliding
+messages a connection). The fourth, a shared sky-health number on every
+screen, was left out for now.

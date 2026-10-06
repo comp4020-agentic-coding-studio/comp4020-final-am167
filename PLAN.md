@@ -296,6 +296,46 @@ Questions to settle first:
   model change and gets a decision record. So decide this before (or with)
   the C9 debris table, not after.
 
+## A purpose (future work, needs thought)
+
+_Added 2026-10-06; Advay likes all three and is still thinking them over.
+Not decided._
+
+Launching "to be seen" is the incentive, but there's no goal to chase and
+nothing shared to lose. Three ideas, meant to work together:
+
+1. **Be heard, and count it.** Each satellite keeps a "heard by" count: how
+   many people had the sky open when it passed over the station. It's your
+   score, shown to you and kept in the catalogue. It makes "be seen"
+   concrete, explains why the low band is worth the risk, and makes being
+   online at the same time matter. The server already knows who is
+   connected over SSE, so it's cheap to keep and testable over HTTP.
+2. **Airtime is the scarce thing, and debris eats it.** The station panel
+   has three slots. Debris passing overhead takes a slot too, heard as
+   static, so a cascade doesn't only destroy satellites, it drowns out the
+   beacons still flying. Your crowding costs others their audience and
+   theirs costs you yours: the attention-economy argument as one mechanic,
+   with no rules to vote on.
+3. **The station asks a question.** One question a day (or a week); beacons
+   answer it. Gives a stranger a reason to launch beyond "say something",
+   and a shared topic. It also helps "Collisions that mean something": two
+   answers to the same question already have a connection, so a wreck that
+   mixes their words reads as two people answering together. The catalogue
+   becomes an archive of answers per question.
+
+Things to ponder:
+
+- Does "heard by" count people, sessions or passes? Cookies are cheap (ADR
+  0002), so one person with many tabs or browsers could inflate it.
+- Does a score pull people towards gaming it rather than writing something
+  worth hearing? Whether to show others' counts, or only your own.
+- How much airtime debris takes, so a cascade hurts without the panel
+  being static for days.
+- Who writes the questions (Advay, a fixed list, rotating), and whether
+  beacons must answer or may ignore it.
+- Overlap check: none of this declares connections (Constellation) or grows
+  from presence (The Garden), but presence does now count towards a score.
+
 ## Open questions
 
 Resolved 2026-10-04 (now in "Decisions so far"): C8 scope, overhead, launch
@@ -313,3 +353,4 @@ flow, beacon rules, launch limits, bands.
   they caused.
 - **Before the C9 debris table:** how colliding beacons connect, and what of
   them the wreck keeps (see "Collisions that mean something").
+- **Open:** which of the purpose ideas to adopt (see "A purpose").
