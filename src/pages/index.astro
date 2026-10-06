@@ -75,6 +75,19 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       </svg>
       <div class="ground"></div>
     </div>
+    <canvas class="pad-view" id="pad-view" aria-hidden="true"></canvas>
+    <div class="fade" aria-hidden="true"></div>
+
+    <div class="hud" id="hud" aria-hidden="true" hidden>
+      <p class="hud-mission"><span id="hud-callsign"></span> <span class="hud-dim">to</span> <span id="hud-band"></span></p>
+      <p class="hud-clock" id="hud-clock">T+ 00:00.0</p>
+      <dl class="hud-readouts">
+        <div><dt>Alt</dt><dd><span id="hud-alt">0.0</span> km</dd></div>
+        <div><dt>Vel</dt><dd><span id="hud-vel">0.00</span> km/s</dd></div>
+      </dl>
+    </div>
+    <button type="button" class="skip" id="skip" hidden>Skip to the sky ›</button>
+    <p class="visually-hidden" role="status" id="launch-status"></p>
 
     <section class="intro">
       <h1>Kessler</h1>
@@ -165,12 +178,68 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   </main>
 
   <script>
-    // Plays the launch before going to the sky: the rocket lifts, the view
-    // follows it up, then the sky page takes over. Without this script the form
-    // posts and redirects as normal.
+    import type { Framing, PadControls } from "../scripts/launchpad.ts";
+
+    // Plays the launch before going to the sky: ignition, liftoff, and the
+    // camera following the rocket up until the ground is the planet's limb,
+    // where the sky page takes over. Without this script the form posts and
+    // redirects as normal; without WebGL the drawn rocket lifts off instead.
     const form = document.querySelector<HTMLFormElement>("form[data-launch]")!;
     const formError = document.getElementById("form-error")!;
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const narrow = matchMedia("(max-width: 52rem)");
+    const intro = document.querySelector<HTMLElement>(".intro")!;
+    const panel = document.querySelector<HTMLElement>(".console")!;
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+
+    // Where the rocket stands on the page: in the open ground between the
+    // intro and the form, no taller than the room under the intro; on a phone,
+    // in the gutter beside the intro, scrolling with it.
+    function measure(width: number, height: number): Framing {
+      // the text itself, not its grid cell, which stretches to the form's height
+      const lines = [...intro.children].map((el) => el.getBoundingClientRect());
+      if (narrow.matches) {
+        // the horizon just above the form, which hides the ground below it
+        return { x: width - 1.9 * rem, y: panel.getBoundingClientRect().top - 0.75 * rem, height: 9 * rem };
+      }
+      const ground = height - 2.5 * rem;
+      const room = (ground - Math.max(...lines.map((r) => r.bottom)) - 2 * rem) * 0.78;
+      const right = Math.max(...lines.map((r) => r.right));
+      return {
+        x: (right + panel.getBoundingClientRect().left) / 2,
+        y: ground,
+        height: Math.min(26 * rem, Math.max(9 * rem, room)),
+      };
+    }
+    // measured again only when the layout can have moved, not every frame
+    let framing: Framing | null = null;
+    let measuredAt = "";
+    const remeasure = () => (framing = null);
+    addEventListener("scroll", remeasure, { passive: true });
+    addEventListener("resize", remeasure);
+    document.fonts?.ready.then(remeasure);
+    function frame(width: number, height: number): Framing {
+      if (!framing || measuredAt !== `${width}x${height}`) {
+        framing = measure(width, height);
+        measuredAt = `${width}x${height}`;
+      }
+      return framing;
+    }
+
+    let scene: PadControls | null = null;
+    import("../scripts/launchpad.ts")
+      .then(({ createPad }) => {
+        scene = createPad({
+          canvas: document.getElementById("pad-view") as HTMLCanvasElement,
+          frame,
+          reduced,
+          // the drawn rocket comes back if the scene stops
+          lost: () => document.body.classList.remove("has-scene"),
+        });
+        if (scene) document.body.classList.add("has-scene");
+      })
+      // the chunk didn't load, or WebGL isn't there: the drawn rocket stays
+      .catch(() => {});
 
     function showErrors(errors: Record<string, string>) {
       formError.textContent = errors.form ?? "";
@@ -184,6 +253,66 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       const first = Object.keys(errors).find((f) => f !== "form");
       form.querySelector<HTMLElement>(first === "band" ? "[name=band]" : `#${first}`)?.focus();
     }
+
+    // The mission readout over the launch.
+    const hud = document.getElementById("hud")!;
+    const clock = document.getElementById("hud-clock")!;
+    const alt = document.getElementById("hud-alt")!;
+    const vel = document.getElementById("hud-vel")!;
+    const twoDigits = (n: number) => String(Math.floor(n)).padStart(2, "0");
+
+    function play(redirect: string) {
+      let going = false;
+      const go = () => {
+        if (going || !redirect) return;
+        going = true;
+        location.assign(redirect);
+      };
+      const data = new FormData(form);
+      const callsign = String(data.get("callsign") ?? "");
+      const band = form.querySelector<HTMLInputElement>("[name=band]:checked")?.closest("label")?.querySelector(".band-name")?.textContent ?? "";
+      // set a moment after the form goes inert, so screen readers announce it
+      setTimeout(() => {
+        document.getElementById("launch-status")!.textContent = `Launching ${callsign} to the ${band.toLowerCase()} band.`;
+      }, 100);
+      form.inert = true;
+      document.body.classList.add("launching");
+      // the sky page loads while the launch plays
+      const prefetch = document.createElement("link");
+      prefetch.rel = "prefetch";
+      prefetch.href = redirect;
+      document.head.append(prefetch);
+
+      if (!scene) {
+        setTimeout(go, 2400);
+        return;
+      }
+      document.getElementById("hud-callsign")!.textContent = callsign;
+      document.getElementById("hud-band")!.textContent = `${band} orbit`;
+      hud.hidden = false;
+      const skip = document.getElementById("skip")!;
+      skip.hidden = false;
+      skip.focus();
+      skip.addEventListener("click", go);
+      addEventListener("keydown", (e) => e.key === "Escape" && go());
+      // whatever happens to the scene, the sky is never more than ten
+      // seconds away
+      setTimeout(go, 10_000);
+      scene
+        .launch(({ time, altitude, speed }) => {
+          clock.textContent = `T+ ${twoDigits(time / 60)}:${twoDigits(time % 60)}.${Math.floor((time * 10) % 10)}`;
+          alt.textContent = altitude.toFixed(1);
+          vel.textContent = speed.toFixed(2);
+        })
+        .then(() => {
+          // a fade to the dark the sky page opens on
+          document.body.classList.add("arrived");
+          setTimeout(go, 450);
+        });
+    }
+
+    // a dry run in development, to watch the launch without launching
+    if (import.meta.env.DEV) Object.assign(window, { dryRun: () => play("") });
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -202,14 +331,19 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
           return;
         }
         showErrors({});
-        if (reduced) return location.assign(body.redirect);
-        form.inert = true;
-        document.body.classList.add("launching");
-        setTimeout(() => location.assign(body.redirect), 2400);
+        // the launch went through, so the sky is where to go regardless
+        const redirect = typeof body.redirect === "string" ? body.redirect : "/sky/";
+        if (reduced) return location.assign(redirect);
+        play(redirect);
       } catch {
         showErrors({ form: "Couldn't reach the launchpad. Check your connection and try again." });
         button.disabled = false;
       }
+    });
+
+    // Back from the sky, the page may come back mid-launch from the cache.
+    addEventListener("pageshow", (e) => {
+      if (e.persisted && document.body.classList.contains("launching")) location.reload();
     });
   </script>
 </Base>
@@ -282,6 +416,21 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     position: relative;
     z-index: 1;
     max-width: 34rem;
+    /* the box fits the text, so the haze behind it does too */
+    align-self: start;
+    /* legible over the afterglow: a soft shadow behind the text, and a
+       darker haze behind the block */
+    text-shadow: 0 0 1.5rem rgb(3 6 14 / 0.7), 0 0 0.4rem rgb(3 6 14 / 0.5);
+    isolation: isolate;
+  }
+
+  .intro::before {
+    content: "";
+    position: absolute;
+    inset: -2rem -3rem -2rem calc(-1 * var(--gutter));
+    z-index: -1;
+    background: radial-gradient(farthest-side, rgb(3 6 14 / 0.6) 45%, transparent);
+    pointer-events: none;
   }
 
   h1 {
@@ -315,7 +464,8 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     justify-self: end;
     margin-bottom: 1.5rem;
     padding: 1.25rem 1.5rem;
-    background: rgb(9 18 36 / 0.88);
+    background: rgb(9 18 36 / 0.78);
+    backdrop-filter: blur(10px);
     border: 1px solid var(--grid-strong);
     border-radius: 4px;
     transition: opacity 0.5s;
@@ -470,23 +620,161 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     cursor: not-allowed;
   }
 
-  /* The launch: the flame lights, the rocket lifts, the ground falls away. */
+  /* The scene: a fixed canvas behind the page, fading in once drawn. The
+     drawn rocket and ground above stay for when there's no WebGL. */
+  .pad-view {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.8s;
+  }
+
+  :global(body.has-scene) .pad-view {
+    opacity: 1;
+  }
+
+  .gantry,
+  .ground {
+    transition: opacity 0.8s;
+  }
+
+  :global(body.has-scene) .gantry,
+  :global(body.has-scene) .ground {
+    opacity: 0;
+  }
+
+  /* The launch: the page clears, the scene plays, and it ends on the dark the
+     sky page opens on. */
+  :global(body.launching) {
+    overflow: hidden;
+  }
+
   :global(body.launching) .console,
   :global(body.launching) .intro {
     opacity: 0;
     transition: opacity 0.4s;
   }
 
-  :global(body.launching) .flame {
+  .fade {
+    position: fixed;
+    inset: 0;
+    z-index: 3;
+    background: #03060e;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.45s ease-in;
+  }
+
+  :global(body.arrived) .fade {
+    opacity: 1;
+  }
+
+  .hud {
+    position: fixed;
+    left: var(--gutter);
+    bottom: 2rem;
+    z-index: 2;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 6px rgb(3 6 14 / 0.8);
+    animation: hud-in 0.6s 0.5s both;
+  }
+
+  .hud p,
+  .hud dl {
+    margin: 0;
+  }
+
+  .hud-mission {
+    font-size: var(--step--1);
+    font-weight: 700;
+    font-variation-settings: "wdth" 118;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+
+  .hud-dim,
+  .hud dt {
+    color: var(--ink-dim);
+  }
+
+  .hud-clock {
+    font-size: var(--step-2);
+    font-weight: 800;
+    font-variation-settings: "wdth" 112;
+    letter-spacing: 0.02em;
+  }
+
+  .hud-readouts {
+    display: flex;
+    gap: 1.5rem;
+    font-size: var(--step--1);
+  }
+
+  .hud-readouts div {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .hud dt {
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .hud dd {
+    margin: 0;
+    min-width: 5.5em;
+  }
+
+  @keyframes hud-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+  }
+
+  .skip {
+    position: fixed;
+    right: var(--gutter);
+    bottom: 2rem;
+    z-index: 2;
+    width: auto;
+    padding: 0.45rem 0.8rem;
+    font: inherit;
+    font-size: var(--step--1);
+    font-weight: 600;
+    color: var(--ink);
+    background: rgb(3 6 14 / 0.8);
+    border: 1px solid var(--grid-strong);
+    border-radius: 4px;
+    cursor: pointer;
+    animation: hud-in 0.6s 1s both;
+  }
+
+  .skip:hover {
+    background: rgb(3 6 14 / 0.9);
+    color: var(--amber);
+    border-color: var(--amber-dim);
+  }
+
+  /* Without the scene, the drawn rocket lifts off and the ground falls away. */
+  :global(body.launching:not(.has-scene)) .flame {
     opacity: 1;
     animation: flicker 0.12s infinite alternate;
   }
 
-  :global(body.launching) .rocket {
+  :global(body.launching:not(.has-scene)) .rocket {
     transform: translateY(-140vh);
   }
 
-  :global(body.launching) .scene {
+  :global(body.launching:not(.has-scene)) .scene {
     transform: translateY(70vh);
   }
 

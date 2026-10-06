@@ -21,6 +21,7 @@ import {
 import { BAND_SPREAD, BANDS, OVERHEAD_HALF_WIDTH, STATION_ANGLE, angleAt, isOverhead, type Band, type Orbit } from "../lib/orbit.ts";
 import coastline from "./coastline.json";
 import { countdown } from "./countdown.ts";
+import { PLANET_COLOURS, STAR_COLOURS, seeded } from "./starfield.ts";
 
 // The sky as seen from just above the station: the planet's limb along the
 // bottom, the three bands stacked over it, and satellites rising in on the
@@ -111,28 +112,7 @@ export function satelliteColour(id: number): [number, number, number] {
   ];
 }
 
-// The same stars on every visit.
-function seeded(seed: number) {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 // ── the backdrop: stars and the Milky Way ─────────────────────────────────
-
-// Spectral colours from hot blue-white to cool orange, weighted as the
-// naked-eye sky is: mostly white, a few blue, some yellow and orange.
-const STAR_COLOURS: [string, number][] = [
-  ["#9bb0ff", 0.06],
-  ["#cad7ff", 0.18],
-  ["#f8f7ff", 0.36],
-  ["#fff4ea", 0.2],
-  ["#ffe2b8", 0.12],
-  ["#ffc787", 0.08],
-];
 
 const STARFIELD = { left: -9, right: 9, bottom: 1, top: 10 };
 // the Milky Way's band, as a line across the backdrop
@@ -273,9 +253,9 @@ function globe(): Mesh {
   geometry.rotateX(Math.PI / 2);
   const material = new ShaderMaterial({
     uniforms: {
-      deep: { value: new Color("#050b1a") },
-      lit: { value: new Color("#11264a") },
-      rim: { value: new Color("#3f8fd6") },
+      deep: { value: new Color(PLANET_COLOURS.deep) },
+      lit: { value: new Color(PLANET_COLOURS.lit) },
+      rim: { value: new Color(PLANET_COLOURS.rim) },
     },
     vertexShader: /* glsl */ `
       varying vec3 vNormal;
@@ -345,8 +325,8 @@ function atmosphere(): Mesh {
       radius: { value: PLANET },
       // thinner as the planet shrinks, so it stays a rim, not a halo
       thickness: { value: 1 },
-      air: { value: new Color("#86eab0") },
-      haze: { value: new Color("#3d86dc") },
+      air: { value: new Color(PLANET_COLOURS.air) },
+      haze: { value: new Color(PLANET_COLOURS.haze) },
     },
     vertexShader: /* glsl */ `
       varying vec2 vPos;
@@ -521,7 +501,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
   } catch {
     return null;
   }
-  renderer.setClearColor("#03060e");
+  renderer.setClearColor(PLANET_COLOURS.space);
   renderer.autoClear = false;
 
   // The stars are a backdrop with their own camera, which zooms by less than

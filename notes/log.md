@@ -415,3 +415,69 @@ and the argument don't land. Added a plain-language explainer page (e.g.
 `/kessler/`) to "Later" in `PLAN.md`: what it is, the real cases, the
 commons angle and how the app's mechanics map onto it, linked from the
 launchpad and the sky. Not scheduled yet.
+
+## 2026-10-06 — The launchpad in Three.js, and a launch that becomes the sky
+
+I liked the launchpad's layout but wanted it more striking, and the launch
+more realistic. The SVG rocket is now a Three.js scene behind the unchanged
+form (ADR 0006, proposed).
+
+![The launchpad before: an SVG rocket and a flat dusk gradient](screenshots/2026-10-06-launchpad-before.png)
+
+![After: a lit rocket by its tower under two searchlights, hills against the afterglow](screenshots/2026-10-06-launchpad-three.png)
+
+- **The scene** (`src/scripts/launchpad.ts`): dusk at the pad, with a lit
+  rocket, a lattice tower with umbilical arms and red warning lights, two
+  searchlights, ridges of hills fading into the haze, thin cloud and the same
+  stars as the sky page (now shared through `src/scripts/starfield.ts`). It's
+  framed from the page's own layout: between the intro and the form on a
+  desktop, in the gutter beside the intro on a phone, standing on a horizon
+  just above the form.
+- **The launch**, about seven seconds: ignition and a ground cloud thrown out
+  sideways by the flame trench, the arms swinging back, liftoff with camera
+  shake, a gravity turn eastward (left to right, the way satellites cross the
+  sky page), and a plume that lights up blue-white once it climbs into
+  sunlight the ground can't see. The pad sits on top of a planet, so the
+  camera pulls back until the ground is the planet's limb, like the sky
+  page's view, then fades to the sky page's dark, and the sky page's canvas
+  fades in from it. A readout shows the callsign, the band, T+, altitude and
+  speed. Skip button and Escape.
+- No JavaScript: the form posts as before. No WebGL, or the scene stops: the
+  SVG rocket and its CSS launch come back. Reduced motion: a still scene, and
+  a launch goes straight to the sky.
+- Three.js is its own chunk, shared with the sky page, so it's cached by the
+  time the launch arrives there.
+
+![The launch from ignition to the view of the limb](screenshots/2026-10-06-launch-sequence.png)
+
+Fixed while checking it in Chrome: the rocket drew at its minimum size (I
+measured the intro's grid cell, which stretches to the form's height, not its
+text); puffs of smoke thrown at the camera filled the screen as overexposed
+squares (now thrown sideways, faded near the camera, and round to the
+sprite's edge); a teal flood across the sky as the camera rose through the
+atmosphere's shell (the limb glow now only counts lines of sight that dip
+below the horizontal); and on a phone the rocket left the frame during the
+pull-back (the camera follows it longer, and the end shot turns towards its
+arc). The dev server also served a stale page script until the file was
+touched.
+
+**Adversarial review** (a fresh Sonnet agent, on the diff). Acted on:
+- A shader failure or a lost WebGL context mid-launch could leave a blank,
+  inert page. The scene now stops, hands back to the SVG rocket, and the
+  launch still ends; the page goes to the sky after ten seconds whatever
+  happens.
+- The launch clock ran on wall time, so a background tab skipped to the end;
+  it now advances with the frames drawn.
+- Escape and Skip could navigate twice; focus is moved to Skip when the
+  launch starts; the screen-reader status is set after the form goes inert.
+- Phone cost: the two spheres drop from 384×192 to 192×96 segments, the
+  ground's noise is skipped once the camera is in orbit, the idle scene
+  draws at 30 fps, the layout is measured on scroll and resize instead of
+  every frame, and point sizes respect the GPU's limit.
+- The SVG rocket now fades out as the canvas fades in, not before.
+- Contrast: the intro text sits over the bright afterglow on a phone, so it
+  has a soft dark haze behind it as well as a text shadow; the dim paragraph
+  measures about 5:1 against what's behind it.
+
+Visuals only, so no new spec. Checks green against a fresh production build
+(50 tests), checked at 1920×1080, 1440×800, 1536×770, 1280×680 and iPhone 14.

@@ -22,6 +22,9 @@ _Last updated 2026-10-06._
   station panel over the scene, the catalogue below (`f8f7003`). Then a
   zoom-out to the whole planet, so the rest of the sky (and C9's collisions)
   can be seen.
+  2026-10-06: the launchpad redrawn in Three.js too (ADR 0006, proposed):
+  a dusk pad scene, and a launch that climbs through a gravity turn while
+  the camera pulls back to the planet's limb and hands off to the sky page.
 - **C8 cutoff:** Tue 6 Oct 2026, 12:00 (moved from Monday for Labour Day).
 - **Next, in order:**
   1. Advay rewrites the agent's README draft (`README.md`, published at

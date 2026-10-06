@@ -12,9 +12,13 @@ export default defineConfig({
     allowedDomains: [{ hostname: "*.fly.dev" }, { hostname: "localhost" }, { hostname: "127.0.0.1" }],
   },
   vite: {
-    // The sky's scene chunk is Three.js plus the baked coastlines: about
-    // 650 kB minified, 185 kB gzipped. It loads after the page already works
-    // (src/scripts/sky.ts), so the default 500 kB warning doesn't apply.
-    build: { chunkSizeWarningLimit: 800 },
+    // Three.js is its own chunk, shared by the launchpad's scene and the
+    // sky's: about 570 kB minified, 140 kB gzipped. Both pages load it after
+    // they already work (src/pages/index.astro, src/scripts/sky.ts), so the
+    // default 500 kB warning doesn't apply.
+    build: {
+      chunkSizeWarningLimit: 800,
+      rollupOptions: { output: { manualChunks: (id) => (id.includes("/node_modules/three/") ? "three" : undefined) } },
+    },
   },
 });

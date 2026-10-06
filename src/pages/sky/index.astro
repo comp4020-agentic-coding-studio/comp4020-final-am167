@@ -132,10 +132,18 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
     background: var(--space);
   }
 
+  /* fades in from the dark once drawn, so arriving from a launch, which
+     ends on that dark, is one continuous shot */
   .sky-page canvas {
     display: block;
     width: 100%;
     height: 100%;
+    opacity: 0;
+    transition: opacity 1s;
+  }
+
+  .sky-page canvas.drawn {
+    opacity: 1;
   }
 
   .sky-page .no-view {

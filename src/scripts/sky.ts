@@ -60,6 +60,7 @@ import("./scene.ts")
       ],
     });
     if (!started) return noScene();
+    requestAnimationFrame(() => requestAnimationFrame(() => canvas.classList.add("drawn")));
     // over the station, or the whole planet with every orbit in view
     const zoom = document.getElementById("zoom") as HTMLButtonElement;
     let out = false;
