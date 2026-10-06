@@ -386,3 +386,14 @@ No scroll at 1920×1080, 1512×860, 1536×770, 1440×800, 1280×720 or 1280×680
 and the rocket's top stays below the text at each. The phone layout is
 unchanged and scrolls as before. Layout only, so no new spec; checks green
 (50 tests).
+
+## 2026-10-06 — Future work: collisions between messages
+
+Advay wants colliding messages to mean something: right now two beacons
+collide by orbit alone and share nothing. Added "Collisions that mean
+something" to `PLAN.md` as open future work, with four directions (the wreck
+keeps words from both beacons, the collision shown as a couplet, seeing your
+band's beacons before you write, and aiming a "reply" launch, probably
+rejected as it makes debris intentional), plus the questions to settle first.
+It touches the debris data model, so it's flagged to decide before C9's debris
+table.

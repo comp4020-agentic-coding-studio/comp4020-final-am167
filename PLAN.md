@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-05._
+_Last updated 2026-10-06._
 
 - **Done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -255,6 +255,47 @@ _Proposed, not final: the working assumption for C8, likely to be revisited._
   as stars joined by declared connections) and The Garden (grows only while
   people are present together).
 
+## Collisions that mean something (future work, needs thought)
+
+_Added 2026-10-06 at Advay's request; not decided._
+
+Right now a collision is just two orbits meeting: the two beacons involved
+have nothing to do with each other, and nothing of them survives in the
+wreck. The collision should read as a meeting of two messages, so that what
+collides has a connection, or gains one by colliding. Directions to think
+through (not exclusive):
+
+- **The wreck keeps the words.** Each fragment carries a word or two from
+  each beacon. When debris passes over the station it's heard as broken
+  static mixing both lines, and the catalogue shows each fragment's words
+  next to the two lines they came from. A cascade then scatters words across
+  the sky: a fragment of A and B that hits C makes fragments carrying all
+  three, so the lineage (ADR 0003) is readable as text, not just ids.
+- **The collision as a couplet.** The collision event shows both beacons
+  together ("A said … / B said …") on every screen and in the catalogue.
+  Cheap, and pairs naturally with the first idea, but on its own it only
+  frames a random pairing.
+- **Write knowing your neighbours.** At launch, show (or play) the beacons
+  already in the band you picked, so you write in the context of who you
+  might hit. The connection comes from the person, not the server.
+- **Aim at a satellite.** A "reply" launch: pick a live satellite and the
+  server picks a phase whose orbit crosses it. Most direct connection, but it
+  turns collisions into something you aim at, which undercuts the argument
+  (debris as a cost nobody meant to cause), and drifts towards
+  Constellation's declared connections. Probably rejected; noted so it's
+  weighed.
+
+Questions to settle first:
+
+- Is the connection **thematic** (the two lines relate) or **causal** (the
+  wreck shows both lines because they hit)? Only the second can be done
+  without the server reading meaning into text.
+- The blocklist has to run on mixed words too: two clean beacons can combine
+  into something that isn't.
+- If fragments carry words, the debris record needs them, which is a data
+  model change and gets a decision record. So decide this before (or with)
+  the C9 debris table, not after.
+
 ## Open questions
 
 Resolved 2026-10-04 (now in "Decisions so far"): C8 scope, overhead, launch
@@ -270,3 +311,5 @@ flow, beacon rules, launch limits, bands.
 - **Before the final README:** the name (Kessler stays the working title).
 - **Open:** whether the catalogue shows owners' callsigns next to the debris
   they caused.
+- **Before the C9 debris table:** how colliding beacons connect, and what of
+  them the wreck keeps (see "Collisions that mean something").
