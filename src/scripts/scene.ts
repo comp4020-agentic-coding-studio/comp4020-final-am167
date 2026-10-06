@@ -6,6 +6,7 @@ import {
   DoubleSide,
   DynamicDrawUsage,
   Float32BufferAttribute,
+  Group,
   LineSegments,
   Mesh,
   OrthographicCamera,
@@ -62,6 +63,8 @@ export interface SceneImpact {
   at: number;
   angle: number;
   radius: number;
+  // one of the two is the viewer's: the view always follows it
+  mine?: boolean;
 }
 
 export interface SceneControls {
@@ -125,9 +128,15 @@ const place = (radius: number, angle: number, planet: number): [number, number] 
 };
 
 // A collision: a pulsing ring where it will happen, over the last WARN_MS
-// before it, then a flash and a ring spreading out over FLASH_MS.
+// before it, then a flash, rings and sparks over FLASH_MS (sparks SPARK_MS).
 const WARN_MS = 30_000;
 const FLASH_MS = 6_000;
+const SPARK_MS = 2_600;
+const SPARKS = 40;
+const EMBER_GLOW: [number, number, number] = [1, 0.45, 0.12];
+// following a collision: how long before it the view turns, how long it
+// holds after, how quickly it turns (ms), and how often for others'
+const PAN = { lead: 5_000, hold: 5_000, ease: 380, every: 30_000 };
 const GREY: [number, number, number] = [0.42, 0.45, 0.5];
 const DERELICT: [number, number, number] = [0.55, 0.5, 0.44];
 const FLASH: [number, number, number] = [1, 0.92, 0.8];
@@ -591,6 +600,8 @@ export function createScene(options: SceneOptions): SceneControls | null {
   const satellites = glowPoints();
   const impacts = glowPoints(true);
   impacts.frustumCulled = false;
+  const sparks = glowPoints();
+  sparks.frustumCulled = false;
   const reentry = createReentry(reduced);
   const station = glowPoints();
   station.geometry.setAttribute("position", new Float32BufferAttribute([0, PLANET + 0.01, 8], 3));
@@ -608,11 +619,16 @@ export function createScene(options: SceneOptions): SceneControls | null {
   starPoints.renderOrder = 1;
   backdropScene.add(backdrop, starPoints);
   const bandRings = bands();
-  const layers = [earth, coasts, air, bandRings, beam, trails, ...reentry.layers, station, satellites, impacts];
+  const layers = [earth, coasts, air, bandRings, beam, trails, ...reentry.layers, station, satellites, impacts, sparks];
+  // the ground turns when the view follows a collision; the orbits are
+  // placed turned (place(), with `turn`), and the bands are circles
+  const ground = new Group();
+  scene.add(ground);
   layers.forEach((layer, i) => {
     layer.renderOrder = i;
     if (layer !== earth && layer !== coasts) layer.position.z = 8;
-    scene.add(layer);
+    if ([earth, coasts, beam, station].includes(layer)) ground.add(layer);
+    else scene.add(layer);
   });
   const sized = [air, bandRings, beam].map((layer) => (layer.material as ShaderMaterial).uniforms.radius);
 
@@ -731,7 +747,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
     renderer.setPixelRatio(ratio);
     pixelRatio = ratio;
     renderer.setSize(width, height, false);
-    for (const layer of [starPoints, satellites, station]) {
+    for (const layer of [starPoints, satellites, station, impacts, sparks]) {
       (layer.material as ShaderMaterial).uniforms.ratio.value = ratio;
     }
     // stars are thinned for the horizon view's scale
@@ -810,62 +826,215 @@ export function createScene(options: SceneOptions): SceneControls | null {
   const tintOf = (sat: SceneSatellite) =>
     kindOf(sat) === "debris" ? GREY : kindOf(sat) === "derelict" ? DERELICT : colourOf(sat.id);
 
-  // the collision layer's buffers, grown as needed
-  let impactCapacity = 0;
-  let impactBuffers: typeof pointBuffers;
-  function growImpacts(needed: number) {
-    if (needed <= impactCapacity) return;
-    impactCapacity = Math.max(needed, impactCapacity * 2, 8);
-    impactBuffers = {
-      position: new Float32Array(impactCapacity * 3),
-      colour: new Float32Array(impactCapacity * 3),
-      size: new Float32Array(impactCapacity),
-      core: new Float32Array(impactCapacity),
-      halo: new Float32Array(impactCapacity),
+  // A layer of glowing points whose buffers grow as needed: the collisions'
+  // flashes and rings, and their sparks.
+  function glowBuffers(layer: Points) {
+    let capacity = 0;
+    let buffers = { position: new Float32Array(0), colour: new Float32Array(0), size: new Float32Array(0), core: new Float32Array(0), halo: new Float32Array(0) };
+    const names = [["position", 3], ["colour", 3], ["size", 1], ["core", 1], ["halo", 1]] as const;
+    return {
+      ensure(needed: number) {
+        if (needed > capacity) {
+          capacity = Math.max(needed, capacity * 2, 8);
+          buffers = {
+            position: new Float32Array(capacity * 3),
+            colour: new Float32Array(capacity * 3),
+            size: new Float32Array(capacity),
+            core: new Float32Array(capacity),
+            halo: new Float32Array(capacity),
+          };
+          layer.geometry.dispose();
+          for (const [name, n] of names) {
+            layer.geometry.setAttribute(name, new BufferAttribute(buffers[name], n).setUsage(DynamicDrawUsage));
+          }
+        }
+        return buffers;
+      },
+      commit(count: number) {
+        for (const [name] of names) layer.geometry.getAttribute(name).needsUpdate = true;
+        layer.geometry.setDrawRange(0, count);
+      },
     };
-    const g = impacts.geometry;
-    g.dispose();
-    for (const [name, size] of [["position", 3], ["colour", 3], ["size", 1], ["core", 1], ["halo", 1]] as const) {
-      g.setAttribute(name, new BufferAttribute(impactBuffers[name], size).setUsage(DynamicDrawUsage));
-    }
   }
-  growImpacts(1);
+  const impactGlow = glowBuffers(impacts);
+  const sparkGlow = glowBuffers(sparks);
+  impactGlow.ensure(1);
+  sparkGlow.ensure(1);
 
-  // Collisions coming (a ring pulsing where they'll meet) and just happened
-  // (a flash, and a ring spreading out). All from the predicted moment, so
-  // every screen sees it at once.
+  // Sparks thrown out of a collision: most along the two orbits that met,
+  // the rest any way. From a generator seeded by the collision, so every
+  // screen throws the same spray.
+  const sprays = new Map<number, { angle: number; speed: number; size: number; hot: number }[]>();
+  function sprayOf(at: number) {
+    let spray = sprays.get(at);
+    if (spray) return spray;
+    const random = seeded(Math.floor(at) % 2_147_483_647);
+    spray = Array.from({ length: SPARKS }, () => {
+      const along = random() < 0.7;
+      const spread = (random() - 0.5) * (along ? 0.9 : 2 * Math.PI);
+      return {
+        // relative to the orbit's way, either way along it
+        angle: (along ? (random() < 0.5 ? 0 : Math.PI) : 0) + spread,
+        speed: 60 + random() * 200,
+        size: 5 + random() * 6,
+        hot: random(),
+      };
+    });
+    if (sprays.size > 50) sprays.clear();
+    sprays.set(at, spray);
+    return spray;
+  }
+
+  // Collisions coming (a ring pulsing where they'll meet) and just happened:
+  // a white-hot flash that cools to orange, two shock rings racing out, and
+  // a spray of sparks. All from the predicted moment, so every screen sees
+  // it at once.
   function drawImpacts(time: number) {
-    const shown: [SceneImpact, number][] = [];
+    const px = (2 * half) / width;
+    const glows: { x: number; y: number; colour: number[]; core: number; halo: number; size: number }[] = [];
+    const sparksShown: { x: number; y: number; colour: number[]; size: number }[] = [];
+    flashAt = null;
     for (const impact of options.impacts?.() ?? []) {
       const since = time - impact.at;
-      if (since > -WARN_MS && since < FLASH_MS) shown.push([impact, since]);
-    }
-    growImpacts(shown.length);
-    const { position, colour, size, core, halo } = impactBuffers;
-    shown.forEach(([impact, since], i) => {
-      const [x, y] = place(impact.radius, impact.angle, planet);
-      position.set([x, y, 0], i * 3);
+      if (since <= -WARN_MS || since >= FLASH_MS) continue;
+      const angle = impact.angle - turn;
+      const [x, y] = place(impact.radius, angle, planet);
       if (since < 0) {
-        // coming: a faint ring, pulsing faster as it nears
+        // coming: a ring, pulsing faster and brighter as it nears
         const near = 1 + since / WARN_MS;
         const beat = reduced ? 0.6 : 0.5 + 0.5 * Math.sin(time / (260 - 180 * near));
-        colour.set(amber.map((v) => v * (0.25 + 0.55 * near) * beat), i * 3);
-        core[i] = 0.01;
-        halo[i] = 9;
-        size[i] = 24;
-      } else {
-        // the flash, then a ring spreading out and fading
-        const t = since / FLASH_MS;
-        const fade = (1 - t) ** 2;
-        colour.set(FLASH.map((v) => v * fade * 1.6), i * 3);
-        core[i] = reduced ? 4 : 8 * (1 - t) ** 3 + 1;
-        halo[i] = reduced ? 0 : 10 + 70 * Math.sqrt(t);
-        size[i] = 2 * halo[i] + 30;
+        glows.push({ x, y, colour: amber.map((v) => v * (0.3 + 0.7 * near) * beat), core: 0.01, halo: 10, size: 26 });
+        continue;
       }
+      const t = since / FLASH_MS;
+      // the flash: white-hot for an instant, cooling to an orange glow
+      const white = Math.max(0, 1 - since / 900);
+      const glow = (1 - t) ** 2;
+      const hot = FLASH.map((v, k) => (v * white + EMBER_GLOW[k] * (1 - white)) * (1.4 + 4 * white) * glow);
+      glows.push({ x, y, colour: hot, core: reduced ? 6 : 5 + 40 * white ** 1.5 + 5 * glow, halo: 0, size: reduced ? 40 : 80 + 220 * white });
+      if (!reduced) {
+        // a fast shock ring, and a slower, fainter one behind it
+        const fast = Math.min(1, since / 1400);
+        if (fast < 1) {
+          glows.push({ x, y, colour: FLASH.map((v) => v * 1.4 * (1 - fast) ** 1.5), core: 0.01, halo: 12 + 130 * Math.sqrt(fast), size: 2 * (12 + 130 * Math.sqrt(fast)) + 20 });
+        }
+        glows.push({ x, y, colour: EMBER_GLOW.map((v) => v * 0.9 * glow), core: 0.01, halo: 10 + 70 * Math.sqrt(t), size: 2 * (10 + 70 * Math.sqrt(t)) + 20 });
+        // and the sparks, slowing as they go, cooling from white to red
+        if (since < SPARK_MS) {
+          const s = since / SPARK_MS;
+          // the orbit's way here, on screen (the chart is seen mirrored)
+          const way = Math.PI / 2 - angle;
+          const travelled = (1 - Math.exp(-since / 600)) * 0.6;
+          for (const spark of sprayOf(impact.at)) {
+            const dir = way + spark.angle;
+            const d = spark.speed * travelled * px;
+            const fade = (1 - s) ** 1.5;
+            const cool = Math.min(1, s * 1.5 + spark.hot * 0.3);
+            const c = FLASH.map((v, k) => (v * (1 - cool) + EMBER[k] * cool) * fade * 1.8);
+            sparksShown.push({ x: x + d * Math.cos(dir), y: y + d * Math.sin(dir), colour: c, size: spark.size * (1 - 0.5 * s) });
+          }
+        }
+        if (since < 900) flashAt = { x, y, strength: (1 - since / 900) ** 2 };
+      }
+    }
+    const g = impactGlow.ensure(glows.length);
+    glows.forEach((p, i) => {
+      g.position.set([p.x, p.y, 0], i * 3);
+      g.colour.set(p.colour, i * 3);
+      g.core[i] = p.core;
+      g.halo[i] = p.halo;
+      g.size[i] = p.size;
     });
-    const g = impacts.geometry;
-    for (const name of ["position", "colour", "size", "core", "halo"]) g.getAttribute(name).needsUpdate = true;
-    g.setDrawRange(0, shown.length);
+    impactGlow.commit(glows.length);
+    const sp = sparkGlow.ensure(sparksShown.length);
+    sparksShown.forEach((p, i) => {
+      sp.position.set([p.x, p.y, 0], i * 3);
+      sp.colour.set(p.colour, i * 3);
+      sp.core[i] = 1.6;
+      sp.halo[i] = 0;
+      sp.size[i] = p.size;
+    });
+    sparkGlow.commit(sparksShown.length);
+  }
+
+  // ── following a collision ──
+  // A few seconds before a collision out of view, the planet turns to bring
+  // it over the middle of the screen, holds through the flash, then turns
+  // back to the station. Yours always; anyone else's at most once every
+  // PAN.every, so a busy sky doesn't keep swinging. Not when zoomed out
+  // (it's all in view) or for reduced motion.
+  let turn = 0;
+  let following: SceneImpact | null = null;
+  let lastFollowed = -Infinity;
+  let lastFrame = performance.now();
+  const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+  function follow(time: number) {
+    const now = performance.now();
+    const dt = Math.min(100, now - lastFrame);
+    lastFrame = now;
+    if (following && time > following.at + PAN.hold) following = null;
+    if (!following && !reduced && zoomTo === 0) {
+      for (const impact of options.impacts?.() ?? []) {
+        const until = impact.at - time;
+        if (until < 0 || until > PAN.lead) continue;
+        // in view already, over the station?
+        const d = display(impact.radius, planet);
+        const seen = Math.asin(Math.min(1, (half * 0.8) / d));
+        if (Math.abs(wrap(impact.angle - STATION_ANGLE)) < seen) continue;
+        if (!impact.mine && time - lastFollowed < PAN.every) continue;
+        following = impact;
+        lastFollowed = time;
+        if (impact.mine) break;
+      }
+    }
+    // with reduced motion the view stays put, and an arrow at the edge says
+    // where a collision is about to happen
+    if (reduced) {
+      let off: SceneImpact | null = null;
+      for (const impact of options.impacts?.() ?? []) {
+        const until = impact.at - time;
+        const d = display(impact.radius, planet);
+        const seen = Math.asin(Math.min(1, (half * 0.8) / d));
+        if (until > -2_000 && until < PAN.lead && Math.abs(wrap(impact.angle - STATION_ANGLE)) >= seen) off = impact;
+      }
+      aside.hidden = !off;
+      if (off) {
+        const right = wrap(off.angle - STATION_ANGLE) > 0;
+        aside.textContent = right ? "Collision out of view ›" : "‹ Collision out of view";
+        aside.style.transform = right
+          ? `translate(${Math.round(width - 8 - aside.offsetWidth)}px, 3.5rem)`
+          : "translate(0.5rem, 3.5rem)";
+      }
+    }
+    const target = following ? wrap(following.angle - STATION_ANGLE) : 0;
+    const step = 1 - Math.exp(-dt / PAN.ease);
+    turn = Math.abs(target - turn) < 1e-4 ? target : turn + wrap(target - turn) * step;
+    ground.rotation.z = turn;
+    // the station's name goes round with it, and fades while it's away
+    const [sx, sy] = screen(-planet * Math.sin(turn), planet * Math.cos(turn));
+    stationLabel.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, 0.6rem)`;
+    stationLabel.style.opacity = String(Math.max(0, 1 - Math.abs(turn) * 6));
+  }
+
+  const aside = document.createElement("span");
+  aside.className = "impact-pointer";
+  aside.hidden = true;
+  overlay.append(aside);
+
+  // a brief brightening of the whole view, around a collision in it
+  let flashAt: { x: number; y: number; strength: number } | null = null;
+  const veil = document.createElement("span");
+  veil.className = "impact-veil";
+  veil.hidden = true;
+  overlay.prepend(veil);
+  function brighten() {
+    if (!flashAt) {
+      veil.hidden = true;
+      return;
+    }
+    const [vx, vy] = screen(flashAt.x, flashAt.y);
+    veil.hidden = false;
+    veil.style.background = `radial-gradient(circle at ${vx}px ${vy}px, rgb(255 246 228 / ${0.7 * flashAt.strength}), rgb(255 170 90 / ${0.22 * flashAt.strength}) 22%, rgb(255 120 60 / ${0.06 * flashAt.strength}) 50%, transparent 75%)`;
   }
 
   // Only draw while the scene is on screen; scrolled down to the catalogue,
@@ -911,7 +1080,8 @@ export function createScene(options: SceneOptions): SceneControls | null {
       if (time > reentryAt(sat)) continue;
       count++;
       ids.add(sat.id);
-      const angle = angleAt(sat, time);
+      // as seen while the view is turned to follow a collision
+      const angle = angleAt(sat, time) - turn;
       const radius = radiusAt(sat, time);
       const [x, y] = place(radius, angle, planet);
       const p = { sat, angle, radius, x, y, overhead: isOverhead(sat, time), burning: falling };
@@ -986,9 +1156,12 @@ export function createScene(options: SceneOptions): SceneControls | null {
     tg.getAttribute("tint").needsUpdate = true;
     tg.setDrawRange(0, flying.length * (TRAIL_STEPS - 1) * 6);
 
+    follow(time);
     drawImpacts(time);
+    brighten();
 
     reentry.draw(burning, {
+      turn,
       time,
       planet,
       unit: (2 * half) / width,

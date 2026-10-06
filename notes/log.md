@@ -1031,8 +1031,60 @@ stories de-duplicated and a reconnect brings missed collisions; unknown
 objects are "something", not "debris"; a test that the stream never sends
 owners or person ids. Recorded, not fixed: signing out skips the launch
 gap (ADR 0009, same loophole as clearing cookies); no server-side cookie
-expiry or "sign out everywhere". Not committed yet.
+expiry or "sign out everywhere". Committed as `2dc518c`.
 
 2026-10-07: Advay accepted ADRs 0005 (the sky in Three.js), 0006 (the
 launchpad in Three.js) and 0008 (collisions in closed form). 0009 and 0010
 stay proposed.
+
+## 2026-10-07 — C9: the catalogue as a table
+
+Advay wanted the catalogue to work like a table: filterable and sortable.
+Built test-first (`spec/catalogue.test.ts`, 9 tests over HTTP). A plain GET
+form filters by search (callsign or operator handle), kind, band, status
+(in the "Everything" view) and "only yours"; every column header is a link
+that sorts by it or turns the sort round (`aria-sort` on the active one);
+results page 100 at a time with "1–100 of 1,874". It all works without
+JavaScript and every view has its own address; with JavaScript the selects
+apply as they change. New Kind and Operator columns (a handle, or "no
+handle"), since the blame (ADR 0010) should be readable there too.
+
+The query (`browse` in `src/lib/sky.ts`) filters in SQL, sorts in memory
+(a height is worked out from the orbit), and works out lineage only for
+the rows on the page. A cascade's lineage now names three and "and N
+others'", where it used to list a dozen callsigns.
+
+Found on the way: the claim limit from the review fix (10 an hour per
+address) was already failing the tests, and would have stopped a class
+behind one campus address; it's now 60 an hour, and connections from the
+machine itself aren't counted. Checked in Chrome at 1920x1080 and iPhone
+14: the page widened to 64rem for seven columns, and on the phone the
+table keeps Object, Height and Status (the operator moves under the name),
+since the narrow name column was breaking "Fragment" mid-word.
+`pnpm check` green (143 tests).
+
+## 2026-10-07 — C9: a crash you can't miss, and a view that follows it
+
+Advay wanted a collision bright enough to see clearly, and asked about
+panning the camera to it (or only when it's yours). Built both:
+
+- **The crash**: a white-hot core that lights up the sky around it for
+  under a second (a radial veil over the whole view), cooling to an
+  orange glow; a fast shock ring and a slower one; and 40 sparks thrown
+  mostly along the two orbits, slowing and cooling white to red. The spray
+  is seeded by the collision, so every screen sees the same one.
+- **Following it**: five seconds before a collision out of view, the
+  planet turns (the ground layers rotate, the orbits are placed turned)
+  to bring it over the middle of the screen, holds five seconds after,
+  then turns back to the station. Yours always; anyone else's at most once
+  every 30 seconds, so a busy sky doesn't keep swinging. Not when zoomed
+  out to the whole sky, and not for reduced motion, where an arrow at the
+  edge says "Collision out of view" instead.
+
+![Followed and bright: the view turned 57° from the station, mid-flash, the high band lit up around two derelicts' collision](screenshots/2026-10-07-collision-followed-and-bright.png)
+
+Checked in Chrome against a seeded sky (two derelicts sent to meet in the
+high band, 57° from the station): at 1920x1080, before, mid-turn, the flash,
+the sparks and the return to the station; and on an iPhone 14. Found on the
+way: the collision layer never got the device pixel ratio, so on a retina
+screen its rings were drawn at half size. `pnpm check` green.

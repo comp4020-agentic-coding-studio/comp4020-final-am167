@@ -150,7 +150,11 @@ import("./scene.ts")
         const time = serverNow();
         return [...sky.values()].filter((sat) => !hit(sat, time));
       },
-      impacts: () => [...coming.values(), ...stories],
+      // a collision of yours is always followed (scene.ts)
+      impacts: () => [
+        ...[...coming.values()].map((c) => ({ ...c, mine: Boolean(sky.get(c.a)?.mine || sky.get(c.b)?.mine) })),
+        ...stories,
+      ],
       now: serverNow,
       launched: initial.launched,
       reduced,

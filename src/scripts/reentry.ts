@@ -321,6 +321,8 @@ export interface ReentryFrame {
   scale: number;
   // the device pixel ratio the canvas draws at
   ratio: number;
+  // how far the view has turned to follow a collision (scene.ts), radians
+  turn?: number;
 }
 
 export interface Reentry {
@@ -344,6 +346,8 @@ export function createReentry(reduced: boolean): Reentry {
   sparks.ensure(1);
 
   const colour = [0, 0, 0];
+  // the view's turn this frame (ReentryFrame)
+  let turn = 0;
 
   // Where a piece is at a time: its point and the way it's flying, in scene
   // coordinates. The chart is seen from the other side (scene.ts), so x is
@@ -354,7 +358,7 @@ export function createReentry(reduced: boolean): Reentry {
     const since = Math.max(0, s - piece.start);
     // a retrograde orbit (ADR 0008) runs the other way, and so do its pieces
     const dir = orbit.direction ?? 1;
-    const angle = angleAt(orbit, time) - dir * piece.lag * since * since;
+    const angle = angleAt(orbit, time) - dir * piece.lag * since * since - turn;
     const radius = radiusAt(orbit, time) - piece.sink * since ** 1.5;
     const d = planet + radius - 1;
     out[0] = -d * Math.cos(angle);
@@ -374,6 +378,7 @@ export function createReentry(reduced: boolean): Reentry {
 
   function draw(burning: Iterable<BurningOrbit>, frame: ReentryFrame): void {
     const { time, planet, unit, scale, ratio } = frame;
+    turn = frame.turn ?? 0;
     (sparkPoints.material as ShaderMaterial).uniforms.ratio.value = ratio;
     const px = unit * scale;
     let wakeCount = 0;
