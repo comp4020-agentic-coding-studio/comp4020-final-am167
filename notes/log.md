@@ -1061,7 +1061,7 @@ machine itself aren't counted. Checked in Chrome at 1920x1080 and iPhone
 14: the page widened to 64rem for seven columns, and on the phone the
 table keeps Object, Height and Status (the operator moves under the name),
 since the narrow name column was breaking "Fragment" mid-word.
-`pnpm check` green (143 tests).
+`pnpm check` green (143 tests) Committed as `37f104c`.
 
 ## 2026-10-07 — C9: a crash you can't miss, and a view that follows it
 
@@ -1087,4 +1087,5 @@ Checked in Chrome against a seeded sky (two derelicts sent to meet in the
 high band, 57° from the station): at 1920x1080, before, mid-turn, the flash,
 the sparks and the return to the station; and on an iPhone 14. Found on the
 way: the collision layer never got the device pixel ratio, so on a retina
-screen its rings were drawn at half size. `pnpm check` green.
+screen its rings were drawn at half size. `pnpm check` green. Committed as
+`90dfab9`.

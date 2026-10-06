@@ -438,6 +438,12 @@ setInterval(() => {
 let counted = "";
 setInterval(() => {
   const time = serverNow();
+  // the "in orbit" notice goes once the satellite it's about doesn't: hit
+  // in a collision (the card says so) or burned up
+  if (notice && !notice.hidden && initial.launched !== null) {
+    const launched = sky.get(initial.launched);
+    if (!launched || !up(launched, time)) notice.hidden = true;
+  }
   for (const sat of sky.values()) {
     if (hit(sat, time)) {
       // gone in a collision: the flash covers it
