@@ -46,8 +46,8 @@ describe("the launchpad", () => {
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toMatch(/^\/sky\//);
 
-    const sky = doc(await (await new Session(baseUrl).get("/sky/")).text());
-    const rows = [...sky.querySelectorAll("tbody tr")].map((tr) => tr.textContent ?? "");
+    const catalogue = doc(await (await new Session(baseUrl).get("/catalogue/")).text());
+    const rows = [...catalogue.querySelectorAll("tbody tr")].map((tr) => tr.textContent ?? "");
     const row = rows.find((text) => text.includes(name));
     expect(row, "the launch isn't in the catalogue").toBeDefined();
     // a beacon is only heard as its satellite passes over the station, so the
@@ -175,8 +175,8 @@ describe("coming back", () => {
     expect(page.body.textContent).toContain(`${name} is in orbit`);
     expect(page.querySelector("form fieldset")?.hasAttribute("disabled")).toBe(true);
 
-    const sky = doc(await (await a.get("/sky/")).text());
-    const row = [...sky.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(name));
+    const catalogue = doc(await (await a.get("/catalogue/")).text());
+    const row = [...catalogue.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(name));
     expect(row?.textContent).toMatch(/yours/);
   });
 
@@ -185,8 +185,10 @@ describe("coming back", () => {
     await a.launch({ band: "mid", callsign: callsign(), beacon: "private" });
     const id = a.cookie("kessler_person")!;
     expect(id).toBeTruthy();
-    const html = await (await new Session(baseUrl).get("/sky/")).text();
-    expect(html).not.toContain(id);
+    for (const path of ["/sky/", "/catalogue/?show=all"]) {
+      const html = await (await new Session(baseUrl).get(path)).text();
+      expect(html, path).not.toContain(id);
+    }
   });
 
   it("carries a beacon as data, never as markup", async () => {

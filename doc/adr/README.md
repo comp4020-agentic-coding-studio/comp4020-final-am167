@@ -11,3 +11,4 @@ be edited until it's accepted.
 | [0002](0002-a-person-is-an-anonymous-cookie.md) | A person is an anonymous cookie | proposed |
 | [0003](0003-the-sky-decays-the-record-stays.md) | The sky decays, the record stays | accepted |
 | [0004](0004-server-sent-events-and-one-clock.md) | Server-sent events, and the server's clock as the only clock | accepted |
+| [0005](0005-three-js-horizon-view.md) | The sky is drawn with Three.js, as a horizon view over the station | proposed |

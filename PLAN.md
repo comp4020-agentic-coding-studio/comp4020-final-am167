@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-04._
+_Last updated 2026-10-05._
 
 - **Done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -16,6 +16,12 @@ _Last updated 2026-10-04._
   "Now and later". Stack restored (`618d80a`). C8 slice built (`4be85b1`):
   launchpad, launch rules, the sky chart and catalogue, SSE; spec tests in
   `spec/launch.test.ts` and `spec/live.test.ts`.
+- **C9, in progress (branch `C9`):** the sky page redrawn with Three.js as a
+  horizon view from Advay's sketch (ADR 0005, proposed): the limb, stars, the
+  bands over the horizon, satellites crossing with trails and labels, the
+  station panel over the scene, the catalogue below (`f8f7003`). Then a
+  zoom-out to the whole planet, so the rest of the sky (and C9's collisions)
+  can be seen.
 - **C8 cutoff:** Tue 6 Oct 2026, 12:00 (moved from Monday for Labour Day).
 - **Next, in order:**
   1. Advay rewrites the agent's README draft (`README.md`, published at
@@ -62,7 +68,9 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Launch limits (2026-10-04) | **One live satellite per person, plus a cooldown** (starting at 10 minutes) after your satellite dies or is deorbited, so relaunching costs something. |
 | Sky cap (2026-10-04) | **At most 200 satellites in orbit at once**; launches are refused while it's full. Added after review: nothing leaves the sky in C8 and a cookieless client can launch without limit, so this protects the 256 MB machine. Revisit with decay in C9. |
 | Catalogue (2026-10-04) | **The "In orbit" table shows callsigns, not beacons.** A beacon is only heard as its satellite passes over the station, so flying low (heard more often) stays worth it. The reviewer pointed out that a permanent list of beacons made "be seen" pointless. |
+| Catalogue page (2026-10-05) | **The sky page keeps a short "Sky now" card; the full table moves to `/catalogue/`.** The card has counts per band and the latest launches, live; the catalogue lists what's in orbit or everything ever launched (a plain link), and is where debris and its lineage go. The table under the sky made the page scroll too far, and debris would make it far longer. The card is also where collisions out of view will be announced. |
 | Bands (2026-10-04) | **Three bands (low, mid, high) with jitter:** you pick a band, the server picks a random radius and phase inside it, so orbits aren't identical. |
+| Band edges (2026-10-05) | **Soft edges:** the radius is drawn from a bell curve around the band's middle, so about one launch in eight lands past the band's edges, but never far enough to reach a neighbouring band. The bands are drawn as soft glows to match. |
 
 ## The altitude trade-off
 
@@ -207,6 +215,9 @@ _Proposed, not final: the working assumption for C8, likely to be revisited._
 
 ### Later
 
+- **Adopted for the sky in C9 (2026-10-05, ADR 0005):** a horizon view
+  through an orthographic camera; the launch and collision effects are still
+  to do.
 - **Visuals (week 12, maybe sooner): Three.js** (Advay, 2026-10-04) for the
   striking version of the sky and the launch: glow, light trails, collision
   bursts. Not for C8; the chart is a 2D canvas for now. It doesn't have to

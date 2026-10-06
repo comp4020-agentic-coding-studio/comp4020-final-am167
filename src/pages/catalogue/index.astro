@@ -1,0 +1,178 @@
+---
+import Base from "../../layouts/Base.astro";
+import { ago } from "../../lib/format.ts";
+import { BANDS } from "../../lib/orbit.ts";
+import { catalogue, catalogueCounts } from "../../lib/sky.ts";
+
+// The record of everything launched (ADR 0003): what's in orbit now, or
+// everything ever, picked by a plain link so it works without JavaScript.
+// Callsigns only: a beacon is only heard over the station.
+const { person } = Astro.locals;
+const show = Astro.url.searchParams.get("show") === "all" ? "all" : "live";
+const rows = catalogue(show, person);
+const counts = catalogueCounts();
+const now = Date.now();
+const fates = {
+  live: "In orbit",
+  decayed: "Decayed",
+  deorbited: "Deorbited",
+  destroyed: "Destroyed",
+} as const;
+const views = [
+  { show: "live", href: "/catalogue/", label: `In orbit (${counts.live})` },
+  { show: "all", href: "/catalogue/?show=all", label: `Everything ever launched (${counts.all})` },
+] as const;
+---
+<Base title="Kessler: the catalogue" current="catalogue">
+  <main class="catalogue-page">
+    <h1>The catalogue</h1>
+    <p class="lede">
+      Every satellite launched into the shared sky, kept for good. Beacons
+      aren't listed: they're only heard as a satellite passes over the station.
+    </p>
+
+    <nav class="views" aria-label="Show">
+      {views.map((v) => (
+        <a href={v.href} aria-current={v.show === show ? "page" : undefined}>{v.label}</a>
+      ))}
+    </nav>
+
+    {rows.length === 0 ? (
+      <p class="empty">
+        {show === "live" ? "Nothing in orbit." : "Nothing has been launched yet."}{" "}
+        <a href="/">Launch the first satellite</a>.
+      </p>
+    ) : (
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Callsign</th>
+            <th scope="col">Band</th>
+            <th scope="col">Launched</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((o) => (
+            <tr class:list={{ mine: o.mine, gone: o.fate !== "live" }}>
+              <th scope="row">
+                <span class="swatch" style={`--hue: ${(o.id * 137.508) % 360}`}></span>
+                {o.callsign ?? "Debris"}
+                {o.mine && <span class="yours"> (yours)</span>}
+              </th>
+              <td>{BANDS[o.band].label}</td>
+              <td><time datetime={new Date(o.launchedAt).toISOString()}>{ago(now - o.launchedAt)}</time></td>
+              <td>
+                {fates[o.fate]}
+                {o.fateAt && <> <time datetime={new Date(o.fateAt).toISOString()}>{ago(now - o.fateAt)}</time></>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+  </main>
+</Base>
+
+<style>
+  .catalogue-page {
+    max-width: 48rem;
+    margin: 0 auto;
+    padding: 1.5rem var(--gutter) 3rem;
+  }
+
+  h1 {
+    margin: 0 0 0.5rem;
+    font-size: var(--step-2);
+    font-weight: 800;
+    font-variation-settings: "wdth" 112;
+  }
+
+  .lede {
+    margin: 0 0 1.25rem;
+    color: var(--ink-dim);
+    max-width: 38rem;
+  }
+
+  .views {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    margin-bottom: 1rem;
+    font-size: var(--step--1);
+  }
+
+  .views a {
+    color: var(--ink-dim);
+    text-decoration: none;
+    padding-block: 0.25rem;
+  }
+
+  .views a[aria-current="page"] {
+    color: var(--ink);
+    box-shadow: inset 0 -2px 0 var(--amber);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--step--1);
+  }
+
+  th,
+  td {
+    text-align: left;
+    padding: 0.45rem 0.75rem 0.45rem 0;
+    border-bottom: 1px solid var(--grid);
+    vertical-align: top;
+  }
+
+  thead th {
+    color: var(--ink-dim);
+    font-weight: 600;
+  }
+
+  tbody th {
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  td {
+    white-space: nowrap;
+    color: var(--ink-dim);
+  }
+
+  tr.mine th,
+  tr.mine td {
+    color: var(--amber);
+  }
+
+  tr.gone th {
+    color: var(--ink-dim);
+    font-weight: 600;
+  }
+
+  .yours {
+    font-weight: 400;
+  }
+
+  .swatch {
+    display: inline-block;
+    width: 0.6rem;
+    height: 0.6rem;
+    margin-right: 0.4rem;
+    border-radius: 50%;
+    background: oklch(0.8 0.13 var(--hue));
+  }
+
+  .empty {
+    margin: 1rem 0 0;
+  }
+
+  /* a phone drops the status time before the table gets wider than the screen */
+  @media (max-width: 30rem) {
+    td time:not(:first-child) {
+      display: none;
+    }
+  }
+</style>
