@@ -37,6 +37,9 @@ export function objectCard(now: () => number, onChange: (id: number | null) => v
   let openerHref: string | null = null;
   // the latest ask: a slow answer to an earlier one is dropped
   let asked = 0;
+  // open when the page came: nothing opened it, so closing it goes back to
+  // the page's heading
+  let withPage = false;
 
   const show = () => {
     if (card.open) return;
@@ -51,6 +54,7 @@ export function objectCard(now: () => number, onChange: (id: number | null) => v
     showing = article ? Number(article.dataset.id) : null;
     stopCounting = article ? keepCounting(article, now) : () => {};
     card.removeAttribute("open");
+    withPage = true;
     show();
     body.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
   }
@@ -95,7 +99,8 @@ export function objectCard(now: () => number, onChange: (id: number | null) => v
     }
     if (status) status.textContent = `${heading?.textContent ?? "Its history"} opened.`;
     heading?.focus({ preventScroll: true });
-    body.scrollTop = 0;
+    // the card scrolls, not its body: a new one starts at its top
+    card.scrollTop = 0;
   }
 
   card.addEventListener("close", () => {
@@ -105,16 +110,30 @@ export function objectCard(now: () => number, onChange: (id: number | null) => v
     showing = null;
     onChange(null);
     if (status) status.textContent = "";
-    // an object's own address shows the catalogue under its card: closing
-    // the card leaves the catalogue, at its own address
-    if (/^\/object\/\d+\/$/.test(location.pathname)) history.replaceState(null, "", "/catalogue/");
+    // an object's own address shows the catalogue under its card, as does
+    // the catalogue's ?object=: closing the card leaves the catalogue, at
+    // its own address and with its own title
+    const url = new URL(location.href);
+    const own = /^\/object\/\d+\/?$/.test(url.pathname);
+    if (own || url.searchParams.has("object")) {
+      if (own) url.pathname = "/catalogue/";
+      // and what came back from a manoeuvre is said in the card it closed
+      for (const name of ["object", "deorbited", "boosted", "refused"]) url.searchParams.delete(name);
+      history.replaceState(null, "", url.pathname + url.search + url.hash);
+      if (card.dataset.pageTitle) document.title = card.dataset.pageTitle;
+    }
     // a list the page rebuilds (the sky's latest launches) may have
-    // replaced the link that opened it: the same link, then
+    // replaced the link that opened it: the same link, then; a card open
+    // when the page came goes back to the page's heading
     const back = opener?.isConnected
       ? opener
       : openerHref
         ? document.querySelector<HTMLElement>(`main a[href="${CSS.escape(openerHref)}"]`)
-        : null;
+        : withPage
+          ? document.querySelector<HTMLElement>("main h1")
+          : null;
+    if (withPage && back?.tagName === "H1") back.tabIndex = -1;
+    withPage = false;
     back?.focus({ preventScroll: true });
     opener = null;
     openerHref = null;

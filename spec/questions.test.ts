@@ -3,12 +3,12 @@ import { DAY, QUESTIONS, answered, dayOf, questionOn } from "../src/lib/question
 import { sharedQuestion } from "../src/lib/story.ts";
 
 // The stations' question (ADR 0018): one a day, from a fixed list, the day
-// turning at midnight in Canberra (standard time). A launch says which
-// day's question its form showed, and answers it if that was today's or
-// yesterday's.
+// turning at midnight in Canberra (summer time included). A launch says
+// which day's question its form showed, and answers it if that was today's
+// or yesterday's.
 
-// noon on 7 October in Canberra (AEST, UTC+10)
-const noon = Date.UTC(2026, 9, 7, 2);
+// noon on 7 October in Canberra (summer time, AEDT, UTC+11)
+const noon = Date.UTC(2026, 9, 7, 1);
 
 describe("the stations' question", () => {
   it("is a short question, from a list long enough to last weeks", () => {
@@ -22,11 +22,18 @@ describe("the stations' question", () => {
 
   it("is the same all day in Canberra, and the next one from its midnight", () => {
     const today = dayOf(noon);
-    // just after and just before midnight in Canberra: 14:00 UTC the day before
-    expect(dayOf(Date.UTC(2026, 9, 6, 14, 0, 1))).toBe(today);
-    expect(dayOf(Date.UTC(2026, 9, 7, 13, 59, 59))).toBe(today);
-    expect(dayOf(Date.UTC(2026, 9, 7, 14, 0, 1))).toBe(today + 1);
+    // just after and just before midnight in Canberra in summer: 13:00 UTC
+    // the day before
+    expect(dayOf(Date.UTC(2026, 9, 6, 13, 0, 1))).toBe(today);
+    expect(dayOf(Date.UTC(2026, 9, 7, 12, 59, 59))).toBe(today);
+    expect(dayOf(Date.UTC(2026, 9, 7, 13, 0, 1))).toBe(today + 1);
     expect(dayOf(noon + DAY)).toBe(today + 1);
+    // and in winter (AEST, UTC+10): 14:00 UTC, a day per day all year
+    const july = dayOf(Date.UTC(2026, 6, 7, 2));
+    expect(dayOf(Date.UTC(2026, 6, 6, 14, 0, 1))).toBe(july);
+    expect(dayOf(Date.UTC(2026, 6, 7, 13, 59, 59))).toBe(july);
+    expect(dayOf(Date.UTC(2026, 6, 7, 14, 0, 1))).toBe(july + 1);
+    expect(today - july).toBe(92);
     const list: readonly string[] = QUESTIONS;
     expect(questionOn(today + 1)).toBe(list[(list.indexOf(questionOn(today)) + 1) % list.length]);
     // and round again

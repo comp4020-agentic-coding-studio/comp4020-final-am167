@@ -45,7 +45,7 @@ const orbit = { radius: o.radius, phase: o.phase, period: o.period, epoch: o.epo
   {o.beacon && <blockquote class="your-sat-beacon"><q>{o.beacon}</q></blockquote>}
   {o.question && <p class="your-sat-question">Answering <q>{o.question}</q></p>}
   <p class="your-sat-heard">
-    {heard.passes === 0 ? "Not heard yet: it hasn't passed over a station while anyone was listening." : `${heardBy(heard.by, true)}, over ${passes(heard.passes)}.`}
+    {heard.passes === 0 ? "Not heard yet: it hasn't been on air at a station while anyone was listening." : `${heardBy(heard.by, true)}, over ${passes(heard.passes)}.`}
   </p>
   <p class="your-sat-now">
     <span data-height>{km(heightKm(radius))}, {falling(fallRate(o, now))}</span>.{" "}

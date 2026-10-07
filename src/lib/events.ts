@@ -34,12 +34,14 @@ export function audience(): Set<string> {
 }
 
 // Everyone is told when the number of people listening changes, a moment
-// after it settles (a page reloading leaves and comes back: no news).
+// after the first change (a page reloading leaves and comes back: no news),
+// and at most that often while people keep coming and going.
 let announced = 0;
 let settling: ReturnType<typeof setTimeout> | undefined;
 function recount(): void {
-  clearTimeout(settling);
+  if (settling) return;
   settling = setTimeout(() => {
+    settling = undefined;
     const now = audience().size;
     if (now === announced) return;
     announced = now;

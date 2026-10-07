@@ -148,3 +148,14 @@ export const listens = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.object, t.listener] }), index("listens_listener").on(t.listener)],
 );
+
+// Every browser that has asked for anything here but the event stream
+// (ADR 0016): an open stream counts as someone listening only if its
+// cookie is one of these, so a cookie made up for a stream alone doesn't.
+// Kept, so a stream that reconnects after a restart still counts. Hashed
+// as a listener is ("p:…"), never the cookie itself.
+export const visitors = sqliteTable("visitors", {
+  listener: text("listener").primaryKey(),
+  // when it was first seen
+  at: integer("at").notNull(),
+});

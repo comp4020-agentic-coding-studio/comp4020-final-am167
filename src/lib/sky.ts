@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, inArray, isNotNull, isNull, lt, max, ne, sql, type SQL } from "drizzle-orm";
+import { and, count, countDistinct, desc, eq, gt, inArray, isNotNull, isNull, lt, max, ne, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { fatalMeeting, fragmentsOf, impactOf, nextMeeting } from "./collide.ts";
 import { listening, publish } from "./events.ts";
@@ -430,7 +430,8 @@ export interface Encounter extends CollisionStory {
 }
 
 // What happened to the viewer's satellites since `since` (their last look
-// at Yours): encounters, and how many more people heard them.
+// at Yours): encounters, and how many people heard them (each once, however
+// many of theirs they heard).
 export function newsSince(who: Who, since: number, now = Date.now()): { encounters: Encounter[]; heardBy: number } {
   const encounters = encountersOf(who, now).filter((e) => e.at > since);
   const ids = viewerOf(who).person
@@ -440,7 +441,7 @@ export function newsSince(who: Who, since: number, now = Date.now()): { encounte
     ids.length === 0
       ? 0
       : (db
-          .select({ n: count() })
+          .select({ n: countDistinct(listens.listener) })
           .from(listens)
           .where(and(inArray(listens.object, ids), gt(listens.at, since)))
           .get()?.n ?? 0);
@@ -499,18 +500,22 @@ function markDecayed(now: number): SkyObject[] {
 // ── derelicts (ADR 0008) ──────────────────────────────────────────────────
 
 // A dead satellite, owned by nobody, put into the sky by the server. It
-// carries an echo: the last words of a satellite long gone from the record,
-// picked at random, so a collision with a derelict still breaks someone's
+// carries an echo: the last words of a satellite gone from the sky (the
+// record keeps it), picked at random, so a collision with a derelict still breaks someone's
 // words into someone else's (the review, 2026-10-07). None until something
 // has gone.
-export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
-  const echo = db
+// Up to `n` lines of satellites gone by `now`, at random, to echo.
+const echoes = (n: number, now: number) =>
+  db
     .select({ id: objects.id, beacon: objects.beacon })
     .from(objects)
     .where(and(eq(objects.kind, "satellite"), ne(objects.fate, "live"), isNotNull(objects.beacon), lt(objects.launchedAt, now)))
     .orderBy(sql`random()`)
-    .limit(1)
-    .get();
+    .limit(n)
+    .all();
+
+export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
+  const [echo] = echoes(1, now);
   const object = toObject(
     db
       .insert(objects)
@@ -523,6 +528,29 @@ export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
   refreshMeetings(live());
   announce(now);
   return object;
+}
+
+// Derelicts still up from before they carried echoes (or put up while
+// nothing had gone) get one, once, as the server starts: otherwise the
+// sky's derelicts stay silent for days after a deploy (the second review,
+// 2026-10-07). Only once, before anything moves, so a sky that kept
+// running and one replayed after a stop break the same words.
+let echoed = false;
+function echoTheSilent(now: number): void {
+  const silent = db
+    .select({ id: objects.id })
+    .from(objects)
+    .where(and(eq(objects.kind, "derelict"), eq(objects.fate, "live"), isNull(objects.echo)))
+    .all();
+  if (silent.length === 0) return;
+  const lines = echoes(silent.length, now);
+  if (lines.length === 0) return;
+  db.transaction((tx) => {
+    silent.forEach((derelict, i) => {
+      const line = lines[i % lines.length];
+      tx.update(objects).set({ words: line.beacon, echo: line.id }).where(eq(objects.id, derelict.id)).run();
+    });
+  });
 }
 
 // ── a collision to watch (ADR 0008) ───────────────────────────────────────
@@ -642,6 +670,10 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
   if (!retimed) {
     retime(now);
     retimed = true;
+  }
+  if (!echoed) {
+    echoTheSilent(now);
+    echoed = true;
   }
   if (now >= quietFrom && now < quietUntil) return { decayed: [], collisions: [] };
   const applied: CollisionReport[] = [];

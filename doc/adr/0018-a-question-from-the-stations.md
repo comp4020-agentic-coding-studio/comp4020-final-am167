@@ -53,7 +53,8 @@ says what it's for on the launchpad, on a page of its own, and after a
 first launch.**
 
 - **The question.** A fixed list (`src/lib/questions.ts`), one a day, the
-  day turning at midnight in Canberra (standard time, so 1 am in summer).
+  day turning at midnight in Canberra (by its time zone, so summer time
+  included).
   The launchpad shows today's above the beacon, with "My beacon answers
   it" to tick if it does. Not ticked by default: a default tick tagged
   every line as an answer, which manufactured the "both were answering"

@@ -1,7 +1,7 @@
 // The stations' question (ADR 0018): one a day, which a beacon can answer.
-// A fixed list, for Advay to edit; the day turns at midnight in Canberra
-// (Australian Eastern Standard Time; 1 am in summer). A satellite keeps the
-// text of what it answered, so editing this list never rewrites the record.
+// A fixed list, for Advay to edit; the day turns at midnight in Canberra,
+// summer time included. A satellite keeps the text of what it answered, so
+// editing this list never rewrites the record.
 // Shared by the server and the browser.
 
 export const QUESTIONS = [
@@ -30,11 +30,14 @@ export const QUESTIONS = [
 
 export const DAY = 86_400_000;
 
-// Canberra's standard time, ahead of UTC
-const CANBERRA = 10 * 3_600_000;
+// the date in Canberra, summer time included (it keeps Sydney's clocks)
+const canberra = new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Sydney", year: "numeric", month: "numeric", day: "numeric" });
 
 // which day it is in Canberra, counted from 1970
-export const dayOf = (time: number): number => Math.floor((time + CANBERRA) / DAY);
+export function dayOf(time: number): number {
+  const parts = Object.fromEntries(canberra.formatToParts(time).map((part) => [part.type, part.value]));
+  return Math.round(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)) / DAY);
+}
 
 export const questionOn = (day: number): string => QUESTIONS[((day % QUESTIONS.length) + QUESTIONS.length) % QUESTIONS.length];
 

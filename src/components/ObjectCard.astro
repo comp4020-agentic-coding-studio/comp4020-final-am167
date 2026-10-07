@@ -13,10 +13,12 @@ interface Props {
   side?: boolean;
   history?: History | null;
   now?: number;
+  // the page's own title, for when a card the server opened is closed
+  pageTitle?: string;
 }
-const { side = false, history = null, now = Date.now() } = Astro.props;
+const { side = false, history = null, now = Date.now(), pageTitle } = Astro.props;
 ---
-<dialog id="object-card" class:list={["object-card", { side }]} aria-labelledby="object-card-title" open={history !== null}>
+<dialog id="object-card" class:list={["object-card", { side }]} aria-labelledby="object-card-title" open={history !== null} data-page-title={pageTitle}>
   <div class="object-card-frame">
     <form method="dialog" class="object-card-close-form">
       <button type="submit" class="object-card-close" aria-label="Close">×</button>
@@ -133,6 +135,17 @@ const { side = false, history = null, now = Date.now() } = Astro.props;
 
   .object-card.side h2 {
     font-size: var(--step-1);
+  }
+
+  /* where the sky is narrower (under about 1440 px), beside the column
+     would cover the globe: over the column instead, so the sky stays in
+     view (the second review, 2026-10-07) */
+  @media (min-width: 52.01rem) and (max-width: 90rem) {
+    .object-card.side[open] {
+      inset: 4.75rem 0.5rem auto auto;
+      width: calc(var(--rail-width, 22rem) - 1rem);
+      max-height: calc(100svh - 5.75rem);
+    }
   }
 
   /* on a phone, a sheet from the bottom */

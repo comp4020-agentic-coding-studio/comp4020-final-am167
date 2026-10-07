@@ -70,31 +70,38 @@ over a station; the sky keeps a log of what was heard, shown as a feed.**
   seconds), and all the static overhead (ADR 0017) one turn between them,
   by the server's clock, so every screen still shows the same one
   (`src/lib/airtime.ts`).
-- **Listening** is having the sky open: its event stream, from a page
-  someone loaded (a stream whose cookie was made for it just then, a
-  script's, isn't counted). The server counts **people**, not tabs: each
-  listener is their operator if signed in, otherwise a one-way hash of
-  their cookie (the cookie itself is never stored again). A tab left hidden
-  stops listening after a minute. The sky page says how many are
-  listening now.
+- **Listening** is having the sky open: its event stream, from a browser
+  that has loaded something here besides the stream (a page, a card, a
+  form). Each browser that has is kept (`visitors`, hashed as below), so a
+  stream reconnecting after a restart still counts; a cookie made up for a
+  stream alone, or made for it just then, isn't anyone. The server counts
+  **people**, not tabs: each listener is their operator if signed in,
+  otherwise a one-way hash of their cookie (the cookie itself is never
+  stored again). A tab hidden for a minute stops listening, as does one
+  opened hidden. The sky page says how many are listening now.
 - **Hearing.** Every second the server works out what each station is
   broadcasting, by the same rule the screens play by. A beacon is
-  **heard** the first time it's on air in a pass (not merely for coming
-  over: one that never gets a turn isn't heard). A pass heard while at
-  least one person is listening is a **transmission**: logged with the
-  station, the time and how many were listening. Each listener who isn't
-  the satellite's own owner is recorded as having heard it, once per
-  satellite (at most 200 a pass), so **"heard by"** is the number of
-  different people who were there for at least one of its turns on air. A
-  pass with nobody listening isn't heard, and isn't logged. Everyone is
-  told (`heard`).
+  **heard** while it's on air (not merely for coming over: one that never
+  gets a turn isn't heard). Its first second on air in a pass, while at
+  least one person is listening, makes the pass a **transmission**: logged
+  with the station, the time and how many heard it. Each listener who
+  isn't the satellite's own owner and is listening at any second it's on
+  air that pass is recorded as having heard it, once per satellite, so
+  someone who opens the sky mid-turn still counts, and **"heard by"** is
+  the number of different people who were listening while it was on air.
+  A pass credits at most 200, drawn at random, so streams opened first
+  can't crowd out people who came later. A pass with nobody listening
+  isn't heard, and isn't logged. Everyone is told (`heard`), again when
+  someone new hears a pass already told.
 - **The feed.** The sky page has a column (under the sky on a phone): the
   three stations, live, as before, and under them **Heard**: each beacon
   the stations have picked up, latest pass first, as a card: who launched
   it (handle, or none), the line, which station heard it last and when,
-  how many people have heard it and over how many passes. A new pass moves
-  its card to the top, live. It's rendered by the server too, so it reads
-  without JavaScript.
+  how many people have heard it and over how many passes. A wreck's static
+  is one card for all its fragments (ADR 0017). A pass of a beacon already
+  in the feed updates its card where it is, so a busy sky doesn't shuffle
+  the column under the reader; one new to the feed goes on top. It's
+  rendered by the server too, so it reads without JavaScript.
 - **A history shows a beacon once it has been heard** (or always, to its
   owner, as before). Until its first transmission, a flying satellite's
   line is withheld, as ADR 0012 said; after it, it's in the log anyway. A
@@ -114,12 +121,14 @@ over a station; the sky keeps a log of what was heard, shown as a feed.**
 - "Heard by" is a score, and scores get gamed. Your own listening never
   counts towards your own, but a second browser (or a private window) is
   someone else here, as it is for launching (ADR 0009's accepted cost), so
-  one determined person can raise their count. Scripted streams that never
-  loaded a page don't count, and a pass counts at most 200 listeners. It
-  counts people who had the page open while the line was on air, not people
-  who read it.
+  one determined person can raise their count. A stream from a browser
+  that never loaded anything here doesn't count, but a script that loads a
+  page first, then opens a stream, is a new browser like any other; a pass
+  counts at most 200 listeners, at random. It counts people who had the
+  page open while the line was on air, not people who read it.
 - Storage grows only while people listen: one row per pass heard, one per
-  new listener per satellite. At a busy hour (20 satellites, someone always
+  new listener per satellite, and one per browser that has visited.
+  Nothing is pruned yet. At a busy hour (20 satellites, someone always
   watching) that's about 30,000 passes a day, a few megabytes; nothing is
   stored while nobody's there.
 - The server does a little work every second while anyone is listening (a
@@ -138,7 +147,8 @@ over a station; the sky keeps a log of what was heard, shown as a feed.**
   secret outside the database would close it.
 - Testable on the server against throwaway databases with the clock passed
   in: a pass with listeners is logged, the owner isn't counted, the same
-  person twice counts once, a pass with nobody listening isn't logged, a
-  satellite that burns up first is never heard. Over HTTP: the beacon
+  person twice counts once, someone arriving mid-pass counts, a crowd is
+  capped at random, a pass with nobody listening isn't logged, a satellite
+  that burns up first is never heard, a made-up cookie isn't a listener. Over HTTP: the beacon
   limit, the feed and the listening count on the sky page, and a history
   showing a beacon once it's been heard.

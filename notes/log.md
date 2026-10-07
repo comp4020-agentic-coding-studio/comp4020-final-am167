@@ -2205,3 +2205,137 @@ Acting on the review's findings 2 and 8, and two of its opinions:
   passed 5 s under a loaded suite.
 
 `pnpm check` green twice in a row on a fresh database (284 tests). Commit `262e2b4`.
+
+## 2026-10-07 — Second adversarial review
+
+A fresh Sonnet reviewer, without the drafting context, re-attacked the
+round at `49914ee`: curl and node scripts against the running build and
+throwaway databases, Chromium at 1920, 1440, 1366, 1280, 1024 and 900 px
+wide and an iPhone, and the code. All 284 tests green. Its verdicts on the
+first review's findings: the copy, the feed and the airtime rule fixed;
+the inflatable "heard by", the hidden-tab pause, ask 6 and the sky's card
+only partly.
+
+Must-fix:
+
+1. **A made-up cookie still counts.** Six streams carrying a random UUID
+   as their person cookie, with no page ever loaded, made a new satellite
+   "Heard by 6 people". The rule only refused a cookie minted for the
+   stream itself. And the 200-listener cap took the first 200 to
+   subscribe, so 200 scripted streams opened early would crowd out every
+   real listener.
+2. **Late arrivals are never credited.** Only the people listening at a
+   pass's first second on air got it; someone who opened the sky 2 s into
+   a turn heard the whole rest of it and wasn't counted (unless the room
+   was otherwise empty). The busy room is the case that matters.
+3. **A 140-character line is clipped in the stations panel** at 1024 to
+   1366 px wide: three lines aren't enough in a 335 to 368 px column. The
+   log's "a 140-character line fits the column" was wrong; it fits from
+   about 1440 px and on phones.
+4. **A tab opened in the background never pauses**: only a change of
+   visibility was handled, so a tab that was never seen counts forever. A
+   reconnect pending when it paused could reopen the stream, and a paused
+   tab still said "Just you, listening".
+5. **The derelicts already up have no echoes.** Only new ones get one, and
+   the live ones last up to three days, so a visit soon after deploying
+   meets silent derelicts, which is most collisions.
+6. **The encounter notice faded after 12 s** on a desktop, taken for a
+   launch notice.
+
+Should-fix: on the sky between about 900 and 1500 px the card covers the
+globe; switching cards kept the old one's scroll (the wrong element was
+reset); the announcement of how many are listening never went out while
+people kept arriving or leaving (each change restarted its wait); "since
+you last looked" counted rows of being heard, not people; closing a card
+opened at an object's address kept that object's title, missed an address
+without its trailing slash, and kept `?object=` in the catalogue's;
+stale lines in ADRs 0016 and 0017 and a test comment; the ear sampled
+twice a second; the sky's feed test checks nothing on a fresh database;
+a derelict's card says "it went up before anything here had gone" for
+every derelict without an echo, and a satellite's "hasn't passed over a
+station while anyone was listening" is the old rule. Opinions: the
+question's day would be better from the time zone (it says 1 am in
+summer); the beacons column lost its `aside` landmark; looking back ten
+minutes after a stall blocked the event loop for 3.9 s in a crowded
+harness.
+
+Checked and fine: focus after a manoeuvre from a card, the opt-in box,
+an empty launch no longer asks you to sign up, the sky's card non-modal
+and switchable, no overflow on a phone, one cookie set at an object's
+address, the same-pass rule against a brute-force oracle (449 of 453
+passes, no extras), and no owner leaking through the stream.
+
+## 2026-10-07 — Review fix 6: the second review's findings
+
+All six must-fixes, and most of the rest:
+
+- **Only a browser that has loaded something here is listening.** Any
+  request but the event stream notes its browser (hashed, as a listener
+  is) in a new `visitors` table (migration `0009_visitors`); a stream
+  counts only if its cookie is there. Kept rather than held in memory, so
+  the tabs that reconnect after a deploy still count. This replaces the
+  "cookie made for this request" rule, and `locals.newPerson` is gone.
+  Checked against the running build: six streams with made-up cookies,
+  then a seventh, read "listening: 0"; a browser that loaded `/sky/`
+  first read 1. A script can still load a page first, like any new
+  browser (ADR 0009's cost, said in ADR 0016).
+- **The cap is drawn at random**, so 200 streams opened first can't crowd
+  out the people who came after.
+- **Someone who starts listening mid-pass is credited.** Each pass is kept
+  with who it has credited; every second on air credits whoever is newly
+  listening (the transmission row is written once, its count updated),
+  and everyone is told the new count, which updates the card where it is
+  (an older pass's recount changes the counts, not the "last heard").
+- **The ear looks once per tick** (it sampled twice, as the interval
+  drifts past a second) **and two minutes back at most**, not ten, after
+  a stall (ten held the event loop for 3.9 s in the reviewer's crowded
+  harness). The heard tests that span a lap listen a minute at a time.
+- **The announcement of how many are listening** is a trailing throttle:
+  a change starts the wait and later changes don't restart it.
+- **"Since you last looked"** counts people, each once (`countDistinct`),
+  and says "3 people heard yours", not "3 more people".
+- **Derelicts already up get echoes** at the server's first settle, once,
+  before anything moves (so a replay after a stop still breaks the same
+  words). A derelict's card no longer says "it went up before anything
+  had gone" of every echo-less one, nor "long gone" of a satellite
+  brought down a minute ago.
+- **The encounter notice** has its own id, stays until its × is clicked,
+  and sits over the bottom left of the scene, clear of the view buttons
+  (the first try, at the top, covered them at 1280 px wide) and of a
+  collision's card. On a phone, making the notice hold its close button
+  (`position: relative`) let its desktop `left: 50%` push it off screen
+  and widen the page to 569 px; caught on the iPhone check and fixed.
+- **A 140-character line takes four lines** in the stations below
+  1440 px wide, as on a phone (measured at 1280x720: scrollHeight 76,
+  clientHeight 76; it was 76 against 57).
+- **On the sky between 832 and 1440 px the card covers the beacons
+  column**, not the globe.
+- **A tab opened hidden pauses** after a minute like one hidden later; a
+  reconnect pending at the pause no longer reopens the stream; a paused
+  tab says "Not listening while hidden".
+- **Closing a card** opened at `/object/12`, `/object/12/` or the
+  catalogue's `?object=12` leaves the catalogue at its own address
+  (keeping `show=mine`) with its own title, and focus on its heading.
+  Switching cards starts the new one at its top (the dialog scrolls, not
+  its body).
+- **The question's day** follows Canberra's clock (`Intl`, Sydney's zone),
+  summer time included, so it turns at midnight there all year; the
+  tests check a summer and a winter midnight.
+- The beacons column is an `aside` again; "Not heard yet" says "on air";
+  ADRs 0016 and 0017 (proposed) say what the code now does (the feed
+  updates cards in place, derelicts carry echoes, the listening rules,
+  nothing pruned yet).
+
+Not done: the sky's feed test still checks only the empty state on a
+fresh database (a pass over HTTP is minutes away; the cards' content is
+covered by the server tests); `transmissions`, `listens` and `visitors`
+aren't pruned; the listener hash stays unkeyed (said in ADR 0016).
+
+Tests first where they could be: late listeners, the random cap, made-up
+cookies and remembering visitors after a restart, the announcement under
+churn (these four failed against the old code), news counting people,
+the echo backfill, and the summer midnight. `pnpm check` green (289
+tests, 0 errors, 0 warnings); `pnpm check:evidence` green. Checked in
+Chromium at 1280x720 (four-line beacon, the card over the column, the
+notice clear of the buttons), 1920x1080, 1366x768 (switching cards) and
+an iPhone 14 (390 wide, no overflow, the notice dismissed).

@@ -179,7 +179,7 @@ import("./scene.ts")
       obstacles: [
         document.querySelector<HTMLElement>(".sky-page .panels")!,
         document.getElementById("views")!,
-        ...(document.getElementById("launched-notice") ? [document.getElementById("launched-notice")!] : []),
+        ...[document.getElementById("launched-notice"), document.getElementById("met-notice")].filter((n) => n !== null),
         document.getElementById("collision-card")!,
         // an object's card, beside the beacons (it's not modal here)
         document.getElementById("object-card")!,
@@ -388,6 +388,15 @@ function news(time: number) {
 setInterval(listen, 250);
 listen();
 
+// "One of yours met something" stays until it's dismissed: it's news, and
+// the reason to go and look (ADR 0017).
+const metNotice = document.getElementById("met-notice");
+const dismiss = metNotice?.querySelector<HTMLButtonElement>(".notice-close");
+if (metNotice && dismiss) {
+  dismiss.hidden = false;
+  dismiss.addEventListener("click", () => (metNotice.hidden = true));
+}
+
 // The "in orbit" notice after a launch floats over the scene; it fades after
 // a few seconds (on a phone it sits in the page and stays). After a first
 // launch, the seconds start once the explainer over it is closed.
@@ -405,7 +414,7 @@ if (notice && getComputedStyle(notice).position === "absolute") {
 
 // The feed beside the stations: each beacon heard while someone was
 // listening, once, the latest pass first. The server renders it; each pass
-// it hears after that comes over the stream and goes to the top.
+// it hears after that comes over the stream.
 const feedList = document.getElementById("feed")!;
 const feedEmpty = document.getElementById("feed-empty")!;
 const FEED = Number(feedList.dataset.size);
@@ -492,8 +501,12 @@ function heard(item: HeardItem) {
   heardCount.set(item.id, item.heardBy);
   const listed = feed.findIndex((f) => f.key === item.key);
   if (listed >= 0) {
-    feed[listed] = item;
-    feedList.querySelector(`[data-key="${CSS.escape(item.key)}"]`)?.replaceWith(heardCard(item));
+    // someone new heard an earlier pass (of this, or of another piece of
+    // its wreck): the counts change, not where or when it was last heard
+    const was = feed[listed];
+    const kept = item.at >= was.at ? item : { ...was, heardBy: item.heardBy, passes: item.passes, pieces: item.pieces, up: item.up };
+    feed[listed] = kept;
+    feedList.querySelector(`[data-key="${CSS.escape(kept.key)}"]`)?.replaceWith(heardCard(kept));
     return;
   }
   feed = [item, ...feed].slice(0, FEED);
@@ -818,25 +831,28 @@ function connect() {
 
   stream.addEventListener("error", () => {
     setConnection("offline");
-    if (stream.readyState === EventSource.CLOSED && current === stream) setTimeout(connect, 3000);
+    // not if the tab has paused since (below)
+    if (stream.readyState === EventSource.CLOSED && current === stream) setTimeout(() => current === stream && connect(), 3000);
   });
 }
 connect();
 
-// A tab left hidden stops listening after a minute: it isn't anyone's
+// A tab hidden for a minute stops listening, and so does one opened hidden
+// (in the background, or restored with the browser): it isn't anyone's
 // audience (ADR 0016). Coming back to it reconnects, and the stream's hello
 // catches the page up.
 let hiddenFor: ReturnType<typeof setTimeout> | undefined;
-document.addEventListener("visibilitychange", () => {
+function whenHidden() {
+  clearTimeout(hiddenFor);
   if (document.hidden) {
     hiddenFor = setTimeout(() => {
       current?.close();
       current = null;
       connection.dataset.state = "offline";
       connection.textContent = "Paused";
+      listeningLine.textContent = "Not listening while hidden";
     }, 60_000);
-  } else {
-    clearTimeout(hiddenFor);
-    if (!current) connect();
-  }
-});
+  } else if (!current) connect();
+}
+document.addEventListener("visibilitychange", whenHidden);
+whenHidden();

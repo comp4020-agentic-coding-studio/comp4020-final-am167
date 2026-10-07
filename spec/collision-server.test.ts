@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { FRAGMENTS, HIT, fatalMeeting, nextMeeting } from "../src/lib/collide.ts";
 import { angleAt, periodAt, radiusAt, type Elements } from "../src/lib/orbit.ts";
@@ -342,6 +343,22 @@ describe("a derelict's echo", async () => {
     expect(sky.encountersOf("mo", at + 1)[0].other).toMatchObject({ kind: "derelict", echoOf: "LANTERN" });
     expect(sky.newsSince("mo", T, at + 1).encounters).toHaveLength(1);
     expect(sky.newsSince("mo", at + 1, at + 1).encounters).toHaveLength(0);
+  });
+});
+
+// the second review, 2026-10-07: the derelicts up before echoes stayed
+// silent for their whole lives (up to three days)
+describe("derelicts up from before echoes", async () => {
+  const { sky, db, schema } = await freshServer();
+  it("get one as the server starts, once something has gone", () => {
+    const silent = db.insert(schema.objects).values({ kind: "derelict", band: "mid", launchedAt: T - HOUR, ...orbit(2.3, 1, 1, T - HOUR) }).returning().get();
+    const gone = db
+      .insert(schema.objects)
+      .values({ kind: "satellite", owner: "old", callsign: "EMBER", beacon: "kept the porch light on for you", band: "low", launchedAt: T - 9 * HOUR, fate: "decayed", fateAt: T - HOUR, ...orbit(1.3, 0, 1, T - 9 * HOUR) })
+      .returning()
+      .get();
+    sky.settle(T);
+    expect(db.select().from(schema.objects).where(eq(schema.objects.id, silent.id)).get()).toMatchObject({ words: gone.beacon, echo: gone.id });
   });
 });
 

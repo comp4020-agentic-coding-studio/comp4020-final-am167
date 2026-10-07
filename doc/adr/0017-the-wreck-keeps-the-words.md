@@ -72,8 +72,10 @@ Yours.**
   the other's shuffled, and which comes first is drawn per fragment, all
   seeded by the two objects' ids, so a replay after a restart makes the
   same shards. A side's line is its beacon (a satellite), its own shard
-  (debris), or nothing (a derelict is dead: silent). If neither side has
-  words, the fragments are silent. A shard is checked against the word
+  (debris), or its echo (a derelict: the last words of a satellite gone
+  from the sky, picked when it's put up; ones up from before echoes get
+  one as the server starts). If neither side has words, the fragments are
+  silent. A shard is checked against the word
   filter (two clean lines can't spell anything run together, but it's
   checked anyway) and dropped if it fails.
 - **Static.** A fragment with words is heard over the stations like a
@@ -81,7 +83,8 @@ Yours.**
   (ADR 0016), styled as static, from whose collision. All the static over
   a station shares one turn between it (a fragment a cycle), so a crash
   costs every beacon there a share of the airtime without drowning them.
-  Silent fragments and derelicts stay silent.
+  Silent fragments stay silent, and a derelict never broadcasts its echo:
+  only its wreck does.
 - **What the wreck says.** A collision is told with its two beacons (the
   couplet) and with its wreck: every fragment's shard in order, the ones
   still up in full, the ones burned up faded. On the sky's collision card,
@@ -90,8 +93,10 @@ Yours.**
 - **An encounter.** Yours lists each collision a satellite of yours was in:
   what it met, that side's line (or what the debris that destroyed it was
   carrying), and what the wreck says now.
-- Stored as one nullable column, `objects.words`. Nothing is worked out
-  from meaning; the connection is causal, as the plan said it had to be.
+- Stored as nullable columns: `objects.words` (a fragment's shard, a
+  derelict's echo) and `objects.echo` (whose line it is). Nothing is
+  worked out from meaning; the connection is causal, as the plan said it
+  had to be.
 
 ## Consequences
 
@@ -113,7 +118,7 @@ Yours.**
   the same words.
 - Testable on the server: every word of both lines appears across the
   shards, in order within each side; the same collision gives the same
-  shards; a derelict adds nothing; a cascade carries words on; fragments
+  shards; a derelict adds its echo; a cascade carries words on; fragments
   with words are heard over a station and fragments without aren't; a
   collision's wreck fades as its fragments burn up; each owner's encounter
   names the other side.

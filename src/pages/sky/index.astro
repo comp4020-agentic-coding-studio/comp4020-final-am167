@@ -93,8 +93,9 @@ const view = launched ? "canberra" : null;
       <div id="collision-card" class="collision-card" role="status" hidden></div>
 
       {met && (
-        <p class="notice launched" id="launched-notice" role="status">
+        <p class="notice met" id="met-notice" role="status">
           One of yours met something: {headline(met.parties)}. <a href="/catalogue/?show=mine#encounters-title">See it in Yours</a>.
+          <button type="button" class="notice-close" aria-label="Dismiss" hidden>×</button>
         </p>
       )}
 
@@ -147,7 +148,7 @@ const view = launched ? "canberra" : null;
       </div>
     </div>
 
-    <div class="rail">
+    <aside class="rail" aria-label="Beacons">
       <section class="station" aria-labelledby="station-title">
         <div class="rail-head">
           <h2 id="station-title">Beacons</h2>
@@ -193,7 +194,7 @@ const view = launched ? "canberra" : null;
           station while someone is listening, as you are now.
         </p>
       </section>
-    </div>
+    </aside>
 
     <!-- an object's history (ADR 0012), opened by clicking it in the sky or
          a name in the latest launches, with your own's controls (ADR 0015) -->
@@ -444,6 +445,45 @@ const view = launched ? "canberra" : null;
 
   .sky-page .notice.fading {
     opacity: 0;
+  }
+
+  /* news that waits to be dismissed (one of yours met something): it
+     stays, so over the bottom left of the scene, clear of the view buttons
+     and of a collision as it happens (on a phone, in the page like the
+     others) */
+  .sky-page .notice.met {
+    padding-right: 2.75rem;
+  }
+
+  @media (min-width: 52.01rem) {
+    .sky-page .notice.met {
+      top: auto;
+      bottom: 1.25rem;
+      left: var(--gutter);
+      width: min(24rem, calc(45% - var(--gutter)));
+      transform: none;
+    }
+  }
+
+  .sky-page .notice-close {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: none;
+    color: var(--ink-dim);
+    font: inherit;
+    font-size: var(--step-1);
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .sky-page .notice-close:hover {
+    border-color: var(--grid-strong);
+    color: var(--amber);
   }
 
   /* A collision, as it happens (ADR 0010): over the bottom right of the
@@ -781,6 +821,16 @@ const view = launched ? "canberra" : null;
     animation: heard 0.4s ease-out;
   }
 
+  /* in a narrower column (under about 1440 px, and on a phone), a beacon
+     at its longest takes four lines (the second review, 2026-10-07) */
+  @media (max-width: 90rem) {
+    .sky-page .post-heard {
+      -webkit-line-clamp: 4;
+      line-clamp: 4;
+      height: calc(4 * 1.25 * var(--beacon-size));
+    }
+  }
+
   .sky-page .post-heard:empty::before {
     content: "Listening";
     color: var(--ink-dim);
@@ -990,7 +1040,9 @@ const view = launched ? "canberra" : null;
 
     .sky-page .notice {
       order: 1;
-      position: static;
+      /* in the page's flow; relative only to hold its close button */
+      position: relative;
+      inset: auto;
       width: auto;
       margin: 1rem var(--gutter) 0;
       transform: none;
@@ -1014,13 +1066,6 @@ const view = launched ? "canberra" : null;
     .sky-page .station {
       order: 3;
       padding-inline: var(--gutter);
-    }
-
-    /* narrower, so a beacon at its longest takes four lines */
-    .sky-page .post-heard {
-      -webkit-line-clamp: 4;
-      line-clamp: 4;
-      height: calc(4 * 1.25 * var(--beacon-size));
     }
 
     .sky-page .panels {

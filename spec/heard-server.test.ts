@@ -66,7 +66,14 @@ async function freshServer() {
       .get();
   const key = (person: string) => heard.listenerKey({ person, operator: null });
   const ears = (...people: string[]) => new Set(people.map(key));
-  return { sky, heard, told, db, schema, put, key, ears };
+  // listening over a long while, a minute a look, as the server's ear does
+  // a second a look (one look only goes back so far)
+  const hear = (from: number, to: number, who: Set<string>) => {
+    const passes = [];
+    for (let t = from; t < to; t += 60_000) passes.push(...heard.listen(t, Math.min(t + 60_000, to), who));
+    return passes;
+  };
+  return { sky, heard, told, db, schema, put, key, ears, hear };
 }
 
 describe("a beacon passing over a station", () => {
@@ -100,13 +107,13 @@ describe("a beacon passing over a station", () => {
   });
 
   it("counts each person once, however many passes they hear", async () => {
-    const { heard, put, ears } = await freshServer();
+    const { heard, put, ears, hear } = await freshServer();
     const sat = put("alice");
     // nearly a whole lap: over each of the three stations once
     const lap = Math.round(periodAt(1.3)) - 5_000;
-    const passes = heard.listen(T, T + lap, ears("bob", "carol"));
+    const passes = hear(T, T + lap, ears("bob", "carol"));
     expect(passes.map((p) => p.station).sort()).toEqual(["canberra", "goldstone", "madrid"]);
-    heard.listen(T + lap, T + 2 * lap, ears("bob", "dan"));
+    hear(T + lap, T + 2 * lap, ears("bob", "dan"));
     expect(heard.heardBy(sat.id)).toBe(3);
     expect(heard.recentlyHeard(10, undefined, T + 2 * lap)[0]).toMatchObject({ id: sat.id, heardBy: 3, passes: 6 });
   });
@@ -127,6 +134,47 @@ describe("a beacon passing over a station", () => {
     const [pass] = heard.listen(T + 4_000, T + 10_000, ears("bob"));
     expect(pass).toMatchObject({ object: sat.id, station: "canberra" });
     expect(pass.at).toBeGreaterThanOrEqual(T + 5_000);
+  });
+
+  // the second review, 2026-10-07: only those listening at its first
+  // second on air were credited, so arriving mid-pass counted for nothing
+  it("is heard by someone who starts listening while it's still on air", async () => {
+    const { heard, told, put, ears, db, schema } = await freshServer();
+    const sat = put("alice");
+    const [pass] = heard.listen(T, T + 4_000, ears("bob"));
+    expect(pass).toMatchObject({ object: sat.id, listeners: 1 });
+    // carol opens the sky mid-pass: the same pass, now heard by both
+    expect(heard.listen(T + 4_000, T + 8_000, ears("bob", "carol"))).toEqual([]);
+    expect(heard.heardBy(sat.id)).toBe(2);
+    const rows = db.select().from(schema.transmissions).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ at: pass.at, listeners: 2 });
+    expect(told.filter((e) => e.type === "heard").at(-1)).toMatchObject({ heard: { id: sat.id, at: pass.at, heardBy: 2, passes: 1 } });
+    // nothing new to say while the same people listen on
+    const before = told.length;
+    expect(heard.listen(T + 8_000, T + 10_000, ears("bob", "carol"))).toEqual([]);
+    expect(told.length).toBe(before);
+  });
+
+  // the second review: one stranger hearing three of yours read "3 more people"
+  it("tells its owner how many people heard theirs since they last looked, each once", async () => {
+    const { sky, heard, put, ears } = await freshServer();
+    const one = put("alice");
+    const two = put("alice", { phase: NEAR_CANBERRA + 0.001 });
+    heard.listen(T, T + 30_000, ears("bob"));
+    expect([heard.heardBy(one.id), heard.heardBy(two.id)]).toEqual([1, 1]);
+    expect(sky.newsSince("alice", T, T + 30_000).heardBy).toBe(1);
+  });
+
+  it("credits at most a few hundred a pass, drawn at random, not the first to arrive", async () => {
+    const { heard, put, key, db, schema } = await freshServer();
+    const sat = put("alice");
+    const crowd = Array.from({ length: heard.MOST_COUNTED + 100 }, (_, i) => key(`listener-${i}`));
+    const [pass] = heard.listen(T, T + 10_000, new Set(crowd));
+    expect(pass.listeners).toBe(heard.MOST_COUNTED);
+    expect(heard.heardBy(sat.id)).toBe(heard.MOST_COUNTED);
+    const credited = new Set(db.select({ listener: schema.listens.listener }).from(schema.listens).all().map((row) => row.listener));
+    expect(crowd.slice(heard.MOST_COUNTED).some((listener) => credited.has(listener))).toBe(true);
   });
 
   // the review, 2026-10-07: heard means on air, not merely overhead
@@ -237,14 +285,14 @@ describe("what was heard", () => {
 // the review, 2026-10-07: a wreck's static is one card, not one a fragment
 describe("a wreck's static in the feed", () => {
   it("is one card for all its fragments, counting their passes and what's still up", async () => {
-    const { heard, db, schema, put, ears } = await freshServer();
+    const { heard, db, schema, put, ears, hear } = await freshServer();
     const pieces = [0, 1, 2].map((n) => put(null, { kind: "derelict", phase: NEAR_CANBERRA - n * 0.6 }));
     for (const piece of pieces) {
       db.update(schema.objects).set({ kind: "debris", sourceCollision: 77, words: `piece ${piece.id} … of two lines` }).where(eq(schema.objects.id, piece.id)).run();
     }
     // a lap: each piece comes over each station
     const lap = Math.round(periodAt(1.3)) - 5_000;
-    const passes = heard.listen(T, T + lap, ears("bob", "carol"));
+    const passes = hear(T, T + lap, ears("bob", "carol"));
     expect(passes.length).toBeGreaterThan(3);
     const feed = heard.recentlyHeard(10, undefined, T + lap);
     expect(feed).toHaveLength(1);
@@ -284,10 +332,19 @@ describe("listening", () => {
     expect(events.audience().size).toBe(0);
   });
 
-  it("doesn't count a stream whose cookie was made just for it", async () => {
+  // the second review, 2026-10-07: six streams carrying a made-up cookie,
+  // with no page ever loaded, made a satellite "heard by 6 people"
+  it("counts a stream only from a browser that has loaded something here, and remembers it", async () => {
     const { heard } = await freshServer();
-    expect(heard.listenerFor({ person: "fresh", newPerson: true, operator: null })).toBeNull();
-    expect(heard.listenerFor({ person: "kept", newPerson: false, operator: null })).toBe(heard.listenerKey({ person: "kept", operator: null }));
+    expect(heard.listenerFor({ person: "made-up", operator: null })).toBeNull();
+    heard.visited("kept");
+    expect(heard.listenerFor({ person: "kept", operator: null })).toBe(heard.listenerKey({ person: "kept", operator: null }));
+    expect(heard.listenerFor({ person: "kept", operator: { id: 7 } })).toBe(heard.listenerKey({ person: "kept", operator: 7 }));
+    // after a restart, a stream reconnecting still counts
+    vi.resetModules();
+    const again = await import("../src/lib/heard.ts");
+    expect(again.listenerFor({ person: "kept", operator: null })).not.toBeNull();
+    expect(again.listenerFor({ person: "made-up", operator: null })).toBeNull();
   });
 
   it("tells everyone how many are listening once it settles, and recounts a stream that broke", async () => {
@@ -307,6 +364,26 @@ describe("listening", () => {
       await vi.advanceTimersByTimeAsync(2_000);
       expect(counts().at(-1)).toBe(1);
       expect(events.audience().size).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // the second review: each change restarted the wait, so while people
+  // kept coming and going nobody was ever told
+  it("tells everyone even while people keep coming and going", async () => {
+    vi.useFakeTimers();
+    try {
+      const { told } = await freshServer();
+      const events = await import("../src/lib/events.ts");
+      events.subscribe(() => {}, "p:stays");
+      for (let i = 0; i < 5; i++) {
+        const off = events.subscribe(() => {}, `p:passing-${i}`);
+        await vi.advanceTimersByTimeAsync(500);
+        off();
+        await vi.advanceTimersByTimeAsync(500);
+      }
+      expect(told.some((e) => e.type === "audience")).toBe(true);
     } finally {
       vi.useRealTimers();
     }

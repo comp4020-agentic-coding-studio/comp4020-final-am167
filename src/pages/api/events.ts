@@ -24,8 +24,9 @@ export const GET: APIRoute = ({ request, locals }) => {
       // hold what the snapshot itself sets off (a burn-up it catches up on, a
       // collision staged for this viewer) until after it: hello comes first
       let held: SkyEvent[] | null = [];
-      // a stream with a cookie made just now (a script, not a page someone
-      // opened) hears everything but isn't counted as listening (ADR 0016)
+      // a stream from a browser that has loaded nothing here (a script, or a
+      // made-up cookie) hears everything but isn't counted as listening
+      // (ADR 0016)
       const unsubscribe = subscribe(
         (event) => (held ? held.push(event) : send(event.type, visible(event))),
         listenerFor(locals),
