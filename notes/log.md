@@ -1255,3 +1255,7 @@ two devices signed in as the same operator, still boost once. New HTTP
 tests for both, and for the launchpad offering no manoeuvres; the rest of
 the HTTP tests moved from the launchpad to the sky panel and the
 catalogue. `pnpm check` green (190 tests).
+
+I accepted ADR 0011 (bringing your satellite down, or boosting it up a
+band) as it stands after the launchpad change. The manoeuvre commits so
+far: `948998e`, `e010756`, `f35f752`.

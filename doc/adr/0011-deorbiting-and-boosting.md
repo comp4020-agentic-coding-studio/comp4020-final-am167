@@ -1,6 +1,6 @@
 # 0011. Bringing your satellite down, or boosting it up a band
 
-**Status:** proposed (2026-10-07).
+**Status:** accepted (2026-10-07; proposed 2026-10-07).
 
 ## Context
 
