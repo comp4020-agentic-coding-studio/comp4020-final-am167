@@ -1,0 +1,78 @@
+---
+import { canManoeuvre, type Manoeuvrable } from "../lib/manoeuvre.ts";
+import { BANDS } from "../lib/orbit.ts";
+
+// Boost a satellite of yours up a band, or bring it down (ADR 0011): two
+// plain forms that work without JavaScript. With JavaScript, bringing one
+// down asks first (src/scripts/manoeuvres.ts). `keep` renders both, hidden
+// when they don't apply, for a page whose script switches them as the
+// satellite changes (the sky's station panel).
+interface Props {
+  object: Manoeuvrable & { id: number; callsign: string | null };
+  back: "/" | "/sky/";
+  keep?: boolean;
+  now?: number;
+}
+const { object, back, keep = false, now = Date.now() } = Astro.props;
+const can = canManoeuvre(object, now);
+const to = can.to ? BANDS[can.to].label : "";
+---
+<div class="manoeuvres" data-manoeuvres data-id={object.id}>
+  {(keep || can.boost === null) && (
+    <form method="post" action="/manoeuvre/" data-manoeuvre hidden={can.boost !== null}>
+      <input type="hidden" name="id" value={object.id} />
+      <input type="hidden" name="back" value={back} />
+      <button type="submit" name="action" value="boost" data-callsign={object.callsign}>
+        Boost to <span data-to>{to}</span>
+      </button>
+    </form>
+  )}
+  {(keep || can.deorbit === null) && (
+    <form method="post" action="/manoeuvre/" data-manoeuvre hidden={can.deorbit !== null}>
+      <input type="hidden" name="id" value={object.id} />
+      <input type="hidden" name="back" value={back} />
+      <button type="submit" name="action" value="deorbit" data-callsign={object.callsign}>
+        Bring it down
+      </button>
+    </form>
+  )}
+</div>
+
+<style>
+  .manoeuvres {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .manoeuvres form {
+    margin: 0;
+  }
+
+  .manoeuvres form[hidden] {
+    display: none;
+  }
+
+  button {
+    padding: 0.3rem 0.65rem;
+    font: inherit;
+    font-size: var(--step--1);
+    font-weight: 700;
+    color: var(--ink);
+    background: rgb(219 228 239 / 0.06);
+    border: 1px solid var(--grid-strong);
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  button:hover,
+  button:focus-visible {
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+
+  button[value="deorbit"] {
+    border-color: rgb(242 165 65 / 0.55);
+  }
+</style>

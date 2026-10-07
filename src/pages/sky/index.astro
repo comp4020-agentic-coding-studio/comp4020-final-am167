@@ -1,6 +1,9 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ManoeuvreControls from "../../components/ManoeuvreControls.astro";
+import ManoeuvreDialogs from "../../components/ManoeuvreDialogs.astro";
 import { ago, embed } from "../../lib/format.ts";
+import { REFUSALS, isRefusal } from "../../lib/manoeuvre.ts";
 import { skyCount } from "../../lib/story.ts";
 import { BANDS, bandAt, radiusAt, type Band } from "../../lib/orbit.ts";
 import { conjunctions, liveSky, recentCollisions, toPublic } from "../../lib/sky.ts";
@@ -19,6 +22,11 @@ const sky = liveSky()
 const launchedParam = Number(Astro.url.searchParams.get("launched"));
 const launched = sky.find((o) => o.id === launchedParam && o.mine) ?? null;
 const mine = sky.find((o) => o.mine) ?? null;
+// back from bringing one down or boosting it without JavaScript (ADR 0011)
+const yoursById = (name: string) => sky.find((o) => o.mine && o.id === Number(Astro.url.searchParams.get(name))) ?? null;
+const deorbited = yoursById("deorbited");
+const boosted = yoursById("boosted");
+const refused = Astro.url.searchParams.get("refused");
 // how many of the latest launches the summary lists (sky.ts keeps it live):
 // people's, not the derelicts the server adds or debris
 const RECENT = 6;
@@ -57,6 +65,15 @@ const collided = recentCollisions(5);
            (ADR 0010); over the scene, or under it on a phone -->
       <div id="collision-card" class="collision-card" role="status" hidden></div>
 
+      {!launched && boosted && (
+        <p class="notice launched" id="launched-notice" role="status">
+          <strong>{boosted.callsign}</strong> is climbing a band. It stays up far longer.
+        </p>
+      )}
+      {!launched && !boosted && isRefusal(refused) && (
+        <p class="notice launched" id="launched-notice" role="alert">{REFUSALS[refused]}</p>
+      )}
+
       {launched && (
         <p class="notice launched" id="launched-notice" role="status">
           <strong>{launched.callsign}</strong> is in orbit. Its beacon is broadcast
@@ -79,6 +96,12 @@ const collided = recentCollisions(5);
           </div>
           <p id="overhead-count" class="overhead-count">&nbsp;</p>
           {mine && <p id="your-pass" class="your-pass" data-id={mine.id}>Yours: {mine.callsign}.</p>}
+          {mine && (
+            <div id="your-controls" class="your-controls">
+              <ManoeuvreControls object={mine} back="/sky/" keep now={now} />
+              <p id="manoeuvre-error" class="manoeuvre-error" role="alert"></p>
+            </div>
+          )}
         </section>
 
         <section class="summary" aria-labelledby="summary-title" data-recent={RECENT}>
@@ -118,6 +141,7 @@ const collided = recentCollisions(5);
       </div>
     </section>
 
+    <ManoeuvreDialogs thanks={deorbited ? (deorbited.callsign ?? "Your satellite") : null} />
   </main>
 
   <script type="application/json" id="sky-data" set:html={embed({ serverTime: now, sky, launched: launched?.id ?? null, conjunctions: coming, collisions: collided })} />
@@ -458,6 +482,21 @@ const collided = recentCollisions(5);
     border-top: 1px solid var(--amber-dim);
     font-size: var(--step--1);
     box-sizing: content-box;
+  }
+
+  /* boost it, or bring it down (ADR 0011): the one the line is about */
+  .sky-page .your-controls {
+    margin-top: 0.5rem;
+  }
+
+  .sky-page .manoeuvre-error {
+    margin: 0.35rem 0 0;
+    font-size: var(--step--1);
+    color: var(--danger);
+  }
+
+  .sky-page .manoeuvre-error:empty {
+    display: none;
   }
 
   .sky-page .summary {

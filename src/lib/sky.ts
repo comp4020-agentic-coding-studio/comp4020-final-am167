@@ -2,11 +2,25 @@ import { and, count, desc, eq, inArray, max, ne, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { fatalMeeting, fragmentsOf, impactOf, nextMeeting } from "./collide.ts";
 import { listening, publish } from "./events.ts";
+import { REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
-import { BANDS, STATION_ANGLE, bandAt, periodAt, placeInBand, radiusAt, reentryAt, type Band, type Orbit } from "./orbit.ts";
+import {
+  BANDS,
+  DECAY,
+  STATION_ANGLE,
+  bandAt,
+  climb,
+  descend,
+  periodAt,
+  placeInBand,
+  radiusAt,
+  reentryAt,
+  type Band,
+  type Orbit,
+} from "./orbit.ts";
 
-const { objects, collisions, operators } = schema;
+const { objects, collisions, operators, manoeuvres } = schema;
 
 // How long between one person's launches (PLAN.md, "Launch limits"). There's
 // no limit on how many you have up: each launch is another beacon heard, and
@@ -48,6 +62,12 @@ export interface SkyObject extends Orbit {
   direction: 1 | -1;
   // for debris, the collision it came from
   sourceCollision: number | null;
+  // a manoeuvre's rate and the end of a climb (ADR 0011), part of the orbit
+  rate: number;
+  until: number | null;
+  // when its owner started bringing it down, and the boosts it has used
+  deorbitedAt: number | null;
+  boosts: number;
 }
 
 // Who is looking: their person cookie, and the operator they're signed in
@@ -96,6 +116,10 @@ const columns = {
   epoch: objects.epoch,
   direction: objects.direction,
   sourceCollision: objects.sourceCollision,
+  rate: objects.rate,
+  until: objects.until,
+  deorbitedAt: objects.deorbitedAt,
+  boosts: objects.boosts,
 };
 
 // The database keeps direction as a plain integer.
@@ -154,9 +178,10 @@ interface Hit {
   at: number;
 }
 
-// When every live pair will meet, if ever. Orbits never change, so neither
-// does when two of them meet: each pair is worked out once, when the second
-// of them is first seen, and forgotten when either leaves the sky.
+// When every live pair will meet, if ever. Orbits only change by a
+// manoeuvre (ADR 0011), so neither does when two of them meet: each pair is
+// worked out once, when the second of them is first seen, and forgotten
+// when either leaves the sky or manoeuvres (and then worked out again).
 const paired = new Set<number>();
 const meetings = new Map<string, Hit>();
 // the keys of each object's meetings, to forget them when it goes
@@ -351,15 +376,16 @@ export const collisionLog = (): CollisionRow[] => db.select().from(collisions).o
 // ── decay (ADR 0007) ──────────────────────────────────────────────────────
 
 // Everything that has burned up by now leaves the sky: its fate becomes
-// `decayed`, dated to the moment it burned up (worked out from its orbit, not
-// when this ran), and everyone watching is told.
+// `decayed` (or `deorbited`, if its owner brought it down: ADR 0011), dated
+// to the moment it burned up (worked out from its orbit, not when this
+// ran), and everyone watching is told.
 function markDecayed(now: number): SkyObject[] {
   const gone = live().filter((object) => reentryAt(object) <= now);
   if (gone.length > 0) {
     db.transaction((tx) => {
       for (const object of gone) {
         tx.update(objects)
-          .set({ fate: "decayed", fateAt: Math.round(reentryAt(object)) })
+          .set({ fate: object.deorbitedAt === null ? "decayed" : "deorbited", fateAt: Math.round(reentryAt(object)) })
           .where(and(eq(objects.id, object.id), eq(objects.fate, "live")))
           .run();
       }
@@ -646,6 +672,8 @@ export function browse(query: CatalogueQuery, who: Who, now = Date.now()): Catal
       epoch: objects.epoch,
       direction: objects.direction,
       sourceCollision: objects.sourceCollision,
+      rate: objects.rate,
+      until: objects.until,
     })
     .from(objects)
     .leftJoin(operators, eq(objects.operator, operators.id))
@@ -842,3 +870,82 @@ export function satellitesOf(who: Who): SkyObject[] {
     .all()
     .map(toObject);
 }
+
+// ── deorbiting and boosting (ADR 0011) ────────────────────────────────────
+
+export type ManoeuvreKind = "deorbit" | "boost";
+export type ManoeuvreRow = typeof manoeuvres.$inferSelect;
+type ManoeuvreResult = { ok: true; object: SkyObject } | { ok: false; error: string; why: Refusal };
+const refuse = (why: Refusal): ManoeuvreResult => ({ ok: false, error: REFUSALS[why], why });
+
+// Your satellite, live, as it is at `now`; or null.
+function yours(who: Who, id: number, now: number): SkyObject | null {
+  settle(now);
+  const row = db
+    .select(columns)
+    .from(objects)
+    .where(and(eq(objects.id, id), eq(objects.fate, "live"), eq(objects.kind, "satellite")))
+    .get();
+  if (!row || !ownedBy(row, who)) return null;
+  const object = toObject(row);
+  // gone already, though not marked yet
+  return reentryAt(object) > now ? object : null;
+}
+
+// A new orbit for an object, from `now`: stored, recorded, its collisions
+// worked out again, and everyone told.
+function manoeuvre(object: SkyObject, kind: ManoeuvreKind, orbit: Required<Orbit>, now: number, extra: Partial<typeof objects.$inferInsert>): SkyObject {
+  const after = db.transaction((tx) => {
+    const row = tx
+      .update(objects)
+      .set({ ...orbit, ...extra })
+      .where(and(eq(objects.id, object.id), eq(objects.fate, "live")))
+      .returning(columns)
+      .get();
+    tx.insert(manoeuvres)
+      .values({
+        object: object.id,
+        kind,
+        at: now,
+        fromRadius: radiusAt(object, now),
+        toRadius: kind === "deorbit" ? DECAY.burnRadius : radiusAt(orbit, orbit.until ?? now),
+      })
+      .run();
+    return toObject(row!);
+  });
+  // its meetings were for the old orbit: forget them, and the collisions
+  // coming that everyone was told of, then work them out again
+  for (const key of meetingsOf.get(object.id) ?? []) announced.delete(key);
+  forget(object.id);
+  publish({ type: "manoeuvre", manoeuvre: kind, object: after, operator: partyOf(after).operator });
+  unquiet();
+  refreshMeetings(live());
+  announce(now);
+  wakeForNext();
+  return after;
+}
+
+// Bring your satellite down (ADR 0011): it falls to the top of the
+// atmosphere in two minutes, then burns up, and ends `deorbited`.
+export function deorbit(who: Who, id: number, now = Date.now()): ManoeuvreResult {
+  const object = yours(who, id, now);
+  if (!object) return refuse("not-yours");
+  const why = canManoeuvre(object, now).deorbit;
+  if (why) return refuse(why);
+  return { ok: true, object: manoeuvre(object, "deorbit", descend(object, now), now, { deorbitedAt: now }) };
+}
+
+// Boost your satellite up a band (ADR 0011): it climbs to a height in the
+// next band, picked like a launch's, using its one tank of fuel.
+export function boost(who: Who, id: number, now = Date.now(), random = Math.random): ManoeuvreResult {
+  const object = yours(who, id, now);
+  if (!object) return refuse("not-yours");
+  const { boost: why, to } = canManoeuvre(object, now);
+  if (why || !to) return refuse(why ?? "top-band");
+  const target = placeInBand(to, now, random).radius;
+  return { ok: true, object: manoeuvre(object, "boost", climb(object, now, target), now, { boosts: object.boosts + 1 }) };
+}
+
+// An object's manoeuvres, oldest first.
+export const manoeuvresOf = (id: number): ManoeuvreRow[] =>
+  db.select().from(manoeuvres).where(eq(manoeuvres.object, id)).orderBy(manoeuvres.id).all();

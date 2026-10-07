@@ -5,6 +5,9 @@ import type { CollisionReport, Conjunction, SkyObject } from "./sky.ts";
 export type SkyEvent =
   | { type: "launch"; object: SkyObject }
   | { type: "decay"; object: SkyObject }
+  // an owner brought one down or boosted it (ADR 0011): its new orbit, and
+  // its operator's handle if it has one
+  | { type: "manoeuvre"; manoeuvre: "deorbit" | "boost"; object: SkyObject; operator: string | null }
   | { type: "conjunction"; conjunction: Conjunction }
   | { type: "collision"; collision: CollisionReport };
 

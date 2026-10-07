@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { FRAGMENTS, HIT, fatalMeeting, nextMeeting } from "../src/lib/collide.ts";
-import { angleAt, periodAt, radiusAt, type Orbit } from "../src/lib/orbit.ts";
+import { angleAt, periodAt, radiusAt, type Elements } from "../src/lib/orbit.ts";
 import type { SkyEvent } from "../src/lib/events.ts";
 
 // The server's side of collisions (ADR 0008): a collision is predicted and
@@ -42,7 +42,7 @@ async function freshServer() {
 const HOUR = 3_600_000;
 // in the future, so the server's own wake-up timers never fire mid-test
 const T = Date.now() + 10 * 24 * HOUR;
-const orbit = (radius: number, phase: number, direction: 1 | -1, epoch = T): Required<Orbit> => ({
+const orbit = (radius: number, phase: number, direction: 1 | -1, epoch = T): Elements => ({
   radius,
   phase,
   period: Math.round(periodAt(radius)),
@@ -162,7 +162,7 @@ describe("derelicts", async () => {
 describe("who a collision names (ADR 0010)", async () => {
   const { sky, heard, operators, db, schema } = await freshServer();
   // satellites on chosen orbits, as if launched (a launch's orbit is random)
-  const put = (values: Partial<typeof schema.objects.$inferInsert> & Required<Orbit>) => {
+  const put = (values: Partial<typeof schema.objects.$inferInsert> & Elements) => {
     const row = db
       .insert(schema.objects)
       .values({ kind: "satellite", band: "low", launchedAt: values.epoch, ...values })

@@ -1,4 +1,5 @@
 import { ago, until } from "../lib/format.ts";
+import { canManoeuvre } from "../lib/manoeuvre.ts";
 import {
   BANDS,
   OVERHEAD_HALF_WIDTH,
@@ -6,6 +7,7 @@ import {
   angleAt,
   bandAt,
   burnAt,
+  climbing,
   isOverhead,
   periodNow,
   plungeAt,
@@ -15,6 +17,7 @@ import {
 } from "../lib/orbit.ts";
 import { blame, couplet, headline, skyCount, type StoryParty } from "../lib/story.ts";
 import { countdown } from "./countdown.ts";
+import { wireManoeuvres } from "./manoeuvres.ts";
 
 // Keeps the shared sky live, and starts the scene that draws it. Positions
 // come from each object's orbit and the server's clock, never from the
@@ -34,6 +37,11 @@ interface Satellite {
   epoch: number;
   direction: 1 | -1;
   sourceCollision: number | null;
+  // a manoeuvre (ADR 0011): part of the orbit, and what its owner did
+  rate: number;
+  until: number | null;
+  deorbitedAt: number | null;
+  boosts: number;
   mine: boolean;
 }
 
@@ -118,12 +126,16 @@ interface BurnUp {
   callsign: string;
   at: number;
   mine: boolean;
+  // its owner brought it down (ADR 0011)
+  deorbited: boolean;
 }
 const burnUps = new Map<number, BurnUp>();
 // people's satellites only: wreckage burning up isn't news
 const burned = (sat: Satellite) => {
-  if (sat.kind === "satellite" && sat.callsign) burnUps.set(sat.id, { callsign: sat.callsign, at: reentryAt(sat), mine: sat.mine });
+  if (sat.kind === "satellite" && sat.callsign)
+    burnUps.set(sat.id, { callsign: sat.callsign, at: reentryAt(sat), mine: sat.mine, deorbited: sat.deorbitedAt !== null });
 };
+const burnedUp = (b: BurnUp) => (b.deorbited ? "was brought down, and burned up" : "burned up on re-entry");
 // the latest, and your own
 const latest = (mine = false) => {
   let found: BurnUp | null = null;
@@ -273,16 +285,43 @@ function listen() {
       count +
       (plungeAt(mine, time) !== null
         ? `${mine.callsign} is burning up on re-entry.`
-        : isOverhead(mine, time)
+        : mine.deorbitedAt !== null
+          ? `${mine.callsign} is coming down: it burns up in ${countdown(reentryAt(mine) - time)}.`
+          : climbing(mine, time)
+            ? `${mine.callsign} is climbing to the ${BANDS[bandAt(radiusAt(mine, mine.until ?? time))].label.toLowerCase()} band.`
+            : isOverhead(mine, time)
           ? `${mine.callsign} is over the station now: everyone watching can see your beacon. It burns up in ${left}.`
           : pass === null
             ? `${mine.callsign} burns up in ${left}, before it next reaches the station.`
             : `${mine.callsign} is next over the station in ${countdown(pass)}. It burns up in ${left}.`),
     );
   } else if (yourPass && yours) {
-    say(`${yours.callsign} burned up on re-entry ${ago(time - yours.at)}. `, true);
+    say(`${yours.callsign} ${burnedUp(yours)} ${ago(time - yours.at)}. `, true);
   }
+  control(mine ?? null, time);
   news(time);
+}
+
+// Boosting it, or bringing it down (ADR 0011): the controls under your line
+// are for the satellite it's about, and only what it can still do.
+const yourControls = document.getElementById("your-controls");
+let controlled = "";
+function control(sat: Satellite | null, time: number) {
+  if (!yourControls) return;
+  const can = sat ? canManoeuvre(sat, time) : null;
+  const key = sat && can ? `${sat.id}:${can.boost}:${can.deorbit}:${can.to}` : "";
+  if (key === controlled) return;
+  controlled = key;
+  for (const form of yourControls.querySelectorAll<HTMLFormElement>("form[data-manoeuvre]")) {
+    const button = form.querySelector<HTMLButtonElement>("button[name=action]")!;
+    const allowed = can !== null && (button.value === "boost" ? can.boost : can.deorbit) === null;
+    form.hidden = !allowed;
+    if (!sat || !can) continue;
+    form.querySelector<HTMLInputElement>("input[name=id]")!.value = String(sat.id);
+    button.dataset.callsign = sat.callsign ?? "";
+    const to = button.querySelector("[data-to]");
+    if (to && can.to) to.textContent = BANDS[can.to].label;
+  }
 }
 
 // Your satellite's line, with a way back to the pad once it's gone.
@@ -314,17 +353,20 @@ function news(time: number) {
     return sat.kind === "derelict" || !sat.callsign ? "a derelict" : named(sat);
   };
   const falling = speaking().find((sat) => plungeAt(sat, time) !== null);
+  const down = speaking().find((sat) => sat.deorbitedAt !== null && plungeAt(sat, time) === null);
   const last = latest();
   const story = stories.reduce<Story | null>((a, b) => (a && a.at > b.at ? a : b), null);
   const next = [...coming.values()].filter((c) => c.at > time).sort((a, b) => a.at - b.at)[0];
   const since = (at: number | undefined) => (at === undefined ? Infinity : time - at);
   let text = "";
   if (story && since(story.at) < 2 * 60_000) text = `${headline(story.parties)} ${ago(since(story.at))}.`;
-  else if (falling) text = `${named(falling)} is burning up on re-entry.`;
+  else if (falling)
+    text = `${named(falling)} ${falling.deorbitedAt !== null ? "was brought down, and is burning up" : "is burning up on re-entry"}.`;
+  else if (down) text = `${named(down)} is being brought down by its operator, to keep the sky clear.`;
   else if (next && next.at - time < 10 * 60_000)
     text = `Collision coming: ${who(next.a)} and ${who(next.b)}, in ${countdown(next.at - time)}.`;
   else if (story && since(story.at) < 15 * 60_000) text = `${headline(story.parties)} ${ago(since(story.at))}.`;
-  else if (last && since(last.at) < 15 * 60_000) text = `${named(last)} burned up on re-entry ${ago(since(last.at))}.`;
+  else if (last && since(last.at) < 15 * 60_000) text = `${named(last)} ${burnedUp(last)} ${ago(since(last.at))}.`;
   else if (next) text = `Next collision: ${who(next.a)} and ${who(next.b)}, in ${until(next.at - time)}.`;
   else {
     const soonest = speaking().sort((a, b) => reentryAt(a) - reentryAt(b))[0];
@@ -472,6 +514,29 @@ setInterval(() => {
   }
 }, 1000);
 
+// ── manoeuvres (ADR 0011) ─────────────────────────────────────────────────
+
+// A satellite's new orbit, from the stream or from your own manoeuvre: the
+// collisions it was heading for are off (the server announces any new ones).
+function manoeuvred(sat: Satellite) {
+  const known = sky.get(sat.id);
+  sky.set(sat.id, { ...sat, mine: known?.mine ?? sat.mine });
+  for (const [key, c] of coming) if (c.a === sat.id || c.b === sat.id) coming.delete(key);
+  rebuildHits();
+  renderSummary();
+}
+const manoeuvreError = document.getElementById("manoeuvre-error");
+wireManoeuvres<Satellite>({
+  inPlace: (sat) => {
+    if (manoeuvreError) manoeuvreError.textContent = "";
+    manoeuvred(sat);
+    listen();
+  },
+  refused: (message) => {
+    if (manoeuvreError) manoeuvreError.textContent = message;
+  },
+});
+
 // ── the event stream ──────────────────────────────────────────────────────
 
 const connection = document.getElementById("connection")!;
@@ -521,6 +586,12 @@ function connect() {
     const sat = JSON.parse(event.data) as Satellite;
     burned(sat);
     if (sky.has(sat.id)) renderSummary();
+  });
+
+  // an owner brought one down or boosted it: its new orbit
+  stream.addEventListener("manoeuvre", (event) => {
+    const told = JSON.parse(event.data) as { manoeuvre: "deorbit" | "boost"; object: Satellite };
+    manoeuvred(told.object);
   });
 
   // a collision coming: every screen draws it at the same moment

@@ -1,0 +1,134 @@
+---
+import { MANOEUVRE } from "../lib/orbit.ts";
+
+// Asking before a satellite is brought down, and thanking whoever does it
+// (ADR 0011). Without JavaScript the form posts at once, and the page it
+// comes back to has the thank-you open (`thanks`); with it, the question
+// comes first and the thank-you follows (src/scripts/manoeuvres.ts).
+interface Props {
+  thanks?: string | null;
+}
+const { thanks = null } = Astro.props;
+const minutes = Math.round(MANOEUVRE.descentMs / 60_000);
+---
+<dialog class="manoeuvre-dialog" id="deorbit-confirm" aria-labelledby="deorbit-confirm-title">
+  <form method="dialog" class="manoeuvre-dialog-body">
+    <h2 id="deorbit-confirm-title">Bring <span data-callsign></span> down?</h2>
+    <p>
+      It leaves orbit over the next {minutes} minutes and burns up in the
+      atmosphere. Its beacon won't be heard again, and it won't be up there
+      for anyone to collide with either.
+    </p>
+    <div class="manoeuvre-dialog-actions">
+      <button type="submit" value="yes" class="primary">Bring it down</button>
+      <button type="submit" value="no" class="quiet">Keep it up</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="manoeuvre-dialog thanks" id="thanks" aria-labelledby="thanks-title" open={thanks !== null}>
+  <form method="dialog" class="manoeuvre-dialog-body">
+    <h2 id="thanks-title">Thank you for keeping the sky clear</h2>
+    <p>
+      <strong data-callsign>{thanks}</strong> is on its way down: it meets the
+      atmosphere in {minutes} minutes and burns up. Every object brought down is
+      one fewer for anyone to collide with, and one fewer to break into debris.
+    </p>
+    <p class="thanks-note">Everyone watching sees it come down.</p>
+    <div class="manoeuvre-dialog-actions">
+      <button type="submit" class="primary">Close</button>
+    </div>
+  </form>
+</dialog>
+
+<style>
+  .manoeuvre-dialog {
+    width: min(30rem, calc(100vw - 2rem));
+    padding: 0;
+    border: 1px solid var(--grid-strong);
+    border-top: 3px solid var(--amber);
+    border-radius: 6px;
+    background: var(--night-deep);
+    color: var(--ink);
+    box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.6);
+  }
+
+  /* open without JavaScript: not modal, so placed over the page by hand */
+  .manoeuvre-dialog[open]:not(:modal) {
+    position: fixed;
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    z-index: 30;
+    margin: 0;
+  }
+
+  .manoeuvre-dialog::backdrop {
+    background: rgb(6 11 24 / 0.7);
+  }
+
+  .manoeuvre-dialog-body {
+    margin: 0;
+    padding: 1.5rem;
+  }
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: var(--step-2);
+    line-height: 1.15;
+  }
+
+  p {
+    margin: 0 0 1rem;
+    color: var(--ink-dim);
+  }
+
+  p strong {
+    color: var(--ink);
+  }
+
+  .thanks h2 {
+    color: var(--amber);
+  }
+
+  .thanks-note {
+    font-size: var(--step--1);
+  }
+
+  .manoeuvre-dialog-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  button {
+    width: auto;
+    padding: 0.6rem 1.1rem;
+    font: inherit;
+    font-weight: 800;
+    border: 0;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .primary {
+    color: var(--night-deep);
+    background: var(--amber);
+  }
+
+  .primary:hover {
+    background: #ffbb5c;
+  }
+
+  .quiet {
+    padding-inline: 0.25rem;
+    font-weight: 600;
+    color: var(--ink-dim);
+    background: none;
+    text-decoration: underline;
+  }
+
+  .quiet:hover {
+    color: var(--ink);
+  }
+</style>

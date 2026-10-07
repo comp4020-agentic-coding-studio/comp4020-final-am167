@@ -44,8 +44,11 @@ export function lasting(shortest: number, longest: number): string {
 // every few seconds.
 export const km = (value: number) =>
   `${value.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km`;
-export const falling = (kmPerHour: number) =>
-  `↓ ${kmPerHour < 10 ? kmPerHour.toFixed(1) : Math.round(kmPerHour).toLocaleString("en")} km/h`;
+// (or rising, through a boost: ADR 0011)
+export const falling = (kmPerHour: number) => {
+  const speed = Math.abs(kmPerHour);
+  return `${kmPerHour < 0 ? "↑" : "↓"} ${speed < 10 ? speed.toFixed(1) : Math.round(speed).toLocaleString("en")} km/h`;
+};
 
 // JSON for a <script type="application/json"> block: no "</script>" escapes.
 export const embed = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");

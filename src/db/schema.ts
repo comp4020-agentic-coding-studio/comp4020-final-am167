@@ -33,6 +33,15 @@ export const objects = sqliteTable(
     // the operator it belongs to, once its person has claimed or signed in
     // to one (ADR 0009); until then it's the owner cookie's
     operator: integer("operator"),
+    // a manoeuvre (ADR 0011): how fast it falls, as a multiple of drag alone
+    // (over 1 brought down, below 0 climbing), and when a climb ends; the
+    // orbit above is the one from the manoeuvre on
+    rate: real("rate").notNull().default(1),
+    until: integer("until"),
+    // when its owner started bringing it down; it ends `deorbited`
+    deorbitedAt: integer("deorbited_at"),
+    // how many boosts it has used, of the one tank it carries
+    boosts: integer("boosts").notNull().default(0),
     fate: text("fate", { enum: ["live", "decayed", "deorbited", "destroyed"] })
       .notNull()
       .default("live"),
@@ -83,4 +92,20 @@ export const collisions = sqliteTable(
     radius: real("radius").notNull(),
   },
   (t) => [index("collisions_at").on(t.at), uniqueIndex("collisions_pair").on(t.a, t.b)],
+);
+
+// Every manoeuvre (ADR 0011), kept forever (ADR 0003): which object, whether
+// it was brought down or boosted, when, and from what height to what height
+// (in planet radii; for a deorbit, the top of the atmosphere).
+export const manoeuvres = sqliteTable(
+  "manoeuvres",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    object: integer("object").notNull(),
+    kind: text("kind", { enum: ["deorbit", "boost"] }).notNull(),
+    at: integer("at").notNull(),
+    fromRadius: real("from_radius").notNull(),
+    toRadius: real("to_radius").notNull(),
+  },
+  (t) => [index("manoeuvres_object").on(t.object)],
 );

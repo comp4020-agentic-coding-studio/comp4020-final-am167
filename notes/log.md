@@ -1144,3 +1144,66 @@ can claim) and ADR 0010 (every screen names who caused a collision, the C9
 decision about several people at once). The README rewrite is low priority:
 I'll write it near the end of the project. Next for C9: the C9 part of
 `PROCESS.md`, `reflections/crit-9.md`, and whether to build deorbiting.
+
+## 2026-10-07 — C9: bringing a satellite down, and boosting it up a band
+
+Asked for both (branch `claude/c9-outstanding-work-17iuus`, on top of the
+handle pop-up from PR #2, which GitHub wouldn't let my own account approve,
+so it's merged into the branch rather than into `main`). **Deorbiting**: a
+gradual descent, and a dialog thanking whoever does it for being
+responsible. **Boosting**: keep a satellite up longer by climbing a band
+(low to mid, mid to high), gradually. Buttons on your satellites on the
+launchpad and in the sky's station panel. I also want to be able to click a
+satellite or fragment to see its history, for C9 but not yet: noted in
+`PLAN.md`.
+
+The agent's design, in ADR 0011 (proposed, for me to accept): a manoeuvre
+is a new epoch for the orbit with its own rate of fall, so positions stay
+closed form (ADR 0007) and every screen draws the same descent. Brought
+down: from any height it reaches the top of the atmosphere in two minutes,
+then burns up as anything does, and ends `deorbited`. Boosted: it climbs to
+a random height in the next band in 90 seconds, then falls by drag alone;
+each satellite has fuel for one boost, so it buys a band, not immortality.
+Every manoeuvre is kept in a new `manoeuvres` table, for the history view.
+
+The snag was collisions: the server predicts meetings on the rule that two
+orbits falling at one rate never get closer in height. A manoeuvring orbit
+moves through other heights, so `nextMeeting` now works in pieces: where
+two objects fall at different rates their heights cross once, and the
+stretch either side where they're within the hit distance is found by
+bisection. Plain pairs go through exactly the same steps as before, so old
+skies replay the same. A manoeuvre throws away the object's predicted
+meetings and works them out again; everyone gets a `manoeuvre` event, so
+screens drop the collisions called off. A boost can take you out of a
+collision coming, which is a taste of C10's dodging.
+
+Tests first (`spec/manoeuvre.test.ts` for the maths,
+`spec/manoeuvre-server.test.ts` for the server, `spec/manoeuvre-http.test.ts`
+over HTTP), each failing for the right reason before the code. Found on the
+way:
+- **`pnpm check` was flaky before this work**: the first stream on a fresh
+  server could get a staged collision's `launch` events before `hello`
+  (the adversarial review's item 10). The stream now holds what the
+  snapshot sets off until after `hello`.
+- My own test had the wrong crossing time (the lower orbit decays too).
+- On the sky page the background post went nowhere: the buttons are named
+  `action`, so `form.action` was the button, not the URL.
+- Capturing the clock before `nextLaunchAt` (which reads it again) gave a
+  brand-new visitor "You can launch again in 1 s" and a disabled form
+  whenever the millisecond ticked over in between. Caught by an existing
+  test failing one run in three.
+- The launchpad's "Yours in orbit" line became a list (one row each:
+  callsign, where it stands, its buttons); the old launch test's exact
+  wording was updated to the list.
+
+Checked in Chrome at 1920x1080 and iPhone 14: boosting HERON from the pad
+("Climbing to the high band"), bringing QUIET-SKY down (asked first, then
+thanked), watching both on the sky (HERON's trail curving outward,
+QUIET-SKY spiralling in and burning up at the limb, ended `deorbited`
+150 s after the order), and bringing HERON down from the station panel
+without leaving the sky. On the phone, the list no longer scrolls inside
+itself. `pnpm check` green three runs in a row (185 tests).
+
+![The thank-you after bringing QUIET-SKY down from the launchpad: asked first, thanked after, and the list says it's coming down](screenshots/2026-10-07-deorbit-thank-you.png)
+
+![The whole sky a minute later: QUIET-SKY burning up at the limb (bottom right) and HERON, brought down from the station panel, on its way](screenshots/2026-10-07-deorbit-descent-and-burn-up.png)
