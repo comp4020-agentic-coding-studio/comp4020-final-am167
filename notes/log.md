@@ -1753,3 +1753,4 @@ timeout, `pnpm test` now runs `fit.test.ts` on its own after the rest
 (`vitest run --exclude spec/fit.test.ts && vitest run spec/fit.test.ts`).
 `pnpm check` green: 220 then 2, no errors or warnings.
 
+Commit `1c289f4` (the fix, the test, the rule and the review's changes).
