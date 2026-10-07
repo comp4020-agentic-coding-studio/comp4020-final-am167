@@ -1783,3 +1783,5 @@ satellites up: after 40 seconds listening, the feed had filled with cards
 three stations and "Just you, listening".
 
 ![The sky with the beacons column: the three stations live, how many are listening, and the Heard feed of cards](screenshots/2026-10-07-beacons-column-and-heard-feed.png)
+
+Commit `e0db217`.
