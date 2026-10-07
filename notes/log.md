@@ -1876,3 +1876,5 @@ collision.
 ![A collision as it happens: both lines, what the wreck says, and Goldstone already playing static made of their words](screenshots/2026-10-07-the-wreck-says-and-static.png)
 
 ![An encounter in Yours: who MOTH met, what LANTERN had said, and what the wreck says](screenshots/2026-10-07-an-encounter-in-yours.png)
+
+Commit `fd0a0df`.
