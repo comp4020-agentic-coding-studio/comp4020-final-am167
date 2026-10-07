@@ -2064,4 +2064,4 @@ audience announced after settling and recounted when a stream breaks
 itself (fake timers; the reviewer noted deleting `startListening()` left
 the suite green). The lap test now looks at just under a lap: over a lap
 plus ten seconds the new code rightly finds Canberra twice. `pnpm check`
-green (277 tests), on a fresh database.
+green (277 tests), on a fresh database. Commit `1472389`.
