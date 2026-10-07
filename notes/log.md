@@ -1271,4 +1271,4 @@ shown again that visit. Without JavaScript it never opens, as before, and
 the line under the Launch button still makes the offer. Checked in Chrome:
 closed on load, open on Launch, skip launches, Escape doesn't, second
 Launch goes straight through. `pnpm check` green (190 tests); the timing is
-client-side, so the HTTP spec suite can't see it.
+client-side, so the HTTP spec suite can't see it. Commit `6f78d9a`.
