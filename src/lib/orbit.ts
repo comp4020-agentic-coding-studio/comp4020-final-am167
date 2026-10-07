@@ -286,6 +286,21 @@ export function isOverhead(orbit: Orbit, time: number): boolean {
   return Math.min(off, TAU - off) <= OVERHEAD_HALF_WIDTH;
 }
 
+// How long until an orbit next enters the station's window, or null if it
+// burns up first. (Its period shortens as it falls, so this is a touch long
+// for a high orbit; the sky re-reads it four times a second.)
+export function untilOverhead(orbit: Orbit, time: number): number | null {
+  if (plungeAt(orbit, time) !== null) return null;
+  // a retrograde orbit comes at the window from the other side (ADR 0008)
+  const angle = angleAt(orbit, time);
+  const gap =
+    orbit.direction === -1
+      ? (angle - (STATION_ANGLE + OVERHEAD_HALF_WIDTH) + TAU) % TAU
+      : (STATION_ANGLE - OVERHEAD_HALF_WIDTH - angle + TAU) % TAU;
+  const ms = (gap / TAU) * periodNow(orbit, time);
+  return time + ms < burnAt(orbit) ? ms : null;
+}
+
 // ── launching ──────────────────────────────────────────────────────────────
 
 // Bands have soft edges. A launch's radius is drawn from a bell curve around

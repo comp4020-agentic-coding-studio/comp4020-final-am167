@@ -16,6 +16,7 @@ import {
   placeInBand,
   radiusAt,
   reentryAt,
+  untilOverhead,
   type Band,
   type Orbit,
 } from "./orbit.ts";
@@ -782,6 +783,159 @@ export function catalogueCounts(): { live: number; all: number } {
     .from(objects)
     .get();
   return { live: Number(row?.live ?? 0), all: row?.all ?? 0 };
+}
+
+// ── an object's history (ADR 0012) ────────────────────────────────────────
+
+// One object's record, told at length: where it came from, what happened to
+// it, and what followed it.
+export interface History {
+  id: number;
+  kind: Kind;
+  callsign: string | null;
+  band: Band;
+  launchedAt: number;
+  handle: string | null;
+  mine: boolean;
+  fate: Fate;
+  fateAt: number | null;
+  // its beacon, once it's gone (or to its owner, always); while it flies,
+  // everyone else hears it only over the station, and it's withheld here
+  beacon: string | null;
+  withheld: boolean;
+  // while it's up: when it next passes over the station (null if it burns
+  // up first), and when it burns up
+  nextPassAt: number | null;
+  reentryAt: number | null;
+  // and its orbit, so a page can keep those counting down
+  orbit: Required<Orbit> | null;
+  // boosts and deorbits (ADR 0011), oldest first, with the band each aimed for
+  manoeuvres: { kind: ManoeuvreKind; at: number; to: Band }[];
+  // for debris: the collision it came from, what met, and who that traces to
+  origin: { collision: number; at: number; parties: [Party, Party]; roots: Root[] } | null;
+  // for anything destroyed: its collision, and what it met
+  end: { collision: number; at: number; with: Party } | null;
+  // everything downstream of it: the fragments its own collision left;
+  // everything those (and theirs) went on to: the collisions, what they
+  // destroyed, every fragment in all, and how many of those are still up.
+  // The blame, read forwards.
+  followed: { left: number; collisions: number; fragments: number; up: number; destroyed: Root[] };
+}
+
+const objectById = (id: number): SkyObject | null => {
+  const row = db.select(columns).from(objects).where(eq(objects.id, id)).get();
+  return row ? toObject(row) : null;
+};
+
+export function historyOf(id: number, who: Who, now = Date.now()): History | null {
+  settle(now);
+  const row = db
+    .select({ ...columns, fate: objects.fate, fateAt: objects.fateAt, handle: operators.handle })
+    .from(objects)
+    .leftJoin(operators, eq(objects.operator, operators.id))
+    .where(eq(objects.id, id))
+    .get();
+  if (!row) return null;
+  const object = toObject(row);
+  const mine = ownedBy(object, who);
+  const flying = object.fate === "live";
+  const shown = !flying || mine;
+  const pass = flying ? untilOverhead(object, now) : null;
+
+  // Every collision and every fragment, read once and walked in memory: two
+  // queries however long the cascade (the sky holds a few hundred objects,
+  // and the record grows by a few collisions an hour).
+  const byObject = new Map<number, CollisionRow[]>();
+  for (const c of db.select().from(collisions).all()) {
+    for (const member of [c.a, c.b]) byObject.set(member, [...(byObject.get(member) ?? []), c]);
+  }
+  const leftBy = new Map<number, { id: number; fate: Fate }[]>();
+  const debris = db
+    .select({ id: objects.id, fate: objects.fate, source: objects.sourceCollision })
+    .from(objects)
+    .where(sql`${objects.sourceCollision} IS NOT NULL`)
+    .all();
+  for (const d of debris) leftBy.set(d.source!, [...(leftBy.get(d.source!) ?? []), d]);
+
+  const party = (other: number) => {
+    const found = objectById(other);
+    return found ? partyOf(found) : null;
+  };
+  const meeting = (c: CollisionRow | null | undefined) => {
+    if (!c) return null;
+    const [a, b] = [party(c.a), party(c.b)];
+    return a && b ? { c, parties: [a, b] as [Party, Party] } : null;
+  };
+  const source =
+    object.sourceCollision === null
+      ? null
+      : meeting(db.select().from(collisions).where(eq(collisions.id, object.sourceCollision)).get());
+  // an object collides once: it's destroyed
+  const own = object.fate === "destroyed" ? meeting(byObject.get(id)?.[0]) : null;
+
+  // walk forwards: each collision a member of its lineage had, and the
+  // fragments each left, which join the lineage. What it hit is worked out
+  // last, once the whole lineage is known, so two of its own fragments
+  // meeting aren't counted as a loss.
+  const lineage = new Set([id]);
+  const queue = [id];
+  const walked = new Map<number, CollisionRow>();
+  let up = 0;
+  while (queue.length > 0) {
+    for (const c of byObject.get(queue.shift()!) ?? []) {
+      if (walked.has(c.id)) continue;
+      walked.set(c.id, c);
+      for (const fragment of leftBy.get(c.id) ?? []) {
+        if (lineage.has(fragment.id)) continue;
+        lineage.add(fragment.id);
+        queue.push(fragment.id);
+        if (fragment.fate === "live") up++;
+      }
+    }
+  }
+  const destroyed = [...walked.values()]
+    .filter((c) => c.id !== own?.c.id)
+    .flatMap((c) => [c.a, c.b].filter((other) => !lineage.has(other)))
+    .map(objectById)
+    .flatMap((o) => (o ? [{ id: o.id, kind: o.kind, callsign: o.callsign, operator: o.operator }] : []));
+  const names = handles(destroyed.map((o) => o.operator));
+
+  return {
+    id: object.id,
+    kind: object.kind,
+    callsign: object.callsign,
+    band: object.band,
+    launchedAt: object.launchedAt,
+    handle: row.handle,
+    mine,
+    fate: row.fate,
+    fateAt: row.fateAt,
+    beacon: shown ? object.beacon : null,
+    withheld: !shown && object.beacon !== null,
+    nextPassAt: pass === null ? null : now + pass,
+    reentryAt: flying ? reentryAt(object) : null,
+    orbit: flying
+      ? {
+          radius: object.radius,
+          phase: object.phase,
+          period: object.period,
+          epoch: object.epoch,
+          direction: object.direction,
+          rate: object.rate,
+          until: object.until,
+        }
+      : null,
+    manoeuvres: manoeuvresOf(id).map((m) => ({ kind: m.kind, at: m.at, to: bandAt(m.toRadius) })),
+    origin: source && { collision: source.c.id, at: source.c.at, parties: source.parties, roots: rootsOf(source.c.id) },
+    end: own && { collision: own.c.id, at: own.c.at, with: own.parties[own.c.a === id ? 1 : 0] },
+    followed: {
+      left: own ? (leftBy.get(own.c.id)?.length ?? 0) : 0,
+      collisions: walked.size - (own ? 1 : 0),
+      fragments: lineage.size - 1,
+      up,
+      destroyed: destroyed.map((o) => ({ ...o, operator: o.operator === null ? null : (names.get(o.operator) ?? null) })),
+    },
+  };
 }
 
 // ── launching ─────────────────────────────────────────────────────────────

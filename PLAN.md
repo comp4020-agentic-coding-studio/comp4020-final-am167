@@ -55,10 +55,15 @@ _Last updated 2026-10-07 (deorbiting and boosting built, in review; C9 write-ups
      branch `claude/c9-outstanding-work-17iuus` (with PR #2's handle
      pop-up), as PR #3.
   4. **Click a satellite or fragment to see its history** (Advay,
-     2026-10-07, for C9 but not yet): in the sky, clicking an object shows
-     its record: who launched it, when, its beacon, and for debris the
-     collision it came from and the satellites at its root (the lineage the
-     catalogue already keeps).
+     2026-10-07; ADR 0012, accepted; built and reviewed, not committed): in the sky, clicking an
+     object opens its record, also at `/object/<id>/` and linked from the
+     catalogue. Framed as "the sky remembers" (Ostrom: seeing what each
+     takes): who launched it, when, any manoeuvre, for debris the collision
+     it came from and its roots, how it ended, and **what followed** (its
+     fragments, how many are still up, what they destroyed). A live
+     satellite's beacon stays hidden (heard only overhead, with a countdown
+     to the next pass); once it's gone the beacon is shown as its epitaph;
+     its owner always sees their own.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or

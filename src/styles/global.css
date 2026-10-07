@@ -112,3 +112,71 @@ a:hover {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* An object's history (ADR 0012): on its own page, and in the panel the sky
+   opens when an object is clicked. Global, since the panel's markup is
+   fetched into the sky page. */
+.history {
+  --history-gap: 1.25rem;
+}
+
+.history p {
+  margin: 0.35rem 0 0;
+}
+
+.history .history-kind {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: var(--step--1);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.history .yours {
+  color: var(--amber);
+}
+
+.history-part {
+  margin-top: var(--history-gap);
+}
+
+.history-part :is(h2, h3) {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: var(--step--1);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.history-beacon {
+  margin: 0.4rem 0 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--amber);
+  font-size: var(--step-1);
+  font-style: italic;
+}
+
+.history-couplet {
+  color: var(--ink-dim);
+}
+
+.history-couplet q {
+  color: var(--ink);
+  font-style: italic;
+}
+
+.history-blame {
+  color: var(--ink-dim);
+  font-size: var(--step--1);
+}
+
+.history-manoeuvres {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.history time {
+  color: var(--ink-dim);
+}

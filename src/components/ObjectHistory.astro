@@ -1,0 +1,173 @@
+---
+import { ago, falling, km, until } from "../lib/format.ts";
+import { BANDS, climbing, fallRate, heightKm, isOverhead, radiusAt } from "../lib/orbit.ts";
+import type { History } from "../lib/sky.ts";
+import { blame, collisionOf, couplet, describe, headline, titleOf, type StoryParty } from "../lib/story.ts";
+import { countdown } from "../scripts/countdown.ts";
+
+// One object's history (ADR 0012), for its own page and for the panel the
+// sky opens when you click it: where it came from, what it said, how it
+// ended and what followed. The wording is the collision story's (ADR 0010):
+// two objects collide, debris destroys.
+interface Props {
+  history: History;
+  now: number;
+  // the level of its section headings: 2 on its own page, 3 in the panel
+  level: 2 | 3;
+}
+const { history: h, now, level } = Astro.props;
+const Heading = `h${level}` as "h2" | "h3";
+
+const kinds = { satellite: "Satellite", derelict: "Derelict", debris: "Fragment" } as const;
+const band = BANDS[h.band].label;
+const self: StoryParty = {
+  id: h.id,
+  kind: h.kind,
+  callsign: h.callsign,
+  beacon: h.beacon,
+  operator: h.handle,
+  from: h.origin?.roots ?? null,
+};
+// the other side of how it ended, and that side's beacon
+const met = h.end && ([self, h.end.with] as [StoryParty, StoryParty]);
+const theirLine = met ? couplet(met).find((line) => line.callsign !== h.callsign) : undefined;
+const live = h.orbit !== null;
+const radius = h.orbit ? radiusAt(h.orbit, now) : null;
+const overhead = h.orbit ? isOverhead(h.orbit, now) : false;
+const f = h.followed;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+// what its wreckage destroyed, each linked to its own history; a long
+// cascade names the first few
+const LOSSES = 8;
+const shownLosses = f.destroyed.slice(0, LOSSES);
+const moreLosses = f.destroyed.length - shownLosses.length;
+---
+<article
+  class="history"
+  data-id={h.id}
+  data-server-time={now}
+  data-orbit={h.orbit ? JSON.stringify(h.orbit) : undefined}
+>
+  <p class="history-kind">
+    {kinds[h.kind]}{h.mine && <span class="yours"> (yours)</span>}
+  </p>
+
+  <p class="history-lede">
+    {h.kind === "satellite" && (
+      <>Launched {h.handle ? <>by <strong>{h.handle}</strong></> : "without a handle"}, into the {band} band,{" "}
+      <time datetime={new Date(h.launchedAt).toISOString()}>{ago(now - h.launchedAt)}</time>.</>
+    )}
+    {h.kind === "derelict" && (
+      <>A dead satellite, nobody's: the sky keeps a few so it's never empty. Put in the {band} band{" "}
+      <time datetime={new Date(h.launchedAt).toISOString()}>{ago(now - h.launchedAt)}</time>.</>
+    )}
+    {h.kind === "debris" && (
+      <>Broken off in {h.origin ? collisionOf(h.origin.roots) : "a collision"}{" "}
+      <time datetime={new Date(h.launchedAt).toISOString()}>{ago(now - h.launchedAt)}</time>.</>
+    )}
+  </p>
+
+  {h.kind === "satellite" && (h.beacon !== null || h.withheld) && (
+    <section class="history-part">
+      <Heading>{live ? "Its beacon" : "What it said"}</Heading>
+      {h.beacon !== null && <blockquote class="history-beacon"><q>{h.beacon}</q></blockquote>}
+      {live && (
+        <p>
+          {h.mine && h.beacon !== null ? "Everyone else hears it " : "Heard "}only as it passes over the station.{" "}
+          <span data-pass>
+            {overhead
+              ? "It's over the station now."
+              : h.nextPassAt === null
+                ? "It burns up before it next gets there."
+                : `Next pass in ${countdown(h.nextPassAt - now)}.`}
+          </span>
+        </p>
+      )}
+    </section>
+  )}
+
+  {h.origin && (
+    <section class="history-part">
+      <Heading>Where it came from</Heading>
+      <p>{headline(h.origin.parties)} <time datetime={new Date(h.origin.at).toISOString()}>{ago(now - h.origin.at)}</time>.</p>
+      {couplet(h.origin.parties).map(({ callsign, beacon }) => (
+        <p class="history-couplet"><q>{beacon}</q> {callsign}</p>
+      ))}
+      <p class="history-blame">{blame(h.origin.parties)}</p>
+    </section>
+  )}
+
+  <section class="history-part">
+    <Heading>{live ? "Now" : "How it ended"}</Heading>
+    {h.manoeuvres.length > 0 && (
+      <ul class="history-manoeuvres">
+        {h.manoeuvres.map((m) => (
+          <li>
+            {m.kind === "boost" ? `Boosted to the ${BANDS[m.to].label} band` : "Brought down by its operator, to keep the sky clear"}{" "}
+            <time datetime={new Date(m.at).toISOString()}>{ago(now - m.at)}</time>.
+          </li>
+        ))}
+      </ul>
+    )}
+    {h.orbit && radius !== null && h.reentryAt !== null && (
+      <p>
+        In orbit at {km(heightKm(radius))}, {climbing(h.orbit, now) ? "climbing" : "falling"}{" "}
+        {falling(fallRate(h.orbit, now))}. It burns up in{" "}
+        <span data-reentry={h.reentryAt}>about {until(h.reentryAt - now)}</span>.
+      </p>
+    )}
+    {h.fate === "decayed" && h.fateAt !== null && (
+      <p>Burned up on re-entry <time datetime={new Date(h.fateAt).toISOString()}>{ago(now - h.fateAt)}</time>.</p>
+    )}
+    {h.fate === "deorbited" && h.fateAt !== null && (
+      <p>
+        Brought down by its operator, and burned up{" "}
+        <time datetime={new Date(h.fateAt).toISOString()}>{ago(now - h.fateAt)}</time>. The sky is a little clearer for it.
+      </p>
+    )}
+    {h.end && met && (
+      <>
+        <p>
+          {headline(met)} <time datetime={new Date(h.end.at).toISOString()}>{ago(now - h.end.at)}</time>.
+          {h.end.with.kind !== "debris" && <> <a href={`/object/${h.end.with.id}/`}>See {describe(h.end.with)}</a>.</>}
+        </p>
+        {theirLine && <p class="history-couplet"><q>{theirLine.beacon}</q> {theirLine.callsign}</p>}
+        <p class="history-blame">{blame(met)}</p>
+      </>
+    )}
+  </section>
+
+  <section class="history-part">
+    <Heading>What followed</Heading>
+    {h.end === null ? (
+      <p>{live ? "It hasn't collided with anything." : "It never collided with anything."}</p>
+    ) : (
+      <>
+        <p>
+          The collision left {f.left === 0 ? "no fragments" : plural(f.left, "fragment")}.
+          {f.collisions > 0 && (
+            <>
+              {" "}That wreckage went on to {plural(f.collisions, "more collision")}
+              {shownLosses.length > 0 && (
+                <>
+                  , destroying{" "}
+                  {shownLosses.map((o, i) => (
+                    <>{i === 0 ? "" : i === shownLosses.length - 1 && moreLosses === 0 ? " and " : ", "}<a href={`/object/${o.id}/`}>{titleOf(o)}</a></>
+                  ))}
+                  {moreLosses > 0 && <> and {moreLosses} more</>}
+                </>
+              )}
+              .
+            </>
+          )}
+        </p>
+        {f.fragments > 0 && (
+          <p>
+            {f.fragments > f.left && <>{plural(f.fragments, "fragment")} in all. </>}
+            {f.up === 0 ? "None are" : f.up === f.fragments && f.up > 1 ? "All are" : `${f.up} ${f.up === 1 ? "is" : "are"}`} still in orbit.
+          </p>
+        )}
+      </>
+    )}
+  </section>
+</article>

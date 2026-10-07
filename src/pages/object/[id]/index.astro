@@ -1,0 +1,54 @@
+---
+import Base from "../../../layouts/Base.astro";
+import ObjectHistory from "../../../components/ObjectHistory.astro";
+import { historyOf } from "../../../lib/sky.ts";
+import { titleOf } from "../../../lib/story.ts";
+
+// One object's history (ADR 0012), at an address of its own: linked from
+// the catalogue, opened from the sky, and complete without JavaScript.
+const { person, operator } = Astro.locals;
+// one address per object: digits, no leading zero
+const id = /^[1-9]\d{0,15}$/.test(Astro.params.id ?? "") ? Number(Astro.params.id) : null;
+const now = Date.now();
+const history = id === null ? null : historyOf(id, { person, operator: operator?.id ?? null }, now);
+if (!history) return new Response("Nothing by that number has been in this sky.", { status: 404 });
+const title = titleOf(history);
+---
+<Base title={`Kessler: ${title}`} current="catalogue">
+  <main class="history-page">
+    <h1>{title}</h1>
+    <ObjectHistory history={history} now={now} level={2} />
+    <p class="history-links">
+      <a href="/sky/">See the sky</a>
+      <a href="/catalogue/?show=all">The whole catalogue</a>
+    </p>
+  </main>
+</Base>
+
+<script>
+  import { keepCounting } from "../../../scripts/history.ts";
+
+  const article = document.querySelector<HTMLElement>(".history")!;
+  const offset = Number(article.dataset.serverTime) - Date.now();
+  keepCounting(article, () => Date.now() + offset);
+</script>
+
+<style>
+  .history-page {
+    max-width: 40rem;
+    padding: 1rem var(--gutter) 3rem;
+  }
+
+  h1 {
+    margin: 0.5rem 0 0;
+    font-size: var(--step-2);
+    font-variation-settings: "wdth" 112;
+  }
+
+  .history-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin-top: 2rem;
+  }
+</style>

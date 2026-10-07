@@ -181,7 +181,7 @@ const number = (n: number) => n.toLocaleString("en");
                 <tr class:list={{ mine: o.mine, gone: o.fate !== "live" }}>
                   <th scope="row">
                     <span class:list={["swatch", o.kind]} style={`--hue: ${(o.id * 137.508) % 360}`}></span>
-                    {o.kind === "satellite" ? o.callsign : kinds[o.kind]}
+                    <a class="history-link" href={`/object/${o.id}/`}>{o.kind === "satellite" ? o.callsign : kinds[o.kind]}</a>
                     {o.mine && <span class="yours"> (yours)</span>}
                     {o.from && <span class="lineage"> from {whole(collisionOf(o.from))}</span>}
                     {o.handle && <span class="operator-inline"> {o.handle}</span>}

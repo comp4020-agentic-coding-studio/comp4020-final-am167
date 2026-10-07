@@ -18,3 +18,4 @@ be edited until it's accepted.
 | [0009](0009-an-operator-you-can-claim.md) | A person is a cookie, and an operator you can claim | accepted |
 | [0010](0010-every-screen-names-who-caused-it.md) | Every screen names who caused a collision, as it happens | accepted |
 | [0011](0011-deorbiting-and-boosting.md) | Bringing your satellite down, or boosting it up a band | accepted |
+| [0012](0012-every-object-keeps-its-history.md) | Every object keeps its history, and a beacon is read in full once it's gone | accepted |
