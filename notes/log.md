@@ -1238,3 +1238,20 @@ Not fixed: "next over the station" estimates from the period now, so it's
 rough mid-manoeuvre; with several satellites the sky's panel offers its
 controls for the one it's talking about, not a choice (the launchpad has
 them all). `pnpm check` green (190 tests).
+
+## 2026-10-07 — C9: manoeuvres off the launchpad; one boost, for sure
+
+After seeing the screenshots, I didn't want satellites managed on the
+launchpad: it was getting cluttered. It's back to the one line naming yours
+in orbit, and boosting and bringing down live in the sky's station panel
+only (which now says "Boost used" or "Highest band" when there's no boost).
+The manoeuvre form always goes back to the sky. ADR 0011 (still proposed,
+so editable) says so.
+
+I also wanted to be sure a satellite can only be boosted once. It already
+was (one tank of fuel per satellite, checked before the boost), and now the
+database write checks it too, so two requests at the same moment, or from
+two devices signed in as the same operator, still boost once. New HTTP
+tests for both, and for the launchpad offering no manoeuvres; the rest of
+the HTTP tests moved from the launchpad to the sky panel and the
+catalogue. `pnpm check` green (190 tests).

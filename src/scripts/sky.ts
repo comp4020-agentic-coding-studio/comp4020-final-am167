@@ -1,5 +1,5 @@
 import { ago, until } from "../lib/format.ts";
-import { canManoeuvre } from "../lib/manoeuvre.ts";
+import { REFUSALS, canManoeuvre } from "../lib/manoeuvre.ts";
 import {
   BANDS,
   OVERHEAD_HALF_WIDTH,
@@ -321,6 +321,14 @@ function control(sat: Satellite | null, time: number) {
     button.dataset.callsign = sat.callsign ?? "";
     const to = button.querySelector("[data-to]");
     if (to && can.to) to.textContent = BANDS[can.to].label;
+  }
+  // why there's no boost, while there's still a way down
+  const spent = yourControls.querySelector<HTMLElement>("[data-spent]");
+  if (spent) {
+    const why = can && can.deorbit === null ? can.boost : null;
+    spent.hidden = why === null;
+    spent.textContent = why === "top-band" ? "Highest band" : "Boost used";
+    if (why) spent.title = REFUSALS[why];
   }
 }
 

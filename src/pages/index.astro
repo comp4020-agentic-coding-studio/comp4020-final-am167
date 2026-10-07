@@ -1,11 +1,8 @@
 ---
 import Base from "../layouts/Base.astro";
-import ManoeuvreControls from "../components/ManoeuvreControls.astro";
-import ManoeuvreDialogs from "../components/ManoeuvreDialogs.astro";
-import { embed, every, lasting } from "../lib/format.ts";
+import { every, lasting } from "../lib/format.ts";
 import { BEACON_MAX, CALLSIGN_MAX, readLaunch, type LaunchErrors, type LaunchValues } from "../lib/launch.ts";
-import { REFUSALS, isRefusal, standing } from "../lib/manoeuvre.ts";
-import { BANDS, MANOEUVRE, bandAt, lifetimeRange, radiusAt, type Band } from "../lib/orbit.ts";
+import { BANDS, lifetimeRange, type Band } from "../lib/orbit.ts";
 import { SKY_CAP, launch, nextLaunchAt, satellitesOf, skyIsFull, waitMessage } from "../lib/sky.ts";
 
 // The launchpad. The form posts here and works without JavaScript: a launch
@@ -45,29 +42,11 @@ if (form) {
 }
 
 // you can have any number up, a short gap apart (PLAN.md, "Launch limits")
-const now = Date.now();
 const mine = satellitesOf(viewer);
-const wait = nextLaunchAt(viewer, now) - now;
+const wait = nextLaunchAt(viewer) - Date.now();
 const full = skyIsFull();
-// back from bringing one down or boosting it (ADR 0011), or refused
-const param = (name: string) => mine.find((o) => o.id === Number(Astro.url.searchParams.get(name))) ?? null;
-const deorbited = param("deorbited");
-const boosted = param("boosted");
-const boostedTo = boosted && BANDS[bandAt(radiusAt(boosted, boosted.until ?? now))].label.toLowerCase();
-const refused = Astro.url.searchParams.get("refused");
-// your satellites' orbits for the page's script: never their owner
-const orbits = mine.map(({ id, radius, phase, period, epoch, direction, rate, until, deorbitedAt, boosts }) => ({
-  id,
-  radius,
-  phase,
-  period,
-  epoch,
-  direction,
-  rate,
-  until,
-  deorbitedAt,
-  boosts,
-}));
+const names = (list: string[]) =>
+  list.length < 2 ? list.join("") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
 const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 const hint: Record<Band, string> = {
   low: "Heard most often.",
@@ -142,40 +121,13 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       <h2 id="launch-title">Launch a satellite</h2>
 
       {mine.length > 0 && (
-        <section class="yours" aria-labelledby="yours-title" data-yours>
-          <h3 id="yours-title">{mine.length === 1 ? "Yours in orbit" : `Yours in orbit (${mine.length})`}</h3>
-          <ul>
-            {mine.map((o) => (
-              <li data-id={o.id}>
-                <p class="yours-name">
-                  <strong>{o.callsign ?? "Unnamed"}</strong>
-                  <span class="yours-standing">{standing(o, now)}.</span>
-                </p>
-                <ManoeuvreControls object={o} back="/" now={now} />
-              </li>
-            ))}
-          </ul>
-          <p class="yours-note">
-            Another launch is another beacon heard, and one more thing for everyone
-            to share the sky with. <a href="/sky/">Watch the sky</a>
-          </p>
-          <!-- their orbits, so the list keeps up as they climb, fall and burn up -->
-          <script
-            type="application/json"
-            id="yours-data"
-            set:html={embed({ serverTime: now, yours: orbits })}
-          />
-        </section>
-      )}
-
-      {boosted && (
-        <p class="notice" role="status">
-          <strong>{boosted.callsign}</strong> is climbing to the {boostedTo} band. It gets
-          there in {Math.round(MANOEUVRE.climbMs / 1000)} seconds, and stays up far longer.
+        <p class="notice">
+          {mine.length === 1 ? "Yours in orbit: " : `Yours in orbit (${mine.length}): `}
+          <strong>{names(mine.map((o) => o.callsign ?? "unnamed"))}</strong>. Another
+          launch is another beacon heard, and one more thing for everyone to share the
+          sky with. <a href="/sky/">Watch the sky</a>
         </p>
       )}
-
-      {isRefusal(refused) && <p class="notice" role="alert">{REFUSALS[refused]}</p>}
 
       {wait > 0 && !errors.form && (
         <p class="notice" id="launch-wait" data-wait={wait}>{waitMessage(wait)}</p>
@@ -279,47 +231,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
         </div>
       </dialog>
     )}
-    <ManoeuvreDialogs thanks={deorbited ? (deorbited.callsign ?? "Your satellite") : null} />
   </main>
-
-  <script>
-    import { canManoeuvre, standing, type Manoeuvrable } from "../lib/manoeuvre.ts";
-    import { reentryAt } from "../lib/orbit.ts";
-    import { wireManoeuvres } from "../scripts/manoeuvres.ts";
-
-    // Asks before bringing a satellite down; the page it comes back to thanks you.
-    wireManoeuvres();
-
-    // What came back in the address (brought down, boosted, refused) is said
-    // once: a reload doesn't say it again.
-    if (/[?&](deorbited|boosted|refused)=/.test(location.search)) history.replaceState(null, "", location.pathname);
-
-    // Your satellites' lines keep up: climbing, coming down, burning up, gone.
-    // Without this script, reloading does the same.
-    const data = document.getElementById("yours-data");
-    if (data) {
-      const { serverTime, yours } = JSON.parse(data.textContent!) as {
-        serverTime: number;
-        yours: (Manoeuvrable & { id: number })[];
-      };
-      const offset = serverTime - Date.now();
-      const tick = () => {
-        const time = Date.now() + offset;
-        for (const sat of yours) {
-          const item = document.querySelector<HTMLElement>(`[data-yours] li[data-id="${sat.id}"]`);
-          if (!item) continue;
-          const line = item.querySelector(".yours-standing")!;
-          const gone = time >= reentryAt(sat);
-          const text = gone ? (sat.deorbitedAt !== null ? "Brought down: burned up." : "Burned up.") : `${standing(sat, time)}.`;
-          if (line.textContent !== text) line.textContent = text;
-          // nothing to do once it's burning up
-          const controls = item.querySelector<HTMLElement>("[data-manoeuvres]");
-          if (controls) controls.hidden = gone || canManoeuvre(sat, time).deorbit !== null;
-        }
-      };
-      setInterval(tick, 1000);
-    }
-  </script>
 
   <script>
     // Opens the handle pop-up on arrival, once a visit. Without this script
@@ -332,8 +244,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     } catch {
       // no storage: show it, as for a first visit
     }
-    // not over the thank-you for bringing a satellite down
-    if (prompt && !seen && !document.querySelector("dialog#thanks[open]")) {
+    if (prompt && !seen) {
       prompt.showModal();
       // seen, however it's left: closed, or followed to the operator page
       try {
@@ -839,56 +750,6 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     background: rgb(242 165 65 / 0.08);
   }
 
-  /* your satellites, each with a boost and a way down (ADR 0011) */
-  .yours {
-    margin: 0 0 1rem;
-    padding: 0.75rem;
-    border-left: 3px solid var(--amber);
-    background: rgb(242 165 65 / 0.08);
-  }
-
-  .yours h3 {
-    margin: 0 0 0.5rem;
-    font-size: var(--step-0);
-  }
-
-  /* three at a time; more scroll */
-  .yours ul {
-    margin: 0 0 0.5rem;
-    padding: 0;
-    list-style: none;
-    max-height: 11.5rem;
-    overflow-y: auto;
-  }
-
-  .yours li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.35rem 0.75rem;
-    padding: 0.4rem 0;
-    border-top: 1px solid rgb(58 87 129 / 0.5);
-  }
-
-  .yours-name {
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    line-height: 1.25;
-  }
-
-  .yours-standing {
-    font-size: var(--step--1);
-    color: var(--ink-dim);
-  }
-
-  .yours-note {
-    margin: 0;
-    font-size: var(--step--1);
-    color: var(--ink-dim);
-  }
-
   button {
     width: 100%;
     padding: 0.8rem 1rem;
@@ -1109,11 +970,6 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     .console {
       justify-self: stretch;
       margin-bottom: 0;
-    }
-
-    /* the page scrolls on a phone: no list scrolling inside it */
-    .yours ul {
-      max-height: none;
     }
 
     /* the rocket stands in a gutter beside the intro, clear of the text */

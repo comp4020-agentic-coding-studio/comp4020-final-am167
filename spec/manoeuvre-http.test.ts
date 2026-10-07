@@ -3,9 +3,9 @@ import { describe, expect, inject, it } from "vitest";
 import { Session, callsign, events, post } from "./session.ts";
 
 // Deorbiting and boosting, over HTTP (ADR 0011): your own satellites, from
-// the launchpad and the sky, by a plain form that works without JavaScript
-// (or as JSON for the page's script); nobody else's; and everyone watching
-// is told.
+// the sky's station panel, by a plain form that works without JavaScript
+// (or as JSON for the page's script); nobody else's; once for a boost; and
+// everyone watching is told. The launchpad stays for launching.
 
 const baseUrl = inject("baseUrl");
 const doc = (html: string) => new JSDOM(html).window.document;
@@ -20,26 +20,65 @@ async function launched(s: Session, band = "low", name = callsign()) {
   return { id, name };
 }
 
-const manoeuvre = (s: Session, id: number, action: "deorbit" | "boost", back = "/", headers = {}) =>
-  post(s, "/manoeuvre/", { id: String(id), action, back }, headers);
+const manoeuvre = (s: Session, id: number, action: "deorbit" | "boost", headers = {}) =>
+  post(s, "/manoeuvre/", { id: String(id), action }, headers);
+const json = { accept: "application/json" };
 
-// a satellite's controls on the launchpad, found by its callsign
-async function controls(s: Session, name: string) {
-  const pad = await page(s, "/");
-  const item = [...pad.querySelectorAll("[data-yours] li")].find((li) => li.textContent?.includes(name));
-  return { pad, item };
+// what the sky's station panel offers for your satellite: the forms shown
+async function offered(s: Session) {
+  const sky = await page(s, "/sky/");
+  const panel = sky.querySelector(".station")!;
+  const shown = [...panel.querySelectorAll<HTMLFormElement>('form[method="post"][action="/manoeuvre/"]')].filter(
+    (form) => !form.hasAttribute("hidden"),
+  );
+  // the line saying why there's no boost, if it's shown
+  const spent = panel.querySelector("[data-spent]:not([hidden])")?.textContent ?? "";
+  return {
+    panel,
+    spent,
+    actions: shown.map((form) => form.querySelector<HTMLButtonElement>('button[name="action"]')!.value),
+    ids: shown.map((form) => form.querySelector<HTMLInputElement>('input[name="id"]')!.value),
+  };
 }
 
-describe("your satellites on the launchpad", () => {
-  it("each have a way to boost it and to bring it down, as plain forms", async () => {
+// a satellite's row in the catalogue, found by its callsign
+async function row(s: Session, name: string) {
+  const catalogue = await page(s, "/catalogue/");
+  return [...catalogue.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(name));
+}
+
+describe("the launchpad", () => {
+  it("lists your satellites but offers no manoeuvres: it's for launching", async () => {
     const a = new Session(baseUrl);
     const { name } = await launched(a);
-    const { item } = await controls(a, name);
-    expect(item, "your satellite isn't listed").toBeDefined();
-    const forms = [...item!.querySelectorAll('form[method="post"][action="/manoeuvre/"]')];
-    const actions = forms.map((f) => f.querySelector<HTMLButtonElement>('button[name="action"]')?.value);
-    expect(actions).toEqual(expect.arrayContaining(["boost", "deorbit"]));
-    expect(item!.textContent).toMatch(/to mid/i);
+    const pad = await page(a, "/");
+    expect(pad.querySelector(".console")?.textContent).toContain(name);
+    expect(pad.querySelector('form[action="/manoeuvre/"]')).toBeNull();
+  });
+});
+
+describe("the sky's station panel", () => {
+  it("offers to boost or bring down your satellite, as plain forms", async () => {
+    const a = new Session(baseUrl);
+    const { id } = await launched(a);
+    const { actions, ids, panel, spent } = await offered(a);
+    expect(actions).toEqual(["boost", "deorbit"]);
+    expect(ids).toEqual([String(id), String(id)]);
+    expect(panel.textContent).toMatch(/boost to mid/i);
+    expect(spent).toBe("");
+  });
+
+  it("offers nothing to someone with no satellite up", async () => {
+    const sky = await page(new Session(baseUrl), "/sky/");
+    expect(sky.querySelector('.station form[action="/manoeuvre/"]')).toBeNull();
+  });
+
+  it("offers no boost from the high band, and says why", async () => {
+    const a = new Session(baseUrl);
+    await launched(a, "high");
+    const { actions, spent } = await offered(a);
+    expect(actions).toEqual(["deorbit"]);
+    expect(spent).toMatch(/highest band/i);
   });
 });
 
@@ -50,23 +89,22 @@ describe("bringing your satellite down", () => {
     const res = await manoeuvre(a, id, "deorbit");
     expect(res.status).toBe(303);
     const location = res.headers.get("location")!;
-    expect(location).toMatch(new RegExp(`deorbited=${id}`));
-    const pad = await page(a, location);
-    const thanks = pad.querySelector("dialog#thanks");
+    expect(location).toBe(`/sky/?deorbited=${id}`);
+    const sky = await page(a, location);
+    const thanks = sky.querySelector("dialog#thanks");
     expect(thanks, "no thank-you").not.toBeNull();
     expect(thanks!.hasAttribute("open")).toBe(true);
     expect(thanks!.textContent).toContain(name);
     expect(thanks!.textContent).toMatch(/thank/i);
-    // and it says it's coming down, with nothing more to do to it
-    const { item } = await controls(a, name);
-    expect(item!.textContent).toMatch(/coming down/i);
-    expect(item!.querySelector('button[name="action"]')).toBeNull();
+    // it's coming down, with nothing more to do to it
+    expect((await row(a, name))?.textContent).toMatch(/in orbit, coming down/i);
+    expect((await offered(a)).actions).toEqual([]);
   });
 
   it("answers the page's script with JSON", async () => {
     const a = new Session(baseUrl);
     const { id } = await launched(a);
-    const res = await manoeuvre(a, id, "deorbit", "/", { accept: "application/json" });
+    const res = await manoeuvre(a, id, "deorbit", json);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { object: { id: number; deorbitedAt: number; mine: boolean; owner?: string } };
     expect(body.object).toMatchObject({ id, mine: true });
@@ -79,10 +117,9 @@ describe("bringing your satellite down", () => {
     const b = new Session(baseUrl);
     await b.get("/");
     const { id, name } = await launched(a);
-    const res = await manoeuvre(b, id, "deorbit", "/", { accept: "application/json" });
+    const res = await manoeuvre(b, id, "deorbit", json);
     expect(res.status).toBeGreaterThanOrEqual(400);
-    const { item } = await controls(a, name);
-    expect(item!.textContent).not.toMatch(/coming down/i);
+    expect((await row(a, name))?.textContent).not.toMatch(/coming down/i);
   });
 
   it("tells everyone watching, without saying whose it is", async () => {
@@ -111,104 +148,63 @@ describe("bringing your satellite down", () => {
 });
 
 describe("boosting your satellite", () => {
-  it("sends it climbing to the next band, once", async () => {
+  it("sends it climbing to the next band", async () => {
     const a = new Session(baseUrl);
     const { id, name } = await launched(a);
     const res = await manoeuvre(a, id, "boost");
     expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toMatch(new RegExp(`boosted=${id}`));
-    const { item } = await controls(a, name);
-    expect(item!.textContent).toMatch(/climbing to the mid band/i);
-    expect([...item!.querySelectorAll<HTMLButtonElement>('button[name="action"]')].map((b) => b.value)).not.toContain("boost");
-    // its one tank of fuel is spent
-    const again = await manoeuvre(a, id, "boost", "/", { accept: "application/json" });
-    expect(again.status).toBe(422);
-    expect(((await again.json()) as { error: string }).error).toMatch(/fuel/i);
+    expect(res.headers.get("location")).toBe(`/sky/?boosted=${id}`);
+    expect((await row(a, name))?.textContent).toMatch(/in orbit, climbing/i);
   });
 
-  it("isn't offered from the high band, the top of the sky", async () => {
-    const a = new Session(baseUrl);
-    const { name } = await launched(a, "high");
-    const { item } = await controls(a, name);
-    expect([...item!.querySelectorAll<HTMLButtonElement>('button[name="action"]')].map((b) => b.value)).toEqual(["deorbit"]);
-  });
-});
-
-describe("the sky's station panel", () => {
-  it("offers to boost or bring down the satellite it tells you about", async () => {
-    const a = new Session(baseUrl);
-    await launched(a);
-    const sky = await page(a, "/sky/");
-    const panel = sky.querySelector(".station");
-    const actions = [...panel!.querySelectorAll<HTMLButtonElement>('form[action="/manoeuvre/"] button[name="action"]')].map(
-      (b) => b.value,
-    );
-    expect(actions).toEqual(expect.arrayContaining(["boost", "deorbit"]));
-    const back = panel!.querySelector<HTMLInputElement>('form[action="/manoeuvre/"] input[name="back"]');
-    expect(back?.value).toBe("/sky/");
-  });
-
-  it("offers nothing to someone with no satellite up", async () => {
-    const sky = await page(new Session(baseUrl), "/sky/");
-    expect(sky.querySelector('.station form[action="/manoeuvre/"]')).toBeNull();
-  });
-});
-
-describe("who may manoeuvre, and from where", () => {
-  it("refuses a post from another site, and leaves the satellite as it was", async () => {
-    const a = new Session(baseUrl);
-    const { id, name } = await launched(a);
-    const res = await post(a, "/manoeuvre/", { id: String(id), action: "deorbit", back: "/" }, { origin: "https://evil.example" });
-    expect(res.status).toBe(403);
-    const { item } = await controls(a, name);
-    expect(item!.textContent).not.toMatch(/coming down/i);
-  });
-
-  it("only ever goes back to the launchpad or the sky", async () => {
+  it("works once: a second is refused, and the panel says the boost is used", async () => {
     const a = new Session(baseUrl);
     const { id } = await launched(a);
-    const res = await manoeuvre(a, id, "boost", "//evil.example/");
-    expect(res.status).toBe(303);
-    expect(new URL(res.headers.get("location")!, baseUrl).origin).toBe(new URL(baseUrl).origin);
+    expect((await manoeuvre(a, id, "boost", json)).status).toBe(200);
+    const again = await manoeuvre(a, id, "boost", json);
+    expect(again.status).toBe(422);
+    expect(((await again.json()) as { error: string }).error).toMatch(/fuel/i);
+    const { actions, spent } = await offered(a);
+    expect(actions).toEqual(["deorbit"]);
+    expect(spent).toMatch(/boost used/i);
   });
 
-  it("lets an operator manoeuvre their satellite from another device they're signed in on", async () => {
-    const handle = `mv_${Math.random().toString(36).slice(2, 10)}`;
+  it("works once even when asked twice at the same moment", async () => {
+    const a = new Session(baseUrl);
+    const { id } = await launched(a);
+    const answers = await Promise.all([manoeuvre(a, id, "boost", json), manoeuvre(a, id, "boost", json)]);
+    expect(answers.map((res) => res.status).sort()).toEqual([200, 422]);
+  });
+
+  it("works once across devices signed in as the same operator", async () => {
+    const handle = `bo_${Math.random().toString(36).slice(2, 10)}`;
     const phone = new Session(baseUrl);
     expect((await post(phone, "/operator/", { action: "claim", handle, passphrase: "correct horse battery" })).status).toBe(303);
     const { id } = await launched(phone);
     const laptop = new Session(baseUrl);
     await laptop.get("/");
     expect((await post(laptop, "/operator/", { action: "sign-in", handle, passphrase: "correct horse battery" })).status).toBe(303);
-    const res = await manoeuvre(laptop, id, "deorbit", "/", { accept: "application/json" });
-    expect(res.status).toBe(200);
+    expect((await manoeuvre(phone, id, "boost", json)).status).toBe(200);
+    expect((await manoeuvre(laptop, id, "boost", json)).status).toBe(422);
+    // and the laptop can still bring it down: it's theirs there too
+    expect((await manoeuvre(laptop, id, "deorbit", json)).status).toBe(200);
   });
 });
 
-describe("the catalogue", () => {
-  const row = async (s: Session, name: string) => {
-    const catalogue = await page(s, "/catalogue/");
-    return [...catalogue.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(name));
-  };
-
-  it("says a satellite is coming down, or climbing", async () => {
+describe("where a manoeuvre comes from", () => {
+  it("refuses a post from another site, and leaves the satellite as it was", async () => {
     const a = new Session(baseUrl);
-    const down = await launched(a);
-    await manoeuvre(a, down.id, "deorbit");
-    expect((await row(a, down.name))?.textContent).toMatch(/in orbit, coming down/i);
-
-    const b = new Session(baseUrl);
-    const up = await launched(b);
-    await manoeuvre(b, up.id, "boost");
-    expect((await row(b, up.name))?.textContent).toMatch(/in orbit, climbing/i);
+    const { id, name } = await launched(a);
+    const res = await post(a, "/manoeuvre/", { id: String(id), action: "deorbit" }, { origin: "https://evil.example" });
+    expect(res.status).toBe(403);
+    expect((await row(a, name))?.textContent).not.toMatch(/coming down/i);
   });
-});
 
-describe("a satellite that can't boost", () => {
-  it("says why on the launchpad", async () => {
+  it("only ever goes back to the sky", async () => {
     const a = new Session(baseUrl);
-    const { name } = await launched(a, "high");
-    const { item } = await controls(a, name);
-    expect(item!.textContent).toMatch(/highest band/i);
+    const { id } = await launched(a);
+    const res = await post(a, "/manoeuvre/", { id: String(id), action: "boost", back: "//evil.example/" });
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe(`/sky/?boosted=${id}`);
   });
 });

@@ -1,8 +1,7 @@
-import { until } from "./format.ts";
-import { BAND_ABOVE, BANDS, bandAt, burnAt, climbing, plungeAt, radiusAt, reentryAt, type Band, type Orbit } from "./orbit.ts";
+import { BAND_ABOVE, bandAt, burnAt, climbing, radiusAt, type Band, type Orbit } from "./orbit.ts";
 
-// What an owner can do with a satellite of theirs (ADR 0011), and how a page
-// says where it stands: shared by the server and the browser.
+// What an owner can do with a satellite of theirs (ADR 0011): shared by the
+// server and the browser.
 
 // How many boosts a satellite's fuel is good for.
 export const FUEL = 1;
@@ -38,18 +37,4 @@ export function canManoeuvre(
     boost: object.boosts >= FUEL || climbing(object, now) ? "no-fuel" : to === null ? "top-band" : null,
     to,
   };
-}
-
-// "Low band, burns up in 4 h", "Climbing to the mid band", "Coming down:
-// burns up in 2 min", "Burning up on re-entry".
-export function standing(object: Manoeuvrable, now: number): string {
-  if (plungeAt(object, now) !== null) return "Burning up on re-entry";
-  const left = until(reentryAt(object) - now);
-  if (object.deorbitedAt !== null) return `Coming down: burns up in ${left}`;
-  const band = bandAt(radiusAt(object, now));
-  if (climbing(object, now)) {
-    const to = bandAt(radiusAt(object, object.until ?? now));
-    return `Climbing to the ${BANDS[to].label.toLowerCase()} band`;
-  }
-  return `${BANDS[band].label} band, burns up in ${left}`;
 }

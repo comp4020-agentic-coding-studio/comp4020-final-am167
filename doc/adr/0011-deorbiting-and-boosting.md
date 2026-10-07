@@ -50,12 +50,15 @@ closed form.**
   share one height) in **90 seconds**, then falls by drag alone from there.
   From low to mid gives it hours more; from mid to high, days. **Each
   satellite carries fuel for one boost**, so a launch can buy one band, not
-  live for ever; nothing in the high band can boost.
+  live for ever; nothing in the high band can boost. The database write
+  itself checks the boost is unused, so asking twice at once, or from two
+  devices, still boosts once.
 - Only the satellite's owner can do either (ADR 0009), through a form that
-  works without JavaScript: on the launchpad, next to each of your
-  satellites, and in the sky's station panel, for the one it is telling
-  you about. A satellite already coming down, or burning up, can't do
-  either; one climbing can be brought down, but not boosted again.
+  works without JavaScript, in the sky's station panel, for the one it is
+  telling you about. Not on the launchpad: that's for launching, and was
+  getting cluttered (Advay, 2026-10-07). A satellite already coming down,
+  or burning up, can't do either; one climbing can be brought down, but
+  not boosted again.
 - **Collisions**: the object's predicted meetings are thrown away and
   worked out again from its new orbit. A meeting is found in pieces: while
   two objects fall at different rates their radius³ gap changes linearly,

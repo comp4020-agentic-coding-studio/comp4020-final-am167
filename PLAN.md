@@ -49,8 +49,8 @@ _Last updated 2026-10-07 (deorbiting and boosting built, in review; C9 write-ups
   3. **Deorbiting and boosting: built, in review** (Advay, 2026-10-07; ADR
      0011, proposed): bring your own satellite down in a two-minute descent,
      with a dialog thanking you for keeping the sky clear; or boost it up a
-     band (low to mid, mid to high, once) in a 90-second climb. Buttons on
-     your satellites on the launchpad and in the sky's station panel. On
+     band (low to mid, mid to high, once) in a 90-second climb. Buttons in
+     the sky's station panel only (not the launchpad: too cluttered). On
      branch `claude/c9-outstanding-work-17iuus` (with PR #2's handle
      pop-up), as a PR. Advay to accept ADR 0011.
   4. **Click a satellite or fragment to see its history** (Advay,

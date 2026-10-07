@@ -191,9 +191,7 @@ describe("coming back", () => {
     const pad = await a.get("/");
     expect(pad.headers.getSetCookie().some((c) => c.startsWith("kessler_person="))).toBe(false);
     const page = doc(await pad.text());
-    const yours = page.querySelector(".console [data-yours]");
-    expect(yours?.textContent).toMatch(/Yours in orbit/);
-    expect([...yours!.querySelectorAll("li")].some((li) => li.textContent?.includes(name))).toBe(true);
+    expect(page.querySelector(".console")?.textContent).toMatch(new RegExp(`Yours in orbit:\\s*${name}`));
 
     const catalogue = doc(await (await a.get("/catalogue/")).text());
     const row = [...catalogue.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(name));

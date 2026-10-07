@@ -1,7 +1,8 @@
 // Bringing a satellite down asks first, and thanks whoever does it (ADR
-// 0011). Without this script the forms post straight away and the page they
-// come back to has the thank-you open. On the sky page, `inPlace` takes the
-// satellite's new orbit, so the page carries on and you watch it go.
+// 0011), on the sky page: the forms post in the background and `inPlace`
+// takes the satellite's new orbit, so the page carries on and you watch it
+// go. Without this script the forms post as normal, and the page they come
+// back to has the thank-you open.
 
 export interface Manoeuvred {
   id: number;
@@ -9,17 +10,20 @@ export interface Manoeuvred {
 }
 
 interface Options<T extends Manoeuvred> {
-  // given, the forms post in the background and this applies the result;
-  // not given, they post as normal once confirmed
-  inPlace?: (object: T, action: "deorbit" | "boost") => void;
-  // where to say a refusal, for a background post
-  refused?: (message: string) => void;
+  // applies the result: the satellite's new orbit
+  inPlace: (object: T, action: "deorbit" | "boost") => void;
+  // where to say a refusal
+  refused: (message: string) => void;
 }
 
-export function wireManoeuvres<T extends Manoeuvred>({ inPlace, refused }: Options<T> = {}): void {
+export function wireManoeuvres<T extends Manoeuvred>({ inPlace, refused }: Options<T>): void {
   const confirm = document.getElementById("deorbit-confirm") as HTMLDialogElement | null;
   const thanks = document.getElementById("thanks") as HTMLDialogElement | null;
   if (!confirm || !thanks) return;
+
+  // what came back in the address (brought down, boosted, refused) is said
+  // once: a reload doesn't say it again
+  if (/[?&](deorbited|boosted|refused)=/.test(location.search)) history.replaceState(null, "", location.pathname);
 
   // a click on the backdrop closes either (the content fills the box)
   for (const dialog of [confirm, thanks]) {
@@ -58,13 +62,13 @@ export function wireManoeuvres<T extends Manoeuvred>({ inPlace, refused }: Optio
       });
       const reply = (await res.json()) as { object?: T; error?: string };
       if (!res.ok || !reply.object) {
-        refused?.(reply.error ?? "That didn't work. Try again.");
+        refused(reply.error ?? "That didn't work. Try again.");
         return;
       }
-      inPlace!(reply.object, action);
+      inPlace(reply.object, action);
       if (action === "deorbit") thank(reply.object.callsign ?? callsign);
     } catch {
-      refused?.("The connection dropped. Try again.");
+      refused("The connection dropped. Try again.");
     }
   }
 
@@ -74,25 +78,14 @@ export function wireManoeuvres<T extends Manoeuvred>({ inPlace, refused }: Optio
     const button = (e.submitter ?? form.querySelector("button[name=action]")) as HTMLButtonElement;
     const action = button.value as "deorbit" | "boost";
     const callsign = button.dataset.callsign ?? null;
-    if (action === "boost" && !inPlace) return;
     e.preventDefault();
     // which satellite, as it was when clicked: the sky's panel moves on to
     // another of yours as they pass over, maybe while the question is open
     const body = new URLSearchParams([...new FormData(form)].map(([key, value]) => [key, String(value)]));
     body.set("action", action);
     if (action === "deorbit" && !(await ask(callsign))) return;
-    if (inPlace) {
-      button.disabled = true;
-      await post(form, body, action, callsign);
-      button.disabled = false;
-      return;
-    }
-    // the button's own name and value only go with a real click, so say it
-    const field = document.createElement("input");
-    field.type = "hidden";
-    field.name = "action";
-    field.value = action;
-    form.append(field);
-    form.submit();
+    button.disabled = true;
+    await post(form, body, action, callsign);
+    button.disabled = false;
   });
 }

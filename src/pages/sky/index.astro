@@ -98,7 +98,7 @@ const collided = recentCollisions(5);
           {mine && <p id="your-pass" class="your-pass" data-id={mine.id}>Yours: {mine.callsign}.</p>}
           {mine && (
             <div id="your-controls" class="your-controls">
-              <ManoeuvreControls object={mine} back="/sky/" keep now={now} />
+              <ManoeuvreControls object={mine} now={now} />
               <p id="manoeuvre-error" class="manoeuvre-error" role="alert"></p>
             </div>
           )}

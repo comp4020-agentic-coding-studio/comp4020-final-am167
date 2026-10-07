@@ -1,8 +1,8 @@
-import { and, count, desc, eq, inArray, max, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, lt, max, ne, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { fatalMeeting, fragmentsOf, impactOf, nextMeeting } from "./collide.ts";
 import { listening, publish } from "./events.ts";
-import { REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
+import { FUEL, REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
 import {
@@ -896,15 +896,25 @@ function yours(who: Who, id: number, now: number): SkyObject | null {
 }
 
 // A new orbit for an object, from `now`: stored, recorded, its collisions
-// worked out again, and everyone told.
-function manoeuvre(object: SkyObject, kind: ManoeuvreKind, orbit: Required<Orbit>, now: number, extra: Partial<typeof objects.$inferInsert>): SkyObject {
+// worked out again, and everyone told. Only if `allowed` still holds in the
+// database as it's written (a boost not yet used, a satellite not already
+// coming down), so no way of asking twice can do it twice; null if not.
+function manoeuvre(
+  object: SkyObject,
+  kind: ManoeuvreKind,
+  orbit: Required<Orbit>,
+  now: number,
+  extra: Partial<typeof objects.$inferInsert>,
+  allowed: SQL,
+): SkyObject | null {
   const after = db.transaction((tx) => {
     const row = tx
       .update(objects)
       .set({ ...orbit, ...extra })
-      .where(and(eq(objects.id, object.id), eq(objects.fate, "live")))
+      .where(and(eq(objects.id, object.id), eq(objects.fate, "live"), allowed))
       .returning(columns)
       .get();
+    if (!row) return null;
     tx.insert(manoeuvres)
       .values({
         object: object.id,
@@ -914,8 +924,9 @@ function manoeuvre(object: SkyObject, kind: ManoeuvreKind, orbit: Required<Orbit
         toRadius: kind === "deorbit" ? DECAY.burnRadius : radiusAt(orbit, orbit.until ?? now),
       })
       .run();
-    return toObject(row!);
+    return toObject(row);
   });
+  if (!after) return null;
   // its meetings were for the old orbit: forget them, and the collisions
   // coming that everyone was told of, then work them out again
   for (const key of meetingsOf.get(object.id) ?? []) announced.delete(key);
@@ -935,7 +946,8 @@ export function deorbit(who: Who, id: number, now = Date.now()): ManoeuvreResult
   if (!object) return refuse("not-yours");
   const why = canManoeuvre(object, now).deorbit;
   if (why) return refuse(why);
-  return { ok: true, object: manoeuvre(object, "deorbit", descend(object, now), now, { deorbitedAt: now }) };
+  const after = manoeuvre(object, "deorbit", descend(object, now), now, { deorbitedAt: now }, isNull(objects.deorbitedAt));
+  return after ? { ok: true, object: after } : refuse("coming-down");
 }
 
 // Boost your satellite up a band (ADR 0011): it climbs to a height in the
@@ -950,7 +962,8 @@ export function boost(who: Who, id: number, now = Date.now(), random = Math.rand
   let target = placeInBand(to, now, random).radius;
   for (let tries = 0; target < BANDS[to].minRadius && tries < 20; tries++) target = placeInBand(to, now, random).radius;
   target = Math.max(target, BANDS[to].minRadius);
-  return { ok: true, object: manoeuvre(object, "boost", climb(object, now, target), now, { boosts: object.boosts + 1 }) };
+  const after = manoeuvre(object, "boost", climb(object, now, target), now, { boosts: object.boosts + 1 }, and(lt(objects.boosts, FUEL), isNull(objects.deorbitedAt))!);
+  return after ? { ok: true, object: after } : refuse("no-fuel");
 }
 
 // An object's manoeuvres, oldest first.
