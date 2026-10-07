@@ -1941,3 +1941,5 @@ sideways scroll. The Why page at 1920x1080 (a missing space after the
 quoted question fixed).
 
 ![The launchpad: the intro saying what it's for, today's question above the beacon, and the box ticked to answer it](screenshots/2026-10-07-launchpad-why-and-question.png)
+
+Commit `248469e`.

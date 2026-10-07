@@ -81,7 +81,7 @@ _Last updated 2026-10-07, overnight (Advay's feedback round on branch `claude/ni
   - **The wreck keeps the words** (ADR 0017; `fd0a0df`): fragments carry
     pieces of both colliding beacons, heard as static; "the wreck says";
     encounters in Yours.
-  - **The purpose** (ADR 0018): a question from the stations each day, the
+  - **The purpose** (ADR 0018; `248469e`): a question from the stations each day, the
     launchpad's intro rewritten around the why, a Why page (`/why/`), the
     first-launch explainer brought up to date. "A purpose" and "Collisions
     that mean something" below are rewritten as decided.
