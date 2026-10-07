@@ -317,7 +317,7 @@ export interface ReentryFrame {
   planet: number;
   // scene units per CSS pixel
   unit: number;
-  // how much to shrink the effect (1 over the station, less zoomed out)
+  // how much to shrink the effect (1 over a station, less zoomed out)
   scale: number;
   // the device pixel ratio the canvas draws at
   ratio: number;

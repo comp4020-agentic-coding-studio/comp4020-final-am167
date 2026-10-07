@@ -5,11 +5,13 @@ import { listening, publish } from "./events.ts";
 import { FUEL, REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
+import { STATIONS } from "./stations.ts";
 import {
   BANDS,
   DECAY,
-  STATION_ANGLE,
+  angleAt,
   bandAt,
+  burnAt,
   climb,
   descend,
   periodAt,
@@ -418,8 +420,8 @@ export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
 // When nothing is coming, a visitor could watch for an hour and see no
 // collision. So, for someone watching, and no more often than `every`, the
 // server sends two derelicts at each other: same height, opposite ways, a
-// dead-centre pass (collide.ts) that meets over the station `lead` from now,
-// in the default view. The rest of the world launches too.
+// dead-centre pass (collide.ts) that meets over a ground station, picked at
+// random, `lead` from now. The rest of the world launches too.
 export const STAGE = {
   every: 5 * 60_000,
   horizon: 4 * 60_000,
@@ -440,9 +442,10 @@ export function stageCollision(now = Date.now()): Conjunction | null {
   // is their first meeting)
   const sweep = ((2 * Math.PI) / period) * STAGE.lead;
   const way: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+  const station = STATIONS[Math.floor(Math.random() * STATIONS.length)];
   const orbit = (direction: 1 | -1) => ({
     radius: STAGE.radius,
-    phase: STATION_ANGLE - direction * sweep,
+    phase: station.angle - direction * sweep,
     period: Math.round(period),
     epoch: now,
     direction,
@@ -492,7 +495,44 @@ export function watcherArrived(): void {
   unquiet();
 }
 
+// Orbits launched before they slowed down (ADR 0012) went round three times
+// as fast for their height. Each one still up gets a new epoch, now: where
+// it is, with today's period for its height, so it carries on from there,
+// slower, and falls to the same burn-up. One already in its last plunge is
+// left to burn up. Anything on today's law is left alone, so it runs once.
+// Needed until nothing launched before the change can still be up (three
+// days after it deployed).
+let retimed = false;
+export function retime(now = Date.now()): void {
+  const old = live().filter((o) => o.period < 0.6 * periodAt(o.radius) && o.epoch <= now && now < burnAt(o));
+  if (old.length === 0) return;
+  db.transaction((tx) => {
+    for (const o of old) {
+      const radius = radiusAt(o, now);
+      // a climb that has ended: it falls by drag alone from here
+      const climbed = o.until !== null && o.until <= now;
+      tx.update(objects)
+        .set({
+          radius,
+          phase: angleAt(o, now),
+          period: Math.round(periodAt(radius)),
+          epoch: now,
+          rate: climbed ? 1 : o.rate,
+          until: climbed ? null : o.until,
+        })
+        .where(eq(objects.id, o.id))
+        .run();
+    }
+  });
+}
+
 export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: CollisionReport[] } {
+  // marked done only once it has worked: a busy or full disk tries again
+  // on the next settle
+  if (!retimed) {
+    retime(now);
+    retimed = true;
+  }
   if (now >= quietFrom && now < quietUntil) return { decayed: [], collisions: [] };
   const applied: CollisionReport[] = [];
   let sky = live();

@@ -1259,3 +1259,77 @@ catalogue. `pnpm check` green (190 tests).
 I accepted ADR 0011 (bringing your satellite down, or boosting it up a
 band) as it stands after the launchpad change. The manoeuvre commits so
 far: `948998e`, `e010756`, `f35f752`.
+
+## 2026-10-07 — C9: slower orbits and three ground stations
+
+I thought the satellites went round too fast, and wanted the beacons to be
+the point of the sky page rather than the scene. Checked first: a beacon is
+heard within 12° of the station, so a low satellite's beacon was on screen
+for about **four seconds**, barely enough to read 60 characters. I'd also
+wondered about dropping the globe view; we kept it, because with more than
+one station the globe is the only view that shows them all, and it's where
+most collisions and cascades are seen.
+
+Decided, and written up as ADRs 0012 and 0013 (proposed):
+- **Every period three times longer** (low 3 min, mid ~8, high 24): a low
+  beacon is up ~12 s. Head-on collision chance tripled (2% → 6%) so
+  collisions per hour stay about the same; decay untouched; trails drawn
+  for 36 s so they keep their length. Orbits already up are **retimed
+  once, in place**, on the server's first settle (new epoch now, new period
+  for the height), so the deployed sky slows without anything jumping.
+- **Three ground stations, like NASA's Deep Space Network**: Canberra,
+  Goldstone, Madrid, all heard by everyone, so the shared moment stays. The
+  three real sites lie within 8° of one great circle, so the chart's orbit
+  plane is that circle and each station sits where its site projects (90°,
+  −23°, −105°): uneven gaps, as the real network's are. The coastlines are
+  re-baked in that frame, so each station sits on its own coast (same file
+  size as before).
+- **The sky opens on the whole planet**, with the three windows drawn and
+  named; buttons switch to the horizon over any station (the old zoom,
+  turned). After a launch it opens over Canberra, where the launch camera
+  ends. "Over the station" became **"Beacons"**: a row per station, beacon
+  in larger type, taking turns when several are overhead, otherwise what's
+  next and when.
+
+Tests first: the period law, the stations (where they are, which window a
+satellite is in, the next one it reaches either way round, nothing heard on
+the way), retiming against a throwaway database (continuity, same burn-up,
+plunges and new-law orbits left alone, idempotent), staged collisions over
+any station, and the sky page's panel and view buttons (whole sky by
+default, Canberra after a launch). `pnpm check` green (203 tests).
+
+Checked in Chrome at 1920×1080 and iPhone 14: one fix from it, the station
+windows ran as beams to the edge of the screen when zoomed out; they now
+fade just past the high band. Console clean.
+
+![The whole sky with the three ground stations' windows, and the Beacons panel with a row for each](screenshots/2026-10-07-three-stations-whole-sky.png)
+
+![The horizon over Goldstone: the ground turned so it's at the top, the California coast under it](screenshots/2026-10-07-goldstone-horizon.png)
+
+Then a fresh Sonnet reviewer, with no shared context, attacked it against
+the ADRs and the spec, with brute-force checks of the maths in node and the
+live app at five widths. Fixed from its findings:
+1. **"Next: X, in −18 s"**: the time until a station was refined from the
+   period, which collapses in a satellite's last laps; about 1% of calls
+   near burn-up came out negative or promised a pass that never happens.
+   It's now found by halving the time to burn-up on the unwrapped angle,
+   which only ever grows. New brute-force test over 400 orbits in their
+   last laps (it failed first, at −995 ms).
+2. The performance harness clicked the old `#zoom` button; it now opens on
+   the whole sky and clicks Canberra.
+3. Retiming marked itself done before it ran, so a busy disk would have
+   left old orbits three times too fast for good. Now marked after.
+4. Beacons taking turns used the local clock, so two screens could show
+   different lines at once; now the server's.
+5. A 60-character beacon was clipped on a phone; rows there have room for
+   three lines.
+Also: retime tests for a climb under way, a finished climb, a descent and
+an orbit not up yet; a staged collision over Goldstone; the canvas's label
+says Canberra when it opens there; a station name measured while hidden is
+measured again when it shows; ADR wording (what each supersedes, "head-on"
+collisions per hour, what retiming does to which meeting is fatal, "by its
+own coast"); stale "the station" comments. Not done: a "recently heard"
+list, a button from your satellite's line to its next station's view,
+fewer live-region announcements when several take turns, and pulling the
+panel's logic out of the page script for unit tests. `pnpm check` green
+(206 tests).

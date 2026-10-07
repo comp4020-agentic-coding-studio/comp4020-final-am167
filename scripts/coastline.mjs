@@ -1,21 +1,22 @@
 // Bakes the coastlines the sky view can see into src/scripts/coastline.json,
 // so the browser doesn't download the whole world. Run with
-// `pnpm coastline` after changing the station or the visible region.
+// `pnpm coastline` after changing the stations or the visible region.
 //
-// The planet never turns under the station (PLAN.md, "Overhead"), so only the
-// hemisphere facing the camera is ever on screen, and up close only the part
-// around the station. The station sits on Canberra. Coordinates are in the
-// scene's frame, in planet radii: +y is up at the station, +z points north
-// towards the camera (so the near side of the planet is Australia), and +x
-// completes a right-handed frame (west).
+// The chart's plane is the great circle closest to the three ground
+// stations (src/lib/stations.ts, ADR 0013), and the coastlines are baked in
+// its frame, so each station sits on its own coast. Only the hemisphere
+// facing the camera is ever on screen, and up close only the part around a
+// station. Coordinates are in the scene's frame, in planet radii: +y is up
+// at Canberra, +z points out of the plane towards the camera, and +x
+// completes a right-handed frame.
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { feature } from "topojson-client";
+import { FRAME, STATIONS, onGlobe } from "../src/lib/stations.ts";
 
-const STATION = { lat: -35.28, lon: 149.13 };
-// Close to the station, what the horizon view can show, at 1:50m; the rest of
+// Close to a station, what the horizon view can show, at 1:50m; the rest of
 // the near hemisphere, only seen zoomed out, at 1:110m.
-const NEAR_Y = 0.45;
+const NEAR = 0.75;
 const MIN_Z = -0.02;
 
 const require = createRequire(import.meta.url);
@@ -24,22 +25,14 @@ const land = (scale) => {
   return feature(topology, topology.objects.land);
 };
 
-const rad = Math.PI / 180;
-const φ = STATION.lat * rad;
-const λ = STATION.lon * rad;
-const up = [Math.cos(φ) * Math.cos(λ), Math.cos(φ) * Math.sin(λ), Math.sin(φ)];
-const north = [-Math.sin(φ) * Math.cos(λ), -Math.sin(φ) * Math.sin(λ), Math.cos(φ)];
-const west = [Math.sin(λ), -Math.cos(λ), 0];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-
-function toScene([lon, lat]) {
-  const p = [
-    Math.cos(lat * rad) * Math.cos(lon * rad),
-    Math.cos(lat * rad) * Math.sin(lon * rad),
-    Math.sin(lat * rad),
-  ];
-  return [dot(p, west), dot(p, up), dot(p, north)];
-}
+const toScene = ([lon, lat]) => {
+  const p = onGlobe(lat, lon);
+  return [dot(p, FRAME.x), dot(p, FRAME.y), dot(p, FRAME.z)];
+};
+// each station's way up, in the scene (it's the chart seen mirrored)
+const ups = STATIONS.map((s) => [-Math.cos(s.angle), Math.sin(s.angle)]);
+const nearStation = ([x, y]) => ups.some(([ux, uy]) => x * ux + y * uy >= NEAR);
 
 // stored as integers in 1/10000ths of a radius, to keep the file small
 const fixed = (n) => Math.round(n * 1e4);
@@ -72,8 +65,8 @@ function bake(scale, inside, step) {
 }
 
 const lines = [
-  ...bake("50m", ([, y, z]) => y >= NEAR_Y && z >= MIN_Z, 8e-4),
-  ...bake("110m", ([, y, z]) => y < NEAR_Y && z >= MIN_Z, 4e-3),
+  ...bake("50m", (p) => nearStation(p) && p[2] >= MIN_Z, 2.4e-3),
+  ...bake("110m", (p) => !nearStation(p) && p[2] >= MIN_Z, 4e-3),
 ];
 
 writeFileSync(new URL("../src/scripts/coastline.json", import.meta.url), JSON.stringify(lines));

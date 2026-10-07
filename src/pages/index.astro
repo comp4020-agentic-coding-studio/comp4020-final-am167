@@ -105,7 +105,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       <p class="lede">
         One low orbit, shared by everyone who comes here. Launch a satellite and
         write it a beacon: one line, broadcast to everyone watching each time it
-        passes over the ground station.
+        passes over one of three ground stations.
       </p>
       <p class="lede">
         Nobody owns the sky. Every launch makes it more crowded, and in a crowded
@@ -150,7 +150,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
               <label class="band">
                 <input type="radio" name="band" value={band} checked={values.band === band} />
                 <span class="band-name">{b.label}</span>
-                <span class="band-period">over the station every {every(b.period)}</span>
+                <span class="band-period">round the planet every {every(b.period)}</span>
                 <span class="band-hint">{hint[band]} <span class="band-life">{life(band)}</span></span>
               </label>
             ))}

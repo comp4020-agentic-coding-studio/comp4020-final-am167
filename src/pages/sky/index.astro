@@ -6,13 +6,15 @@ import { ago, embed } from "../../lib/format.ts";
 import { REFUSALS, isRefusal } from "../../lib/manoeuvre.ts";
 import { skyCount } from "../../lib/story.ts";
 import { BANDS, bandAt, radiusAt, type Band } from "../../lib/orbit.ts";
+import { STATIONS } from "../../lib/stations.ts";
 import { conjunctions, liveSky, recentCollisions, toPublic } from "../../lib/sky.ts";
 
 // The shared sky. The server renders a summary of what's in orbit (counts per
 // band and the latest launches), so the page is complete without JavaScript;
-// the full list is the catalogue's. The script draws the sky over the station
-// from the same orbits and keeps everything live over the event stream
-// (ADR 0004).
+// the full list is the catalogue's. The script draws the whole sky, or the
+// horizon over a ground station, from the same orbits, says what each
+// station hears, and keeps everything live over the event stream (ADR 0004,
+// 0013).
 const { person, operator } = Astro.locals;
 const viewer = { person, operator: operator?.id ?? null };
 const now = Date.now();
@@ -35,6 +37,9 @@ const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 // collisions coming, and the latest that happened (ADR 0008, 0010)
 const coming = conjunctions(now);
 const collided = recentCollisions(5);
+// the view it opens on (ADR 0013): the whole sky, or straight after a
+// launch the horizon over Canberra, where the launch's camera ends
+const view = launched ? "canberra" : null;
 ---
 <Base title="Kessler: the sky" current="sky">
   <main class="sky-page">
@@ -44,19 +49,27 @@ const collided = recentCollisions(5);
         <canvas
           id="chart"
           role="img"
-          aria-label={`The sky over the station: ${skyCount(sky)}. Most rise on the left and set on the right; some go the other way.`}
+          aria-label={view
+            ? `The sky over Canberra: ${skyCount(sky)}. Most rise on the left and set on the right; some go the other way.`
+            : `The whole sky, with the three ground stations: ${skyCount(sky)}.`}
         ></canvas>
         <div id="scene-labels" class="scene-labels" aria-hidden="true"></div>
-        <button type="button" id="zoom" class="zoom" hidden>See the whole sky</button>
+        <!-- the whole planet, or the horizon over one station (ADR 0013) -->
+        <div id="views" class="views" role="group" aria-label="View" hidden>
+          <button type="button" data-view="" aria-pressed={view === null ? "true" : "false"}>Whole sky</button>
+          {STATIONS.map((s) => (
+            <button type="button" data-view={s.id} aria-pressed={view === s.id ? "true" : "false"}>{s.name}</button>
+          ))}
+        </div>
         <noscript>
           <p class="no-view">
-            The sky and the station need JavaScript. Everything in orbit is
+            The sky and the beacons need JavaScript. Everything in orbit is
             listed in the <a href="/catalogue/">catalogue</a>.
           </p>
         </noscript>
         <p id="no-webgl" class="no-view" hidden>
           The sky couldn't be drawn here (it needs WebGL, and a connection to
-          load it). The station still hears every beacon, and everything in
+          load it). The stations still hear every beacon, and everything in
           orbit is listed in the <a href="/catalogue/">catalogue</a>.
         </p>
       </div>
@@ -77,7 +90,7 @@ const collided = recentCollisions(5);
       {launched && (
         <p class="notice launched" id="launched-notice" role="status">
           <strong>{launched.callsign}</strong> is in orbit. Its beacon is broadcast
-          each time it passes over the station.
+          each time it passes over a ground station.
           {!operator && (
             <> <a href="/operator/">Claim a handle</a> to keep it on any device.</>
           )}
@@ -86,15 +99,22 @@ const collided = recentCollisions(5);
 
       <div class="panels">
         <section class="station" aria-labelledby="station-title">
-          <h2 id="station-title">Over the station</h2>
-          <!-- a fixed height: three beacons at a time, paged when more are overhead -->
-          <div class="heard">
-            <ul id="overhead" class="overhead" aria-live="polite"></ul>
-            <p id="next-pass" class="next-pass">
-              {sky.length === 0 ? "Nothing in orbit yet." : "Beacons are heard here as satellites pass overhead."}
-            </p>
-          </div>
-          <p id="overhead-count" class="overhead-count">&nbsp;</p>
+          <h2 id="station-title">Beacons</h2>
+          <p class="station-note">Heard by everyone, as satellites pass the three ground stations.</p>
+          <!-- a row for each station (ADR 0013), each a fixed height: what it
+               hears now, taking turns when more than one is overhead, or
+               what's next -->
+          <ol class="posts">
+            {STATIONS.map((s) => (
+              <li class="post" data-station={s.id}>
+                <p class="post-head">
+                  <span class="post-name">{s.name}</span>
+                  <span class="post-next" data-next></span>
+                </p>
+                <p class="post-heard" data-heard aria-live="polite"></p>
+              </li>
+            ))}
+          </ol>
           {mine && <p id="your-pass" class="your-pass" data-id={mine.id}>Yours: {mine.callsign}.</p>}
           {mine && (
             <div id="your-controls" class="your-controls">
@@ -118,7 +138,7 @@ const collided = recentCollisions(5);
               </div>
             ))}
           </dl>
-          <!-- burn-ups, wherever they happen: most are out of the station's view -->
+          <!-- burn-ups, wherever they happen: most happen away from the stations -->
           <p class="sky-news" id="sky-news" role="status" hidden></p>
           <p class="empty" id="empty" hidden={sky.length > 0}>
             The sky is empty. <a href="/">Launch the first satellite</a>.
@@ -144,13 +164,13 @@ const collided = recentCollisions(5);
     <ManoeuvreDialogs thanks={deorbited ? (deorbited.callsign ?? "Your satellite") : null} />
   </main>
 
-  <script type="application/json" id="sky-data" set:html={embed({ serverTime: now, sky, launched: launched?.id ?? null, conjunctions: coming, collisions: collided })} />
+  <script type="application/json" id="sky-data" set:html={embed({ serverTime: now, sky, launched: launched?.id ?? null, view, conjunctions: coming, collisions: collided })} />
   <script>
     import "../../scripts/sky.ts";
   </script>
 </Base>
 
-<!-- global: the script rebuilds the latest launches, the station list and
+<!-- global: the script rebuilds the latest launches, the beacon rows and
      the scene's labels, and elements it makes carry no scoped-style attribute -->
 <style is:global>
   .sky-page {
@@ -159,7 +179,7 @@ const collided = recentCollisions(5);
     --scene-height: max(30rem, calc(100svh - 4rem));
   }
 
-  /* The sky fills the first screen; the station panel floats over it. */
+  /* The sky fills the first screen; the panels float over it. */
   .sky-page .scene {
     position: relative;
   }
@@ -303,24 +323,45 @@ const collided = recentCollisions(5);
     }
   }
 
-  .sky-page .zoom {
+  /* the whole sky, or the horizon over one station: one choice of four */
+  .sky-page .views {
     position: absolute;
     top: 1.25rem;
     right: var(--gutter);
-    padding: 0.5rem 0.85rem;
+    display: flex;
     border: 1px solid var(--grid-strong);
     border-radius: 4px;
     background: rgb(6 11 24 / 0.72);
     backdrop-filter: blur(6px);
-    color: var(--ink);
+    overflow: hidden;
+  }
+
+  .sky-page .views[hidden] {
+    display: none;
+  }
+
+  .sky-page .views button {
+    padding: 0.5rem 0.75rem;
+    border: 0;
+    border-left: 1px solid var(--grid-strong);
+    background: none;
+    color: var(--ink-dim);
     font: inherit;
     font-size: var(--step--1);
     font-weight: 600;
     cursor: pointer;
   }
 
-  .sky-page .zoom:hover {
-    border-color: var(--amber-dim);
+  .sky-page .views button:first-child {
+    border-left: 0;
+  }
+
+  .sky-page .views button:hover {
+    color: var(--amber);
+  }
+
+  .sky-page .views button[aria-pressed="true"] {
+    background: rgb(242 165 65 / 0.16);
     color: var(--amber);
   }
 
@@ -328,7 +369,7 @@ const collided = recentCollisions(5);
     position: absolute;
     top: 1.25rem;
     left: var(--gutter);
-    width: min(24rem, 40vw);
+    width: min(26rem, 40vw);
     display: grid;
     gap: 0.75rem;
   }
@@ -362,7 +403,7 @@ const collided = recentCollisions(5);
   }
 
   /* A collision, as it happens (ADR 0010): over the bottom right of the
-     scene, clear of the station panel; the script fades it after a while. */
+     scene, clear of the beacons; the script fades it after a while. */
   .sky-page .collision-card {
     position: absolute;
     right: var(--gutter);
@@ -405,10 +446,10 @@ const collided = recentCollisions(5);
     font-size: var(--step--1);
   }
 
-  /* The panel never changes height: three beacon slots, each a callsign and
-     at most two lines of beacon, a count line, and two lines for yours. */
+  /* The beacons: a row for each ground station (ADR 0013), each a fixed
+     height (its name, and at most two lines of beacon), so the panel never
+     changes size as satellites come and go. */
   .sky-page .station {
-    --slot: 3.95rem;
     padding: 1rem;
     border: 1px solid var(--amber-dim);
     border-radius: 4px;
@@ -416,63 +457,101 @@ const collided = recentCollisions(5);
     backdrop-filter: blur(6px);
   }
 
-  .sky-page .heard {
-    height: calc(3 * var(--slot) + 2 * 0.5rem);
-    overflow: hidden;
+  .sky-page .station h2 {
+    margin-bottom: 0.15rem;
   }
 
-  .sky-page .overhead {
+  .sky-page .station-note {
+    margin: 0 0 0.75rem;
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+  }
+
+  .sky-page .posts {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 0.5rem;
+    gap: 0.6rem;
   }
 
-  .sky-page .overhead li {
-    display: grid;
-    align-content: start;
-    height: var(--slot);
+  .sky-page .post {
+    --beacon-size: var(--step-1);
+    padding-left: 0.7rem;
+    border-left: 2px solid var(--grid-strong);
+  }
+
+  .sky-page .post.live {
+    border-left-color: var(--amber);
+  }
+
+  .sky-page .post p {
+    margin: 0;
+  }
+
+  .sky-page .post-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .sky-page .post-name {
+    color: var(--ink-dim);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .sky-page .post.live .post-name {
+    color: var(--amber);
+  }
+
+  .sky-page .post-next {
+    overflow: hidden;
+    color: var(--ink-dim);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* two lines of beacon, always: room for one at its longest */
+  .sky-page .post-heard {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    height: calc(2 * 1.25 * var(--beacon-size));
+    overflow: hidden;
+    font-size: var(--beacon-size);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .sky-page .post-heard .callsign {
+    margin-right: 0.4em;
+    color: var(--amber);
+    font-size: var(--step--1);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .sky-page .post-heard .beacon {
     animation: heard 0.4s ease-out;
+  }
+
+  .sky-page .post-heard:empty::before {
+    content: "Listening";
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+    opacity: 0.6;
   }
 
   @keyframes heard {
     from {
       opacity: 0;
     }
-  }
-
-  .sky-page .overhead .callsign {
-    font-size: var(--step--1);
-    color: var(--amber);
-    font-weight: 700;
-  }
-
-  .sky-page .overhead .beacon {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    overflow: hidden;
-    font-size: var(--step-0);
-    line-height: 1.3;
-    overflow-wrap: anywhere;
-  }
-
-  .sky-page .next-pass {
-    margin: 0;
-    color: var(--ink-dim);
-    font-size: var(--step--1);
-  }
-
-  .sky-page .overhead:not(:empty) + .next-pass {
-    display: none;
-  }
-
-  .sky-page .overhead-count {
-    margin: 0.5rem 0 0;
-    color: var(--ink-dim);
-    font-size: 0.75rem;
   }
 
   .sky-page .your-pass {
@@ -677,7 +756,14 @@ const collided = recentCollisions(5);
       transform: none;
     }
 
-    /* under the scene, like the notice: over it, a long one hides the station */
+    /* narrower, so a beacon at its longest takes three lines */
+    .sky-page .post-heard {
+      -webkit-line-clamp: 3;
+      line-clamp: 3;
+      height: calc(3 * 1.25 * var(--beacon-size));
+    }
+
+    /* under the scene, like the notice: over it, a long one hides the beacons */
     .sky-page .collision-card {
       position: static;
       width: auto;

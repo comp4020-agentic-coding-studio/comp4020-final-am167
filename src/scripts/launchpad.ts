@@ -1253,7 +1253,7 @@ export function createPad(options: PadOptions): PadControls | null {
       offset = [offset[0] * (1 - follow), offset[1] * (1 - follow)];
 
       // and pull back until the ground is the planet's limb, with the pad on
-      // it, as the sky page sees the station
+      // it, as the sky page sees Canberra
       const u = ease(smooth(PULL, ARRIVE, t));
       if (u > 0) {
         // far enough out to see the whole arc, from the pad to where the
