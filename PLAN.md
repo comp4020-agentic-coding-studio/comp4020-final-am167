@@ -39,7 +39,8 @@ _Last updated 2026-10-07 (deorbiting and boosting built, in review; C9 write-ups
     bright collision the view turns to follow (`90dfab9`); the "in orbit"
     notice dropped once that satellite is gone (`811236f`); a nudge towards
     claiming a handle at launch (`487f0a4`), then as a pop-up on arriving
-    at the launchpad (once a visit, closable, never a gate; PR #2).
+    at the launchpad (once a visit, closable, never a gate; PR #2), since
+    moved to open on the first Launch of a visit instead of on arrival.
   - Not built, though once listed for C9: conjunction alerts and dodging
     (moved to C10).
 - **Next, for C9:**

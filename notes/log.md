@@ -1259,3 +1259,16 @@ catalogue. `pnpm check` green (190 tests).
 I accepted ADR 0011 (bringing your satellite down, or boosting it up a
 band) as it stands after the launchpad change. The manoeuvre commits so
 far: `948998e`, `e010756`, `f35f752`.
+
+## 2026-10-07: the handle pop-up opens on Launch, not on arrival
+
+The pop-up asking whether to launch under a handle opened as soon as the
+launchpad loaded, before anyone had decided to launch anything. It now
+opens on the first Launch of a visit instead: the submit is held, and
+"Launch without a handle" carries the same launch on (Escape or the
+backdrop just closes it, so you can change your mind). Once shown it isn't
+shown again that visit. Without JavaScript it never opens, as before, and
+the line under the Launch button still makes the offer. Checked in Chrome:
+closed on load, open on Launch, skip launches, Escape doesn't, second
+Launch goes straight through. `pnpm check` green (190 tests); the timing is
+client-side, so the HTTP spec suite can't see it.
