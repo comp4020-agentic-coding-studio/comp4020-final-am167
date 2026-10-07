@@ -2490,3 +2490,14 @@ first. `pnpm check` green (305 tests, 0 errors, 0 warnings) against a
 fresh build. Checked in Chrome at 1920x1080 (all three folded, still
 folded after a reload) and on an iPhone 14 (390 wide, no overflow).
 Commit `80ba3a6`.
+
+## 2026-10-08 — README cleared to a skeleton
+
+Advay is rewriting the README in their own words, so it's now a
+skeleton: the same five headings, with an HTML comment under each saying
+what goes there and a worked example drawn from the old text (falsifiable
+claims with numbers, tests written as behaviour, trade-offs named
+honestly). The comments don't render on `/readme/`; the headings do, so
+the invariant test still passes. The old text is at `d8fb66a`.
+`pnpm check` green (305 tests, 0 errors, 0 warnings) against a fresh
+build.
