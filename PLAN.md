@@ -85,6 +85,16 @@ _Last updated 2026-10-07, overnight (Advay's feedback round on branch `claude/ni
     launchpad's intro rewritten around the why, a Why page (`/why/`), the
     first-launch explainer brought up to date. "A purpose" and "Collisions
     that mean something" below are rewritten as decided.
+  - **Adversarial review** (fresh Sonnet reviewer; findings `f262b7e`)
+    and five rounds of fixes: "heard" now means on air, by the shared
+    turn rule, and counts only people who loaded a page (`1472389`); one
+    feed card per wreck, cards never jump, no "no handle" (`855fc08`);
+    derelicts carry echoes of gone satellites' last words, and encounters
+    are announced (`72a17dd`); the sky's card isn't modal, and an object's
+    address is the catalogue with its card popped up (`fe908a4`); the
+    question is opt-in and turns at Canberra midnight, the copy matches
+    the code, test gaps closed (`262e2b4`). Plus derelicts counted
+    together in lineage wording and a bounded feed query (`e0b2562`).
   - For Advay: accept (or change) ADRs 0015–0018; edit the question list
     (`src/lib/questions.ts`) and the Why page's wording into his own; the
     README is now further out of date (it says 60 characters and "one live
