@@ -780,12 +780,13 @@ async function runRuntimeProfile(
     let wholeSky: PhaseResult | null = null;
     let offscreen: (PhaseResult & { canvasLeftViewport: boolean }) | null = null;
     if (skyReady !== null) {
-      station = await collectPhase(sky, 3_000, refreshIntervalMilliseconds);
-      // the zoom out to the whole planet, where every satellite is in view
-      // and every one wants a label
-      await sky.locator("#zoom").click();
-      zoom = await collectPhase(sky, 1_500, refreshIntervalMilliseconds);
+      // it opens on the whole planet, where every satellite is in view and
+      // every one wants a label (ADR 0014)
       wholeSky = await collectPhase(sky, 3_000, refreshIntervalMilliseconds);
+      // then the zoom in to the horizon over a station
+      await sky.locator('.views button[data-view="canberra"]').click();
+      zoom = await collectPhase(sky, 1_500, refreshIntervalMilliseconds);
+      station = await collectPhase(sky, 3_000, refreshIntervalMilliseconds);
       // scrolled to the summary, the scene should rest
       await sky.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       await sky.waitForTimeout(400);

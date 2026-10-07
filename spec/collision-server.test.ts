@@ -254,24 +254,26 @@ describe("who a collision names (ADR 0010)", async () => {
     const delta = put({ owner: "dave", callsign: "DELTA", beacon: "still up here", ...orbit(2.4, 0, 1, now) });
     const theirs = sky.historyOf(delta.id, "someone else", now)!;
     expect(theirs).toMatchObject({ fate: "live", beacon: null, withheld: true, end: null });
-    expect(theirs.nextPassAt).toBeGreaterThan(now);
-    expect(theirs.reentryAt).toBeGreaterThan(theirs.nextPassAt!);
+    // the next of the three ground stations it reaches (ADR 0014)
+    expect(theirs.nextPass!.at).toBeGreaterThan(now);
+    expect(["Canberra", "Goldstone", "Madrid"]).toContain(theirs.nextPass!.station);
+    expect(theirs.reentryAt).toBeGreaterThan(theirs.nextPass!.at);
     expect(theirs.followed).toEqual({ left: 0, collisions: 0, fragments: 0, up: 0, destroyed: [] });
     expect(sky.historyOf(delta.id, "dave", now)).toMatchObject({ beacon: "still up here", withheld: false, mine: true });
   });
 });
 
-describe("a collision staged over the station", async () => {
+describe("a collision staged over a station", async () => {
   const { sky } = await freshServer();
-  const { STATION_ANGLE } = await import("../src/lib/orbit.ts");
+  const { STATIONS } = await import("../src/lib/stations.ts");
 
-  it("puts two derelicts on a head-on course to meet over the station soon, when nothing else is coming", () => {
+  it("puts two derelicts on a head-on course to meet over a ground station soon, when nothing else is coming", () => {
     const staged = sky.stageCollision(T);
     expect(staged).not.toBeNull();
     expect(staged!.at - T).toBeGreaterThan(10_000);
     expect(staged!.at - T).toBeLessThan(60_000);
-    const off = Math.abs(staged!.angle - STATION_ANGLE);
-    expect(Math.min(off, 2 * Math.PI - off)).toBeLessThan(0.05);
+    const off = (angle: number) => Math.abs(Math.atan2(Math.sin(staged!.angle - angle), Math.cos(staged!.angle - angle)));
+    expect(Math.min(...STATIONS.map((s) => off(s.angle)))).toBeLessThan(0.05);
     const up = sky.liveSky(T);
     expect(up.filter((o) => o.kind === "derelict").map((o) => o.id).sort()).toEqual([staged!.a, staged!.b].sort());
   });
@@ -282,5 +284,22 @@ describe("a collision staged over the station", async () => {
     sky.settle(after);
     expect(sky.stageCollision(after + 60_000)).toBeNull();
     expect(sky.stageCollision(after + sky.STAGE.every)).not.toBeNull();
+  });
+});
+
+describe("a collision staged over another station", async () => {
+  const { sky } = await freshServer();
+  const { STATIONS } = await import("../src/lib/stations.ts");
+
+  it("can meet over Goldstone or Madrid, not only Canberra (ADR 0014)", () => {
+    // the first draw picks the way round, the second the station
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    try {
+      const staged = sky.stageCollision(T)!;
+      const goldstone = STATIONS.find((s) => s.id === "goldstone")!;
+      expect(Math.abs(Math.atan2(Math.sin(staged.angle - goldstone.angle), Math.cos(staged.angle - goldstone.angle)))).toBeLessThan(0.05);
+    } finally {
+      random.mockRestore();
+    }
   });
 });

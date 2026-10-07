@@ -5,18 +5,19 @@ import { listening, publish } from "./events.ts";
 import { FUEL, REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
+import { STATIONS, nextStation } from "./stations.ts";
 import {
   BANDS,
   DECAY,
-  STATION_ANGLE,
+  angleAt,
   bandAt,
+  burnAt,
   climb,
   descend,
   periodAt,
   placeInBand,
   radiusAt,
   reentryAt,
-  untilOverhead,
   type Band,
   type Orbit,
 } from "./orbit.ts";
@@ -419,8 +420,8 @@ export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
 // When nothing is coming, a visitor could watch for an hour and see no
 // collision. So, for someone watching, and no more often than `every`, the
 // server sends two derelicts at each other: same height, opposite ways, a
-// dead-centre pass (collide.ts) that meets over the station `lead` from now,
-// in the default view. The rest of the world launches too.
+// dead-centre pass (collide.ts) that meets over a ground station, picked at
+// random, `lead` from now. The rest of the world launches too.
 export const STAGE = {
   every: 5 * 60_000,
   horizon: 4 * 60_000,
@@ -441,9 +442,10 @@ export function stageCollision(now = Date.now()): Conjunction | null {
   // is their first meeting)
   const sweep = ((2 * Math.PI) / period) * STAGE.lead;
   const way: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+  const station = STATIONS[Math.floor(Math.random() * STATIONS.length)];
   const orbit = (direction: 1 | -1) => ({
     radius: STAGE.radius,
-    phase: STATION_ANGLE - direction * sweep,
+    phase: station.angle - direction * sweep,
     period: Math.round(period),
     epoch: now,
     direction,
@@ -493,7 +495,44 @@ export function watcherArrived(): void {
   unquiet();
 }
 
+// Orbits launched before they slowed down (ADR 0013) went round three times
+// as fast for their height. Each one still up gets a new epoch, now: where
+// it is, with today's period for its height, so it carries on from there,
+// slower, and falls to the same burn-up. One already in its last plunge is
+// left to burn up. Anything on today's law is left alone, so it runs once.
+// Needed until nothing launched before the change can still be up (three
+// days after it deployed).
+let retimed = false;
+export function retime(now = Date.now()): void {
+  const old = live().filter((o) => o.period < 0.6 * periodAt(o.radius) && o.epoch <= now && now < burnAt(o));
+  if (old.length === 0) return;
+  db.transaction((tx) => {
+    for (const o of old) {
+      const radius = radiusAt(o, now);
+      // a climb that has ended: it falls by drag alone from here
+      const climbed = o.until !== null && o.until <= now;
+      tx.update(objects)
+        .set({
+          radius,
+          phase: angleAt(o, now),
+          period: Math.round(periodAt(radius)),
+          epoch: now,
+          rate: climbed ? 1 : o.rate,
+          until: climbed ? null : o.until,
+        })
+        .where(eq(objects.id, o.id))
+        .run();
+    }
+  });
+}
+
 export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: CollisionReport[] } {
+  // marked done only once it has worked: a busy or full disk tries again
+  // on the next settle
+  if (!retimed) {
+    retime(now);
+    retimed = true;
+  }
   if (now >= quietFrom && now < quietUntil) return { decayed: [], collisions: [] };
   const applied: CollisionReport[] = [];
   let sky = live();
@@ -800,12 +839,12 @@ export interface History {
   fate: Fate;
   fateAt: number | null;
   // its beacon, once it's gone (or to its owner, always); while it flies,
-  // everyone else hears it only over the station, and it's withheld here
+  // everyone else hears it only over a ground station, and it's withheld here
   beacon: string | null;
   withheld: boolean;
-  // while it's up: when it next passes over the station (null if it burns
-  // up first), and when it burns up
-  nextPassAt: number | null;
+  // while it's up: when it next passes over a ground station, and which
+  // (null if it burns up first), and when it burns up
+  nextPass: { at: number; station: string } | null;
   reentryAt: number | null;
   // and its orbit, so a page can keep those counting down
   orbit: Required<Orbit> | null;
@@ -840,7 +879,7 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
   const mine = ownedBy(object, who);
   const flying = object.fate === "live";
   const shown = !flying || mine;
-  const pass = flying ? untilOverhead(object, now) : null;
+  const pass = flying ? nextStation(object, now) : null;
 
   // Every collision and every fragment, read once and walked in memory: two
   // queries however long the cascade (the sky holds a few hundred objects,
@@ -912,7 +951,7 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
     fateAt: row.fateAt,
     beacon: shown ? object.beacon : null,
     withheld: !shown && object.beacon !== null,
-    nextPassAt: pass === null ? null : now + pass,
+    nextPass: pass === null ? null : { at: now + pass.in, station: pass.station.name },
     reentryAt: flying ? reentryAt(object) : null,
     orbit: flying
       ? {

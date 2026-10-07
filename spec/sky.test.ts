@@ -3,7 +3,7 @@ import { describe, expect, inject, it } from "vitest";
 import { bandAt, bandReach, heightKm, radiusAt } from "../src/lib/orbit.ts";
 import { Session, callsign } from "./session.ts";
 
-// The sky page stays one screen: the scene, what the station hears, and a
+// The sky page stays one screen: the scene, what the ground stations hear, and a
 // short summary of the sky. The full record of everything ever launched is
 // the catalogue, on its own page. Both work without JavaScript.
 const baseUrl = inject("baseUrl");
@@ -51,13 +51,42 @@ describe("the sky page", () => {
     // derelicts and debris aren't launches (ADR 0008)
     const newest = sky.filter((o) => o.kind === "satellite").sort((a, b) => b.launchedAt - a.launchedAt);
     items.forEach((text, i) => expect(text).toContain(newest[i].callsign));
-    // a beacon is only heard over the station, never in the summary
+    // a beacon is only heard over a ground station, never in the summary
     expect(items.join(" ")).not.toContain("recent");
   });
 
   it("links to the full catalogue", async () => {
     const { page } = await skyPage();
     expect(page.querySelector('a[href="/catalogue/"]')).not.toBeNull();
+  });
+
+  // ADR 0014: three ground stations, all heard by everyone
+  it("has a beacon panel with a row for each of the three ground stations", async () => {
+    const { page } = await skyPage();
+    const panel = page.querySelector(".station")!;
+    expect(panel.querySelector("h2")?.textContent).toBe("Beacons");
+    const rows = [...panel.querySelectorAll("[data-station]")];
+    expect(rows.map((row) => row.getAttribute("data-station"))).toEqual(["canberra", "goldstone", "madrid"]);
+    expect(rows.map((row) => row.querySelector(".post-name")?.textContent)).toEqual(["Canberra", "Goldstone", "Madrid"]);
+    // what each hears is announced as it changes
+    for (const row of rows) expect(row.querySelector("[aria-live]")).not.toBeNull();
+  });
+
+  it("opens on the whole sky, with the horizon over each station a button away", async () => {
+    const { page } = await skyPage();
+    const views = [...page.querySelectorAll<HTMLButtonElement>(".views button")];
+    expect(views.map((b) => b.textContent)).toEqual(["Whole sky", "Canberra", "Goldstone", "Madrid"]);
+    expect(views.map((b) => b.getAttribute("aria-pressed"))).toEqual(["true", "false", "false", "false"]);
+  });
+
+  it("opens over Canberra, where the launch camera ends, straight after a launch", async () => {
+    const session = new Session(baseUrl);
+    const launched = await session.launch({ band: "low", callsign: callsign(), beacon: "hand-off" });
+    const location = launched.headers.get("location") ?? "";
+    expect(location).toMatch(/\/sky\/\?launched=\d+/);
+    const page = doc(await (await session.get(location)).text());
+    const pressed = page.querySelector('.views button[aria-pressed="true"]');
+    expect(pressed?.textContent).toBe("Canberra");
   });
 });
 

@@ -60,7 +60,7 @@ describe("the launchpad", () => {
     const rows = [...catalogue.querySelectorAll("tbody tr")].map((tr) => tr.textContent ?? "");
     const row = rows.find((text) => text.includes(name));
     expect(row, "the launch isn't in the catalogue").toBeDefined();
-    // a beacon is only heard as its satellite passes over the station, so the
+    // a beacon is only heard as its satellite passes over a ground station, so the
     // catalogue names satellites without giving their beacons away
     expect(row).not.toContain("hello from the pad");
   });

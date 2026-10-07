@@ -4,9 +4,9 @@ import { Session, callsign } from "./session.ts";
 
 // Every object's history, over HTTP (ADR 0012): its own page, linked from
 // the catalogue and the sky, and the same as a panel for the sky. A flying
-// satellite's beacon is only shown over the station, so a stranger's view of
+// satellite's beacon is only shown over a ground station, so a stranger's view of
 // its history leaves it out; its owner sees their own. (A rule of the game,
-// not a secret: the sky's own data carries live beacons for the station.) Where debris came from and what followed are checked
+// not a secret: the sky's own data carries live beacons for the stations.) Where debris came from and what followed are checked
 // against staged collisions in collision-server.test.ts.
 
 const baseUrl = inject("baseUrl");
@@ -32,7 +32,7 @@ describe("an object's history", () => {
     expect(history.textContent).toMatch(/launched without a handle/i);
     expect(history.textContent).toMatch(/Low/);
     expect(history.textContent).not.toContain(beacon);
-    expect(history.textContent).toMatch(/heard only as it passes over the station/i);
+    expect(history.textContent).toMatch(/heard only as it passes over a ground station/i);
   });
 
   it("is the same in the sky's panel, beacon withheld from a stranger and shown to its owner", async () => {

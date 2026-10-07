@@ -1,6 +1,7 @@
 ---
 import { ago, falling, km, until } from "../lib/format.ts";
-import { BANDS, climbing, fallRate, heightKm, isOverhead, radiusAt } from "../lib/orbit.ts";
+import { BANDS, climbing, fallRate, heightKm, radiusAt } from "../lib/orbit.ts";
+import { stationOver } from "../lib/stations.ts";
 import type { History } from "../lib/sky.ts";
 import { blame, collisionOf, couplet, describe, headline, titleOf, type StoryParty } from "../lib/story.ts";
 import { countdown } from "../scripts/countdown.ts";
@@ -33,7 +34,7 @@ const met = h.end && ([self, h.end.with] as [StoryParty, StoryParty]);
 const theirLine = met ? couplet(met).find((line) => line.callsign !== h.callsign) : undefined;
 const live = h.orbit !== null;
 const radius = h.orbit ? radiusAt(h.orbit, now) : null;
-const overhead = h.orbit ? isOverhead(h.orbit, now) : false;
+const overhead = h.orbit ? stationOver(h.orbit, now) : null;
 const f = h.followed;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 // what its wreckage destroyed, each linked to its own history; a long
@@ -73,13 +74,13 @@ const moreLosses = f.destroyed.length - shownLosses.length;
       {h.beacon !== null && <blockquote class="history-beacon"><q>{h.beacon}</q></blockquote>}
       {live && (
         <p>
-          {h.mine && h.beacon !== null ? "Everyone else hears it " : "Heard "}only as it passes over the station.{" "}
+          {h.mine && h.beacon !== null ? "Everyone else hears it " : "Heard "}only as it passes over a ground station.{" "}
           <span data-pass>
             {overhead
-              ? "It's over the station now."
-              : h.nextPassAt === null
-                ? "It burns up before it next gets there."
-                : `Next pass in ${countdown(h.nextPassAt - now)}.`}
+              ? `It's over ${overhead.name} now.`
+              : h.nextPass === null
+                ? "It burns up before it next gets to one."
+                : `Next over ${h.nextPass.station} in ${countdown(h.nextPass.at - now)}.`}
           </span>
         </p>
       )}

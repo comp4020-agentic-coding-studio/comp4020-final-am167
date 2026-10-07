@@ -2,7 +2,7 @@
 
 One low orbit, shared by everyone who visits. You launch a satellite and give
 it a beacon: one line, shown to everyone watching each time the satellite
-passes over the ground station. Nobody owns the sky, and every launch makes it
+passes over one of three ground stations. Nobody owns the sky, and every launch makes it
 more crowded.
 
 This is a first version (week 9). The cascade the app is named after comes
@@ -21,8 +21,8 @@ Kessler is good if:
    within about a second, and everyone sees each satellite in the same place
    at the same moment.
 2. **Wanting to be seen has a cost.** A beacon is only heard when its
-   satellite crosses the station. Low orbits pass over every minute; high
-   ones every eight. The catalogue never gives beacons away, so the only way
+   satellite crosses a ground station. Low orbits come round every three
+   minutes; high ones every twenty-four. The catalogue never gives beacons away, so the only way
    to be heard more is to crowd the low band, which from week 10 is what
    makes collisions likely.
 3. **What you do stays.** Your satellite is still yours when you come back.

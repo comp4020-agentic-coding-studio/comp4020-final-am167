@@ -8,19 +8,23 @@
 // still in closed form.
 //
 // Distances are in planet radii. Angles are radians, anticlockwise from the
-// right, with y up; the shared ground station is at the top of the planet.
+// right, with y up; Canberra's ground station is at the top of the planet
+// (the three stations are in stations.ts).
 
 const TAU = 2 * Math.PI;
 
 // One period for each height, whatever band an object was launched into, so
 // everything at the same height moves together and a falling orbit speeds up.
 // It falls steeply with height (not Kepler's 1.5 power: this sky is tuned to
-// be watched, not to be physical): the middle of the low band comes round
-// once a minute, the middle of the high band every eight.
+// be watched, not to be physical): the middle of the high band takes eight
+// times as long as the low band's. The middle of the low band comes round
+// every LOW_PERIOD: slow enough that a beacon is up long enough to read as
+// it crosses a station (ADR 0013; it was once a minute).
 const LOW_MIDDLE = 1.3;
 const HIGH_MIDDLE = 2.4;
+const LOW_PERIOD = 3 * 60_000;
 export const PERIOD_POWER = Math.log(8) / Math.log(HIGH_MIDDLE / LOW_MIDDLE);
-export const periodAt = (radius: number): number => 60_000 * (radius / LOW_MIDDLE) ** PERIOD_POWER;
+export const periodAt = (radius: number): number => LOW_PERIOD * (radius / LOW_MIDDLE) ** PERIOD_POWER;
 
 // The bands you launch into. They're ranges of one continuous height, not
 // shelves: once up, an orbit falls through the bands below it.
@@ -51,11 +55,6 @@ export const BAND_EDGES = {
 };
 export const bandAt = (radius: number): Band =>
   radius < BAND_EDGES.lowTop ? "low" : radius < BAND_EDGES.midTop ? "mid" : "high";
-
-export const STATION_ANGLE = Math.PI / 2;
-
-// How far either side of the station a satellite counts as overhead.
-export const OVERHEAD_HALF_WIDTH = (12 * Math.PI) / 180;
 
 export interface Orbit {
   // radius at the epoch
@@ -280,26 +279,6 @@ export function climb(orbit: Orbit, time: number, target: number): Required<Orbi
 
 // Whether an orbit is still climbing at `time`.
 export const climbing = (orbit: Orbit, time: number): boolean => climbs(orbit) && time < orbit.until;
-
-export function isOverhead(orbit: Orbit, time: number): boolean {
-  const off = Math.abs(angleAt(orbit, time) - STATION_ANGLE);
-  return Math.min(off, TAU - off) <= OVERHEAD_HALF_WIDTH;
-}
-
-// How long until an orbit next enters the station's window, or null if it
-// burns up first. (Its period shortens as it falls, so this is a touch long
-// for a high orbit; the sky re-reads it four times a second.)
-export function untilOverhead(orbit: Orbit, time: number): number | null {
-  if (plungeAt(orbit, time) !== null) return null;
-  // a retrograde orbit comes at the window from the other side (ADR 0008)
-  const angle = angleAt(orbit, time);
-  const gap =
-    orbit.direction === -1
-      ? (angle - (STATION_ANGLE + OVERHEAD_HALF_WIDTH) + TAU) % TAU
-      : (STATION_ANGLE - OVERHEAD_HALF_WIDTH - angle + TAU) % TAU;
-  const ms = (gap / TAU) * periodNow(orbit, time);
-  return time + ms < burnAt(orbit) ? ms : null;
-}
 
 // ── launching ──────────────────────────────────────────────────────────────
 

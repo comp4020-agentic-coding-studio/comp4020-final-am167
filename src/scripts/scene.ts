@@ -22,27 +22,26 @@ import {
 import {
   BAND_EDGES,
   BANDS,
-  OVERHEAD_HALF_WIDTH,
-  STATION_ANGLE,
   angleAt,
   burnAt,
-  isOverhead,
   periodNow,
   radiusAt,
   reentryAt,
   type Band,
   type Orbit,
 } from "../lib/orbit.ts";
+import { OVERHEAD_HALF_WIDTH, STATIONS, isOverhead, type Station, type StationId } from "../lib/stations.ts";
 import coastline from "./coastline.json";
 import { countdown } from "./countdown.ts";
 import { attachPerformanceProfiler } from "./performance-profiler.ts";
 import { createReentry } from "./reentry.ts";
 import { PLANET_COLOURS, STAR_COLOURS, seeded } from "./starfield.ts";
 
-// The sky as seen from just above the station: the planet's limb along the
-// bottom, the three bands stacked over it, and satellites rising in on the
-// left, crossing the station's window and setting on the right. It zooms out
-// to the whole planet, with every orbit in view.
+// The whole planet, with every orbit in view and the three ground stations'
+// windows on it (ADR 0014); or the sky as seen from just above one station:
+// the planet's limb along the bottom, the three bands stacked over it, and
+// satellites rising in on the left, crossing the station's window and
+// setting on the right. One continuous zoom between the two.
 //
 // The simulation is still the flat chart of orbit.ts (PLAN.md, "Dimension"):
 // every orbit lies in the screen's plane and the camera is orthographic, so
@@ -68,8 +67,8 @@ export interface SceneImpact {
 }
 
 export interface SceneControls {
-  // true for the whole planet, false for the horizon over the station
-  zoom(out: boolean): void;
+  // the horizon over a station, or null for the whole planet
+  view(station: StationId | null): void;
   // the object drawn nearest a point on the page (a click), if one is close
   // enough to mean it
   pick(clientX: number, clientY: number, reach: number): number | null;
@@ -82,6 +81,9 @@ export interface SceneOptions {
   now: () => number;
   // a satellite launched just before the page opened, to point out
   launched: number | null;
+  // the view it opens on: the horizon over a station, or null for the
+  // whole planet
+  initial: StationId | null;
   reduced: boolean;
   // elements over the canvas that labels and the pointer keep clear of
   obstacles: HTMLElement[];
@@ -93,7 +95,7 @@ export interface SceneOptions {
 
 const TAU = Math.PI * 2;
 
-// Over the station the planet is drawn six chart units across, but the orbits
+// Over a station the planet is drawn six chart units across, but the orbits
 // keep their heights above it, so the bands sit close over a gently curved
 // horizon. Zoomed out, it shrinks back to the chart's own size.
 const PLANET = 6;
@@ -121,12 +123,12 @@ const HEATING_MS = 150_000;
 const EMBER: [number, number, number] = [1, 0.16, 0.02];
 
 // How long a trail is, in time behind the satellite, and its longest arc.
-const TRAIL_MS = 12_000;
+const TRAIL_MS = 36_000;
 const TRAIL_MAX = 0.35;
 const TRAIL_STEPS = 28;
 
 // Seen from the other side of the chart's plane, so satellites cross left to
-// right; the station is at the top either way.
+// right; Canberra is at the top either way.
 const place = (radius: number, angle: number, planet: number): [number, number] => {
   const d = display(radius, planet);
   return [-d * Math.cos(angle), d * Math.sin(angle)];
@@ -409,7 +411,7 @@ function atmosphere(): Mesh {
   return new Mesh(geometry, material);
 }
 
-// ── the chart over the horizon: bands and the station's window ────────────
+// ── the chart over the horizon: bands and the stations' windows ────────────
 
 // The bands are ranges of one continuous height (ADR 0007): each is a faint
 // wash from where it meets the band below to where it meets the one above,
@@ -456,15 +458,20 @@ function bands(): Mesh {
   return new Mesh(geometry, material);
 }
 
+// The way up from a station, as drawn (the chart is seen mirrored).
+const upAt = (station: Station) => Math.PI - station.angle;
+
 // Anything inside this wedge is over the station, and its beacon is heard.
-function stationWindow(): Mesh {
-  const geometry = new RingGeometry(WHOLE * 0.5, TOP + 2, 64, 8, STATION_ANGLE - OVERHEAD_HALF_WIDTH, OVERHEAD_HALF_WIDTH * 2);
+function stationWindow(station: Station): Mesh {
+  const up = upAt(station);
+  const geometry = new RingGeometry(WHOLE * 0.5, TOP + 2, 64, 8, up - OVERHEAD_HALF_WIDTH, OVERHEAD_HALF_WIDTH * 2);
   const material = new ShaderMaterial({
     uniforms: {
       colour: { value: AMBER },
       radius: { value: PLANET },
       reach: { value: TOP - PLANET },
       halfWidth: { value: OVERHEAD_HALF_WIDTH },
+      up: { value: up },
     },
     vertexShader: /* glsl */ `
       varying vec2 vPos;
@@ -477,13 +484,18 @@ function stationWindow(): Mesh {
       uniform float radius;
       uniform float reach;
       uniform float halfWidth;
+      uniform float up;
       varying vec2 vPos;
       void main() {
         if (length(vPos) < radius) discard;
-        float up = clamp((length(vPos) - radius) / reach, 0.0, 1.0);
-        float off = abs(atan(vPos.x, vPos.y)) / halfWidth;
+        float height = (length(vPos) - radius) / reach;
+        float rise = clamp(height, 0.0, 1.0);
+        float turn = atan(vPos.y, vPos.x) - up;
+        float off = abs(atan(sin(turn), cos(turn))) / halfWidth;
         float edge = smoothstep(0.96, 1.0, off) * 0.12;
-        float a = (0.045 + edge) * (1.0 - up * 0.7);
+        // gone a little above the high band, so zoomed out it's a wedge
+        // over the orbits, not a beam to the edge of the screen
+        float a = (0.045 + edge) * (1.0 - rise * 0.7) * (1.0 - smoothstep(0.85, 1.15, height));
         gl_FragColor = vec4(colour, a);
         #include <colorspace_fragment>
       }`,
@@ -581,7 +593,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
   const earth = globe();
   const coasts = coastlines();
   const air = atmosphere();
-  const beam = stationWindow();
+  const beams = STATIONS.map(stationWindow);
   const trails = new Mesh(new BufferGeometry(), new ShaderMaterial({
     vertexShader: /* glsl */ `
       attribute vec4 tint;
@@ -608,12 +620,16 @@ export function createScene(options: SceneOptions): SceneControls | null {
   const sparks = glowPoints();
   sparks.frustumCulled = false;
   const reentry = createReentry(reduced);
+  // the stations themselves, on the ground under their windows (placed by
+  // apply(), as the planet's size changes)
   const station = glowPoints();
-  station.geometry.setAttribute("position", new Float32BufferAttribute([0, PLANET + 0.01, 8], 3));
-  station.geometry.setAttribute("colour", new Float32BufferAttribute([AMBER.r, AMBER.g, AMBER.b], 3));
-  station.geometry.setAttribute("size", new Float32BufferAttribute([30], 1));
-  station.geometry.setAttribute("core", new Float32BufferAttribute([3], 1));
-  station.geometry.setAttribute("halo", new Float32BufferAttribute([0], 1));
+  const each = (values: number[]) => STATIONS.flatMap(() => values);
+  station.geometry.setAttribute("position", new Float32BufferAttribute(each([0, 0, 0]), 3));
+  station.geometry.setAttribute("colour", new Float32BufferAttribute(each([AMBER.r, AMBER.g, AMBER.b]), 3));
+  station.geometry.setAttribute("size", new Float32BufferAttribute(each([30]), 1));
+  station.geometry.setAttribute("core", new Float32BufferAttribute(each([3]), 1));
+  station.geometry.setAttribute("halo", new Float32BufferAttribute(each([0]), 1));
+  station.frustumCulled = false;
 
   // their geometry changes every frame, so its bounds go stale
   trails.frustumCulled = false;
@@ -624,20 +640,22 @@ export function createScene(options: SceneOptions): SceneControls | null {
   starPoints.renderOrder = 1;
   backdropScene.add(backdrop, starPoints);
   const bandRings = bands();
-  const layers = [earth, coasts, air, bandRings, beam, trails, ...reentry.layers, station, satellites, impacts, sparks];
-  // the ground turns when the view follows a collision; the orbits are
-  // placed turned (place(), with `turn`), and the bands are circles
+  const layers = [earth, coasts, air, bandRings, ...beams, trails, ...reentry.layers, station, satellites, impacts, sparks];
+  // the ground turns to bring a station to the top, and when the view
+  // follows a collision; the orbits are placed turned (place(), with
+  // `turn`), and the bands are circles
   const ground = new Group();
   scene.add(ground);
   layers.forEach((layer, i) => {
     layer.renderOrder = i;
     if (layer !== earth && layer !== coasts) layer.position.z = 8;
-    if ([earth, coasts, beam, station].includes(layer)) ground.add(layer);
+    if ([earth, coasts, ...beams, station].includes(layer)) ground.add(layer);
     else scene.add(layer);
   });
-  const sized = [air, bandRings, beam].map((layer) => (layer.material as ShaderMaterial).uniforms.radius);
+  const sized = [air, bandRings, ...beams].map((layer) => (layer.material as ShaderMaterial).uniforms.radius);
 
   // ── the labels over the canvas ──
+  type Box = [number, number, number, number];
   const bandLabels = (Object.values(BANDS) as (typeof BANDS)[Band][]).map((band) => {
     const el = document.createElement("span");
     el.className = "band-label";
@@ -645,18 +663,21 @@ export function createScene(options: SceneOptions): SceneControls | null {
     overlay.append(el);
     return { band, el };
   });
-  const stationLabel = document.createElement("span");
-  stationLabel.className = "station-label";
-  stationLabel.textContent = "Station";
+  const stationLabels = STATIONS.map((s) => {
+    const el = document.createElement("span");
+    el.className = "station-label";
+    el.textContent = s.name;
+    overlay.append(el);
+    return { station: s, el, width: 0, height: 0, box: null as Box | null, at: "" };
+  });
   const pointer = document.createElement("span");
   pointer.className = "your-pointer";
   pointer.hidden = true;
   const pulse = document.createElement("span");
   pulse.className = "launch-pulse";
   pulse.hidden = true;
-  overlay.append(stationLabel, pointer, pulse);
+  overlay.append(pointer, pulse);
   const labels = new Map<number, { el: HTMLSpanElement; width: number; shown: boolean; at: string }>();
-  type Box = [number, number, number, number];
   const LABEL_HEIGHT = 18;
   const overlaps = (a: Box, b: Box) => !(a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3]);
   const boxOf = (el: Element): Box => {
@@ -675,11 +696,15 @@ export function createScene(options: SceneOptions): SceneControls | null {
   let top = TOP;
   let bottom = 0;
   let planet = PLANET;
-  // 0 is the horizon over the station, 1 the whole planet
-  let zoom = 0;
-  let zoomFrom = 0;
-  let zoomTo = 0;
+  // 0 is the horizon over a station, 1 the whole planet
+  let zoom = options.initial ? 0 : 1;
+  let zoomFrom = zoom;
+  let zoomTo = zoom;
   let zoomStart = 0;
+  // the station the horizon is over (and, zoomed out, at the top)
+  let viewed = STATIONS.find((s) => s.id === options.initial) ?? STATIONS[0];
+  // how far the ground turns to bring it to the top
+  const turnFor = (station: Station) => station.angle - Math.PI / 2;
 
   // The view at a zoom level: the planet's size and the camera's edges.
   function frameAt(level: number) {
@@ -726,7 +751,9 @@ export function createScene(options: SceneOptions): SceneControls | null {
     coasts.scale.setScalar(scale);
     for (const uniform of sized) uniform.value = planet;
     (air.material as ShaderMaterial).uniforms.thickness.value = Math.sqrt(scale);
-    station.position.y = planet - PLANET;
+    const at = station.geometry.getAttribute("position");
+    STATIONS.forEach((s, i) => at.setXYZ(i, (planet + 0.01) * Math.cos(upAt(s)), (planet + 0.01) * Math.sin(upAt(s)), 0));
+    at.needsUpdate = true;
     // band names on their arcs at the right-hand edge; zoomed out the bands
     // sit too close together to name, so the names fade away
     for (const { band, el } of bandLabels) {
@@ -736,8 +763,6 @@ export function createScene(options: SceneOptions): SceneControls | null {
       const [sx, sy] = screen(x, Math.sqrt(r * r - x * x));
       el.style.transform = `translate(${sx}px, ${sy}px) translate(-100%, -50%)`;
     }
-    const [sx, sy] = screen(0, planet);
-    stationLabel.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, 0.6rem)`;
     measure();
   }
 
@@ -764,8 +789,13 @@ export function createScene(options: SceneOptions): SceneControls | null {
   // Label sizes, read again once the webfont has loaded.
   function measure() {
     const named = bandLabels.filter(({ el }) => el.style.opacity !== "0").map(({ el }) => el);
-    fixed = [...named, stationLabel].map(boxOf);
+    fixed = named.map(boxOf);
     for (const entry of labels.values()) entry.width = entry.el.offsetWidth;
+    // (a hidden one reads as no size, and is measured when it shows)
+    for (const entry of stationLabels) {
+      entry.width = entry.el.offsetWidth;
+      entry.height = entry.el.offsetHeight;
+    }
   }
   document.fonts?.ready.then(measure);
 
@@ -965,10 +995,10 @@ export function createScene(options: SceneOptions): SceneControls | null {
   // ── following a collision ──
   // A few seconds before a collision out of view, the planet turns to bring
   // it over the middle of the screen, holds through the flash, then turns
-  // back to the station. Yours always; anyone else's at most once every
+  // back to the station in view. Yours always; anyone else's at most once every
   // PAN.every, so a busy sky doesn't keep swinging. Not when zoomed out
   // (it's all in view) or for reduced motion.
-  let turn = 0;
+  let turn = turnFor(viewed);
   let following: SceneImpact | null = null;
   let lastFollowed = -Infinity;
   let lastFrame = performance.now();
@@ -982,10 +1012,10 @@ export function createScene(options: SceneOptions): SceneControls | null {
       for (const impact of options.impacts?.() ?? []) {
         const until = impact.at - time;
         if (until < 0 || until > PAN.lead) continue;
-        // in view already, over the station?
+        // in view already, over the station in view?
         const d = display(impact.radius, planet);
         const seen = Math.asin(Math.min(1, (half * 0.8) / d));
-        if (Math.abs(wrap(impact.angle - STATION_ANGLE)) < seen) continue;
+        if (Math.abs(wrap(impact.angle - viewed.angle)) < seen) continue;
         if (!impact.mine && time - lastFollowed < PAN.every) continue;
         following = impact;
         lastFollowed = time;
@@ -996,29 +1026,54 @@ export function createScene(options: SceneOptions): SceneControls | null {
     // where a collision is about to happen
     if (reduced) {
       let off: SceneImpact | null = null;
-      for (const impact of options.impacts?.() ?? []) {
+      for (const impact of zoomTo === 0 ? (options.impacts?.() ?? []) : []) {
         const until = impact.at - time;
         const d = display(impact.radius, planet);
         const seen = Math.asin(Math.min(1, (half * 0.8) / d));
-        if (until > -2_000 && until < PAN.lead && Math.abs(wrap(impact.angle - STATION_ANGLE)) >= seen) off = impact;
+        if (until > -2_000 && until < PAN.lead && Math.abs(wrap(impact.angle - viewed.angle)) >= seen) off = impact;
       }
       aside.hidden = !off;
       if (off) {
-        const right = wrap(off.angle - STATION_ANGLE) > 0;
+        const right = wrap(off.angle - viewed.angle) > 0;
         aside.textContent = right ? "Collision out of view ›" : "‹ Collision out of view";
         aside.style.transform = right
           ? `translate(${Math.round(width - 8 - aside.offsetWidth)}px, 3.5rem)`
           : "translate(0.5rem, 3.5rem)";
       }
     }
-    const target = following ? wrap(following.angle - STATION_ANGLE) : 0;
+    // back to the station in view when it isn't following one
+    const target = wrap(following ? following.angle - Math.PI / 2 : turnFor(viewed));
     const step = 1 - Math.exp(-dt / PAN.ease);
-    turn = Math.abs(target - turn) < 1e-4 ? target : turn + wrap(target - turn) * step;
+    turn = reduced || Math.abs(wrap(target - turn)) < 1e-4 ? target : wrap(turn + wrap(target - turn) * step);
     ground.rotation.z = turn;
-    // the station's name goes round with it, and fades while it's away
-    const [sx, sy] = screen(-planet * Math.sin(turn), planet * Math.cos(turn));
-    stationLabel.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, 0.6rem)`;
-    stationLabel.style.opacity = String(Math.max(0, 1 - Math.abs(turn) * 6));
+    nameStations();
+  }
+
+  // Each station's name, just inside the planet under its window, going
+  // round with the ground. Hidden while off screen.
+  function nameStations() {
+    for (const entry of stationLabels) {
+      const up = upAt(entry.station) + turn;
+      const [rx, ry] = screen(planet * Math.cos(up), planet * Math.sin(up));
+      // in from the rim, towards the planet's centre (y is down on screen)
+      const gap = 10 + entry.height / 2;
+      const x = rx - Math.cos(up) * gap - entry.width / 2;
+      const y = ry + Math.sin(up) * gap - entry.height / 2;
+      const shown = x > -entry.width && x < width && y > -entry.height && y < height;
+      entry.box = shown ? [x, y, x + entry.width, y + entry.height] : null;
+      const at = shown ? `translate(${Math.round(x)}px, ${Math.round(y)}px)` : "hidden";
+      if (at === entry.at) continue;
+      entry.at = at;
+      entry.el.hidden = !shown;
+      if (!shown) continue;
+      entry.el.style.transform = at;
+      // a name measured while hidden has no size: measure it now it shows
+      if (entry.width === 0) {
+        entry.width = entry.el.offsetWidth;
+        entry.height = entry.el.offsetHeight;
+        entry.at = "";
+      }
+    }
   }
 
   const aside = document.createElement("span");
@@ -1179,7 +1234,11 @@ export function createScene(options: SceneOptions): SceneControls | null {
     if (profiler) profiler.render(draw);
     else draw();
     // read the panels' boxes before any label is moved, so layout runs once
-    const blocked = [...fixed, ...options.obstacles.map(boxOf)];
+    const blocked = [
+      ...fixed,
+      ...stationLabels.flatMap((entry) => (entry.box ? [entry.box] : [])),
+      ...options.obstacles.map(boxOf),
+    ];
     label(blocked);
     point(mine, blocked);
   }
@@ -1287,9 +1346,13 @@ export function createScene(options: SceneOptions): SceneControls | null {
 
   requestAnimationFrame(frame);
   return {
-    zoom(out: boolean) {
+    view(id: StationId | null) {
+      const station = STATIONS.find((s) => s.id === id);
+      // zoomed out, the planet keeps whichever station was last at the top
+      if (station) viewed = station;
+      following = null;
       zoomFrom = zoom;
-      zoomTo = out ? 1 : 0;
+      zoomTo = station ? 0 : 1;
       zoomStart = performance.now();
     },
     pick(clientX, clientY, reach) {

@@ -17,7 +17,7 @@ import { blame, collisionOf, couplet, describe, headline } from "../../lib/story
 // The record of everything launched (ADR 0003), as a table: filtered,
 // searched, sorted and paged by a plain GET form and links, so it works
 // without JavaScript and every view has its own address. Callsigns only: a
-// beacon is only heard over the station. Heights are worked out from each
+// beacon is only heard over a ground station. Heights are worked out from each
 // orbit (ADR 0007), and a script keeps them falling. Every fragment traces
 // back to the collision that made it, and every collision is told with who
 // it names (ADR 0010).
@@ -89,7 +89,7 @@ const number = (n: number) => n.toLocaleString("en");
       Everything that has been in the shared sky, kept for good: people's
       satellites, the derelicts that drift in, and every fragment, traced
       back to the collision that made it. Beacons aren't listed: they're only
-      heard as a satellite passes over the station (and in the collisions
+      heard as a satellite passes over a ground station (and in the collisions
       below). Every orbit slowly falls and burns up in the end; its record
       stays here.
     </p>

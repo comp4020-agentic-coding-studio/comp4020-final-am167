@@ -32,9 +32,11 @@ export const SIZE = {
 // meeting of a pair is a chance, the same for every meeting, and which one
 // hits is drawn once from the pair's ids (fatalMeeting, below), so it's the
 // same on every replay. Lapping meetings are rare (hours apart), so each is
-// a bigger chance.
+// a bigger chance. Head-on meetings were three times as frequent before the
+// orbits slowed (ADR 0013); each is three times the chance it was, so
+// collisions come about as often as they did.
 export const CHANCE = {
-  headOn: 0.02,
+  headOn: 0.06,
   lapping: 0.5,
 };
 

@@ -104,7 +104,7 @@ describe("orbital decay", () => {
     const after = swept(orbit, burn, burn + step, 4);
     expect(after / before).toBeGreaterThan(0.95);
     expect(after / before).toBeLessThan(1.05);
-    // under a pixel, even close up over the station
+    // under a pixel, even close up over a station
     expect(Math.abs(radiusAt(orbit, burn + step) - radiusAt(orbit, burn - step))).toBeLessThan(1e-3);
   });
 
@@ -163,6 +163,14 @@ describe("bands are ranges of height", () => {
     }
     expect(periodAt(middle("low"))).toBeCloseTo(BANDS.low.period, -3);
     expect(periodAt(middle("high"))).toBeCloseTo(BANDS.high.period, -3);
+  });
+
+  it("comes round slowly enough to read a beacon: low every 3 minutes, high every 24 (ADR 0013)", () => {
+    const MINUTE = 60_000;
+    expect(periodAt(middle("low"))).toBeCloseTo(3 * MINUTE, -2);
+    expect(periodAt(middle("high"))).toBeCloseTo(24 * MINUTE, -2);
+    expect(periodAt(middle("mid")) / MINUTE).toBeGreaterThan(7.5);
+    expect(periodAt(middle("mid")) / MINUTE).toBeLessThan(8.5);
   });
 
   it("covers every height from the ground up, low to high, with no gaps", () => {

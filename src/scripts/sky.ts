@@ -1,16 +1,7 @@
 import { ago, until } from "../lib/format.ts";
 import { REFUSALS, canManoeuvre } from "../lib/manoeuvre.ts";
-import {
-  BANDS,
-  bandAt,
-  climbing,
-  isOverhead,
-  plungeAt,
-  radiusAt,
-  reentryAt,
-  untilOverhead,
-  type Band,
-} from "../lib/orbit.ts";
+import { BANDS, bandAt, climbing, plungeAt, radiusAt, reentryAt, type Band } from "../lib/orbit.ts";
+import { STATIONS, nextStation, stationOver, untilStation, type StationId } from "../lib/stations.ts";
 import { blame, couplet, headline, skyCount, type StoryParty } from "../lib/story.ts";
 import { countdown } from "./countdown.ts";
 import { keepCounting } from "./history.ts";
@@ -64,6 +55,8 @@ const initial = JSON.parse(document.getElementById("sky-data")!.textContent!) as
   serverTime: number;
   sky: Satellite[];
   launched: number | null;
+  // the view it opens on (ADR 0014): a station's horizon, or the whole sky
+  view: StationId | null;
   conjunctions: Conjunction[];
   collisions: Story[];
 };
@@ -77,7 +70,7 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const hue = (id: number) => (id * 137.508) % 360;
 
 // Everything falls and burns up (ADR 0007). A burned-up object stays in the
-// scene this long after, while its wake fades, but leaves the station and
+// scene this long after, while its wake fades, but leaves the stations and
 // the counts at once.
 const AFTERGLOW_MS = 8_000;
 
@@ -141,7 +134,7 @@ const latest = (mine = false) => {
 // ── the scene ─────────────────────────────────────────────────────────────
 
 // Three.js is most of the page's weight, so it loads on its own while the
-// station and the summary start working.
+// beacons and the summary start working.
 const canvas = document.getElementById("chart") as HTMLCanvasElement;
 const noScene = () => {
   canvas.hidden = true;
@@ -164,10 +157,11 @@ import("./scene.ts")
       ],
       now: serverNow,
       launched: initial.launched,
+      initial: initial.view,
       reduced,
       obstacles: [
         document.querySelector<HTMLElement>(".sky-page .panels")!,
-        document.getElementById("zoom")!,
+        document.getElementById("views")!,
         ...(document.getElementById("launched-notice") ? [document.getElementById("launched-notice")!] : []),
         document.getElementById("collision-card")!,
         historyPanel,
@@ -176,15 +170,19 @@ import("./scene.ts")
     });
     if (!started) return noScene();
     requestAnimationFrame(() => requestAnimationFrame(() => canvas.classList.add("drawn")));
-    // over the station, or the whole planet with every orbit in view
-    const zoom = document.getElementById("zoom") as HTMLButtonElement;
-    let out = false;
-    zoom.hidden = false;
-    zoom.addEventListener("click", () => {
-      out = !out;
-      started.zoom(out);
-      zoom.textContent = out ? "Back to the station" : "See the whole sky";
-    });
+    // the whole planet with every orbit in view, or the horizon over a station
+    const views = document.getElementById("views")!;
+    const buttons = [...views.querySelectorAll<HTMLButtonElement>("button[data-view]")];
+    views.hidden = false;
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        if (button.getAttribute("aria-pressed") === "true") return;
+        for (const b of buttons) b.setAttribute("aria-pressed", String(b === button));
+        const id = (button.dataset.view || null) as StationId | null;
+        started.view(id);
+        describe(id);
+      });
+    }
     // click (or tap, with a wider reach) an object to open its history
     const reach = (event: MouseEvent) => ((event as PointerEvent).pointerType === "touch" ? 32 : 22);
     canvas.addEventListener("click", (event) => {
@@ -286,78 +284,78 @@ document.addEventListener("click", (event) => {
   openHistory(Number(id));
 });
 
-// ── what the station hears ────────────────────────────────────────────────
+// ── what the stations hear (ADR 0014) ─────────────────────────────────────
 
-const overheadList = document.getElementById("overhead")!;
-const overheadCount = document.getElementById("overhead-count")!;
-const nextPass = document.getElementById("next-pass")!;
+// A row for each station: what it hears now, or what it hears next.
+const posts = STATIONS.map((station) => {
+  const row = document.querySelector<HTMLElement>(`[data-station="${station.id}"]`)!;
+  return {
+    station,
+    row,
+    heard: row.querySelector<HTMLElement>("[data-heard]")!,
+    next: row.querySelector<HTMLElement>("[data-next]")!,
+    key: "",
+    said: "",
+  };
+});
 const yourPass = document.getElementById("your-pass");
-let heard = "";
 
-// The panel has room for three beacons. When more are overhead it pages
-// through them, so every one is still heard while the panel keeps its size.
-const SLOTS = 3;
-const PAGE_MS = 4000;
+// More than one over a station at once take turns.
+const TURN_MS = 5000;
 
-// what the station hears: satellites with a beacon (derelicts and debris
+// what the stations hear: satellites with a beacon (derelicts and debris
 // are silent)
 const speaking = () => flying().filter((sat) => sat.beacon);
 
 function listen() {
   const time = serverNow();
-  const over = speaking()
-    .filter((s) => isOverhead(s, time))
-    .sort((a, b) => a.id - b.id);
-  const pages = Math.ceil(over.length / SLOTS);
-  const page = pages > 1 ? Math.floor(Date.now() / PAGE_MS) % pages : 0;
-  const shown = over.slice(page * SLOTS, page * SLOTS + SLOTS);
-  overheadCount.textContent =
-    over.length === 0
-      ? "\u00a0"
-      : pages > 1
-        ? `${page * SLOTS + 1}–${page * SLOTS + shown.length} of ${over.length} overhead`
-        : `${over.length} overhead`;
-  const key = shown.map((s) => s.id).join(",");
-  if (key !== heard) {
-    heard = key;
-    overheadList.replaceChildren(
-      ...shown.map((s) => {
-        const li = document.createElement("li");
+  const talking = speaking();
+  const over = new Map(talking.map((sat) => [sat.id, stationOver(sat, time)]));
+  for (const post of posts) {
+    const here = talking.filter((sat) => over.get(sat.id)?.id === post.station.id).sort((a, b) => a.id - b.id);
+    // by the server's clock, so every screen shows the same one at once
+    const turn = here.length > 1 ? Math.floor(time / TURN_MS) % here.length : 0;
+    const sat = here[turn];
+    const key = sat ? String(sat.id) : "";
+    if (key !== post.key) {
+      post.key = key;
+      post.row.classList.toggle("live", Boolean(sat));
+      if (!sat) post.heard.replaceChildren();
+      else {
         const name = document.createElement("span");
         name.className = "callsign";
-        name.textContent = s.callsign;
+        name.textContent = sat.callsign;
         const beacon = document.createElement("span");
         beacon.className = "beacon";
-        beacon.textContent = s.beacon;
-        li.append(name, beacon);
-        return li;
-      }),
-    );
-  }
-  if (over.length === 0) {
-    // the next one to enter the station's window
-    let soonest: { sat: Satellite; ms: number } | null = null;
-    for (const sat of speaking()) {
-      const ms = untilOverhead(sat, time);
-      // one that burns up first never gets there
-      if (ms !== null && (!soonest || ms < soonest.ms)) soonest = { sat, ms };
+        beacon.textContent = sat.beacon;
+        post.heard.replaceChildren(name, beacon);
+      }
     }
-    nextPass.textContent = soonest
-      ? `Next overhead: ${soonest.sat.callsign}, in ${countdown(soonest.ms)}.`
-      : speaking().length > 0
-        ? "Nothing in orbit will reach the station before it burns up."
-        : "No satellites in orbit yet.";
+    let said: string;
+    if (sat) said = here.length > 1 ? `${turn + 1} of ${here.length} overhead` : "";
+    else {
+      // the next to come into this station's window
+      let soonest: { sat: Satellite; ms: number } | null = null;
+      for (const s of talking) {
+        const ms = untilStation(s, time, post.station);
+        // one that burns up first never gets there
+        if (ms !== null && (!soonest || ms < soonest.ms)) soonest = { sat: s, ms };
+      }
+      said = soonest ? `Next: ${soonest.sat.callsign}, in ${countdown(soonest.ms)}` : talking.length > 0 ? "" : "Nothing in orbit";
+    }
+    if (said !== post.said) post.next.textContent = post.said = said;
   }
 
   // your own satellites: the one everyone will hear next (or is hearing
   // now), and how long it has left
-  const yoursUp = speaking().filter((s) => s.mine);
-  const soonest = (s: Satellite) => (isOverhead(s, time) ? -1 : (untilOverhead(s, time) ?? Infinity));
-  const mine = yoursUp.sort((a, b) => soonest(a) - soonest(b))[0];
+  const yoursUp = talking.filter((s) => s.mine);
+  const heardIn = (s: Satellite) => (over.get(s.id) ? -1 : (nextStation(s, time)?.in ?? Infinity));
+  const mine = yoursUp.sort((a, b) => heardIn(a) - heardIn(b))[0];
   const yours = latest(true);
   if (yourPass && mine) {
     const left = until(reentryAt(mine) - time);
-    const pass = untilOverhead(mine, time);
+    const now = over.get(mine.id);
+    const pass = nextStation(mine, time);
     const count = yoursUp.length > 1 ? `You have ${yoursUp.length} up. ` : "";
     say(
       count +
@@ -367,11 +365,11 @@ function listen() {
           ? `${mine.callsign} is coming down: it burns up in ${countdown(reentryAt(mine) - time)}.`
           : climbing(mine, time)
             ? `${mine.callsign} is climbing to the ${BANDS[bandAt(radiusAt(mine, mine.until ?? time))].label.toLowerCase()} band.`
-            : isOverhead(mine, time)
-          ? `${mine.callsign} is over the station now: everyone watching can see your beacon. It burns up in ${left}.`
+            : now
+          ? `${mine.callsign} is over ${now.name} now: everyone watching can see your beacon. It burns up in ${left}.`
           : pass === null
-            ? `${mine.callsign} burns up in ${left}, before it next reaches the station.`
-            : `${mine.callsign} is next over the station in ${countdown(pass)}. It burns up in ${left}.`),
+            ? `${mine.callsign} burns up in ${left}, before it reaches a ground station.`
+            : `${mine.callsign} is next over ${pass.station.name} in ${countdown(pass.in)}. It burns up in ${left}.`),
     );
   } else if (yourPass && yours) {
     say(`${yours.callsign} ${burnedUp(yours)} ${ago(time - yours.at)}. `, true);
@@ -426,7 +424,7 @@ function say(text: string, gone = false) {
 }
 
 // What's burning now, what burned up last, or what will burn up next: most
-// burn up out of the station's view, so the summary says so.
+// burn up away from the stations, so the summary says so.
 const newsLine = document.getElementById("sky-news")!;
 let said = "";
 function news(time: number) {
@@ -519,9 +517,19 @@ function renderSummary() {
     );
   }
   empty.hidden = n > 0;
+  describe(viewing);
+}
+
+// What the scene shows, for a screen reader.
+let viewing = initial.view;
+function describe(view: StationId | null) {
+  viewing = view;
+  const station = STATIONS.find((s) => s.id === view);
   canvas.setAttribute(
     "aria-label",
-    `The sky over the station: ${count.textContent}. Most rise on the left and set on the right; some go the other way.`,
+    station
+      ? `The sky over ${station.name}: ${count.textContent}. Most rise on the left and set on the right; some go the other way.`
+      : `The whole sky, with the three ground stations: ${count.textContent}.`,
   );
 }
 
