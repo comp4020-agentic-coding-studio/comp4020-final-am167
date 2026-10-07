@@ -1590,3 +1590,57 @@ gives way to the room between intro and form on narrow desktops (the
 comment now says so). `pnpm check` green (220 tests).
 
 Commit `c83719d`.
+
+## 2026-10-07 — Resident operators: launches on a schedule (ADR 0015)
+
+Asked for: satellites seeded in every hour, fake launches that seem real,
+from a varied cast of real-looking launchers, so the site feels active.
+Most hours nobody is on, so a visitor met a sky of silent derelicts and a
+catalogue whose latest launch was hours old.
+
+Built as **resident operators** (ADR 0015, proposed), not fake people:
+`src/lib/residents.ts` has sixteen invented operators (an imaging
+company, a comms constellation, weather, navigation, ocean monitoring,
+space physics, a seed bank, a student CubeSat lab, a radio club, a
+primary school, an art collective, an advertiser, a memorial, three
+hobbyists), each with its own bands, callsigns and lines. The schedule is
+a pure function of the clock: each hour a generator seeded by the hour
+picks how many (Poisson, about three; some hours none), who, when, the
+band, callsign, line and orbit seed. `settle` launches each as it comes
+due, at its due time, as an ordinary satellite under the resident's
+operator, so it's heard, collides and is blamed like anyone's. Nobody can
+sign in as a resident (new `operators.resident` flag, migration 0005), and
+the handles are taken. A first draft had the object's record say it was
+"one of the station's resident operators, not a person", since otherwise
+the server's launches pass for people's to whoever marks the app; Advay
+had it taken out for now ("I may add it back"), with its HTTP test. The
+record still knows (`History.resident`), so it's one line to restore.
+
+Two things found on the way:
+
+1. **A stopped server diverged from a running one.** Backfilling all
+   missed launches before replaying collisions gave objects ids in a
+   different order, and a collision's outcome is drawn from its objects'
+   ids. Now `settle` interleaves each resident launch with the collisions
+   in time order; the server test compares a server stepped every 30 s
+   with one stopped for three hours.
+2. **Callsigns repeated within hours** in the first look at a fresh
+   catalogue ("AURORA-4" twice, "MERIDIAN W11" twice). Numbered
+   callsigns now take a per-resident serial that goes up each hour; a
+   test checks none repeats within half a day.
+
+Limits: at most 20 of theirs up (the derelict floor counts them, so they
+replace derelicts), none while the sky is half full, six hours of backfill
+on a fresh or long-stopped server. Simulated three days with no people
+launching: collisions about 2.7 an hour with residents against 1.1
+without (residents settle around 17 up, derelicts fall to about 5, the cap
+holds launches to about 1.6 an hour), inside the 1 to 5 Advay chose.
+
+Tests first: `spec/residents.test.ts` (every callsign and line passes
+`readLaunch`, every resident and band appears, mostly low, about three an
+hour with some hours empty, no resident twice an hour, deterministic,
+window edges) and `spec/residents-server.test.ts` (backfill of exactly
+what was due, launched once however often settled, record says resident,
+claim and sign-in refused, a person's launch isn't resident, restart
+matches a running server, the cap holds, `RESIDENTS=0` launches none). The four
+server tests that need an exact sky set `RESIDENTS=0`.

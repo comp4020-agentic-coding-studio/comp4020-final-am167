@@ -58,6 +58,7 @@ export const objects = sqliteTable(
 // Operators (ADR 0009): a handle anyone can claim, with a passphrase, so a
 // person's satellites (and the blame for them) follow them across devices.
 // No email, no real names: the passphrase is kept only as an scrypt hash.
+// A resident operator (ADR 0015) has no passphrase at all.
 export const operators = sqliteTable(
   "operators",
   {
@@ -68,6 +69,9 @@ export const operators = sqliteTable(
     salt: text("salt").notNull(),
     hash: text("hash").notNull(),
     createdAt: integer("created_at").notNull(),
+    // one of the resident operators the station launches for on a schedule
+    // (src/lib/residents.ts): nobody can sign in as one
+    resident: integer("resident", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [uniqueIndex("operators_handle_key").on(t.handleKey)],
 );

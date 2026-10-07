@@ -1,0 +1,1 @@
+ALTER TABLE `operators` ADD `resident` integer DEFAULT false NOT NULL;

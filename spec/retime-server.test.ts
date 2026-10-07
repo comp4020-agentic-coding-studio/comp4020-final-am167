@@ -11,6 +11,8 @@ import { DECAY, MANOEUVRE, angleAt, burnAt, climb, descend, periodAt, radiusAt, 
 // server's own code against a throwaway database, with the clock passed in.
 
 process.env.DERELICTS = "0";
+// nor the resident operators' launches (ADR 0015), which have their own tests
+process.env.RESIDENTS = "0";
 const dir = mkdtempSync(join(tmpdir(), "kessler-retime-"));
 process.env.DATABASE_PATH = join(dir, "app.db");
 execFileSync(process.execPath, ["scripts/migrate.mjs"], { env: process.env });

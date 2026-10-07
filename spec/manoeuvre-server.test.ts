@@ -14,6 +14,8 @@ import type { SkyEvent } from "../src/lib/events.ts";
 // throwaway databases with the clock passed in, as the collision tests are.
 
 process.env.DERELICTS = "0";
+// nor the resident operators' launches (ADR 0015), which have their own tests
+process.env.RESIDENTS = "0";
 
 const dirs: string[] = [];
 afterAll(() => {

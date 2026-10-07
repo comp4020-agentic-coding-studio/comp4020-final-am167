@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-07 (PRs #3 and #4 merged, so all C9 building is done; stale C9 items tidied; C9 write-ups outstanding)._
+_Last updated 2026-10-07 (PRs #3 and #4 merged, so all C9 building is done; stale C9 items tidied; C9 write-ups outstanding; resident operators built, ADR 0015 proposed)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -64,6 +64,14 @@ _Last updated 2026-10-07 (PRs #3 and #4 merged, so all C9 building is done; stal
     Madrid), all heard by everyone, to give the passes back; the sky opens
     on the whole planet with a beacon panel per station, and the horizon
     over any station one click away.
+  - **Resident operators** (Advay, 2026-10-07; ADR 0015, proposed): so
+    the site feels active at any hour, the server launches for a cast of
+    sixteen invented operators (companies, a university lab, a radio club,
+    a school, an advertiser, a memorial, hobbyists), about three an hour
+    on a schedule seeded by the clock, each with its own bands, callsigns
+    and lines. They fly, collide and take the blame like anyone's; nobody
+    can sign in as one. Not disclosed on the page for now (Advay may add
+    it back). At most 20 up, in the derelicts' place.
   - Not built, though once listed for C9: conjunction alerts and dodging
     (moved to C10).
 - **C9 cutoff:** Mon 12 Oct 2026, 12:00.
@@ -76,8 +84,9 @@ _Last updated 2026-10-07 (PRs #3 and #4 merged, so all C9 building is done; stal
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or
   operators, and its tested list predates them. ADR 0010 is judged by what
-  the README says good means, so the rewrite should say it. Advay also
-  confirms which sources he has read.
+  the README says good means, so the rewrite should say it. It should
+  also say that some satellites are resident operators', not people's
+  (ADR 0015). Advay also confirms which sources he has read.
 - **Never deploy, flip public or commit without Advay's say-so** (CLAUDE.md).
 
 ## The idea
@@ -129,6 +138,7 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Collision geometry (2026-10-06) | **Mixed directions, plus near misses.** Orbits are flat and the period depends only on height, so two objects going the same way at the same height never close in, and decay keeps the gap in radius³ fixed. So each object gets a direction (prograde or retrograde): opposite-direction objects at similar heights cross head-on twice a lap. Same-direction objects can still collide when one creeps up on another within a (larger) hit distance. Rejected: hidden 3D inclinations (rewrites the rendering). Needs a decision record. |
 | Collision mechanics (2026-10-06, draft) | **Predicted by the server, broadcast ahead.** Positions are closed-form, so the server solves each pair's next crossing, keeps a queue of upcoming hits and sets a timer for the next (as decay does for burn-ups). A `conjunction` event gives every screen the impact time in advance, so all screens draw it at the same moment. At impact both objects are `destroyed` and seeded fragments spawn near the point, mostly keeping their parent's direction, so a head-on hit leaves debris going both ways. Catch-up after a restart runs the queue forward in time order (decays and collisions, new debris colliding inside the gap). New `collisions` table; `objects` gains direction and source collision (the lineage of ADR 0003). |
 | Seeding (2026-10-06) | **The server keeps a baseline of derelicts**: dead, ownerless satellites and old debris, as real orbit has, so collisions can happen when only the marker's two sessions are open. |
+| Resident operators (2026-10-07, ADR 0015, proposed) | **The server launches for a cast of invented operators**, about three an hour on a schedule that's a pure function of the clock, so there's always something launching and something to hear. At most 20 of theirs up (counted in the derelict floor, so they take the derelicts' place), none while the sky is half full; a stopped server launches what it missed, up to six hours back. Not disclosed on the page for now (a line in each one's record was drafted, then taken out at Advay's call; he may add it back). |
 | Identity (2026-10-06) | **Optional claim on top of the cookie.** You still launch anonymously within seconds (ADR 0002's reason holds); you can claim a unique operator handle with a passphrase, which keeps your record and blame across devices. No email, no personal data; passphrases hashed with Node's `scrypt`. Supersedes ADR 0002, so needs a new record. Rejected: required sign-up (marker friction), GitHub OAuth (secrets, personal data, marker needs an account), handle without a password (no cross-device). |
 | Blame (2026-10-06) | **Worked out from lineage, not stored.** Every fragment traces through its collision to the satellites at the root; their operators are who to blame. |
 | C9 scope (2026-10-06) | **Collisions + login.** Collisions, debris, lineage and blame by operator, and the optional claim. Conjunction alerts and dodging wait for C10. The C9 written decision is who sees the blame (ADR 0010). |

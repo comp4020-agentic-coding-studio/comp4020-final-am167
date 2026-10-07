@@ -165,8 +165,9 @@ export function impactOf(a: Orbit, b: Orbit, at: number): { angle: number; radiu
 }
 
 // A small seeded generator (mulberry32), so a collision makes the same
-// fragments on every replay.
-function seeded(seed: number): () => number {
+// fragments on every replay (and the resident operators' schedule is the
+// same on every server, src/lib/residents.ts).
+export function seeded(seed: number): () => number {
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);

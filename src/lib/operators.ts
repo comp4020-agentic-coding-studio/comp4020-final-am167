@@ -148,7 +148,8 @@ export async function signIn(person: string, form: OperatorForm, from: string, n
   // hash even for an unknown handle, so both take as long
   const given = await hashOf(form.passphrase, row?.salt ?? "no such operator");
   if (!given) return BUSY;
-  if (!row || !timingSafeEqual(given, Buffer.from(row.hash, "hex"))) {
+  // a resident operator (ADR 0015) has no passphrase to match
+  if (!row || row.resident || !timingSafeEqual(given, Buffer.from(row.hash, "hex"))) {
     const count = (tried?.count ?? 0) + 1;
     tries.set(key, { count, until: count >= FAILS ? now + LOCK_MS : 0 });
     return WRONG;

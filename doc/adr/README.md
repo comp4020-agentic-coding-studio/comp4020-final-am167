@@ -21,3 +21,4 @@ be edited until it's accepted.
 | [0012](0012-every-object-keeps-its-history.md) | Every object keeps its history, and a beacon is read in full once it's gone | accepted |
 | [0013](0013-slower-orbits.md) | Slower orbits, so a beacon can be read | accepted |
 | [0014](0014-three-ground-stations.md) | Three ground stations, and the whole sky first | accepted |
+| [0015](0015-resident-operators.md) | Resident operators launch on a schedule | proposed |

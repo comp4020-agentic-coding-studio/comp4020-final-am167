@@ -1,10 +1,11 @@
-import { and, count, desc, eq, inArray, isNull, lt, max, ne, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNull, lt, max, ne, or, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
-import { fatalMeeting, fragmentsOf, impactOf, nextMeeting } from "./collide.ts";
+import { fatalMeeting, fragmentsOf, impactOf, nextMeeting, seeded } from "./collide.ts";
 import { listening, publish } from "./events.ts";
 import { FUEL, REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
+import { HOUR, RESIDENTS, nextSlotAfter, slotsBetween, type Slot } from "./residents.ts";
 import { STATIONS, nextStation } from "./stations.ts";
 import {
   BANDS,
@@ -47,6 +48,18 @@ export const LIVE_CAP = Number(process.env.LIVE_CAP ?? 600);
 // testing.
 export const DERELICT_BASELINE = Number(process.env.DERELICTS ?? 20);
 export const DERELICT_GAP = 10 * 60_000;
+
+// The resident operators (ADR 0015, src/lib/residents.ts): about this many
+// launches an hour, so the sky is never quiet for long, but no more than
+// RESIDENT_CAP of theirs up at once (as many as the derelict floor, which
+// counts them: in a quiet sky they take the derelicts' place, so collisions
+// come about as often as ADR 0008 tuned them), and only while the sky is
+// less than half full, so they never take a person's room. A server that was
+// stopped launches what it missed, up to RESIDENT_BACKFILL back. RESIDENTS
+// and RESIDENT_CAP override them for testing; RESIDENTS=0 turns them off.
+export const RESIDENT_RATE = Number(process.env.RESIDENTS ?? 3);
+export const RESIDENT_CAP = Number(process.env.RESIDENT_CAP ?? 20);
+export const RESIDENT_BACKFILL = 6 * HOUR;
 
 export type Kind = "satellite" | "derelict" | "debris";
 
@@ -415,6 +428,89 @@ export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
   return object;
 }
 
+// ── resident operators (ADR 0015) ─────────────────────────────────────────
+
+// The residents' operator rows, by handle, made the first time they're
+// needed. A resident has no passphrase, so nobody can sign in as one, and
+// its handle is taken, so nobody can claim it. A handle a person claimed
+// first stays theirs, and that resident never launches.
+let residentIds: Map<string, number> | null = null;
+function residentOperators(now: number): Map<string, number> {
+  if (residentIds) return residentIds;
+  db.transaction((tx) => {
+    for (const { handle } of RESIDENTS) {
+      tx.insert(operators)
+        .values({ handle, handleKey: handle.toLowerCase(), salt: "", hash: "", createdAt: now, resident: true })
+        .onConflictDoNothing()
+        .run();
+    }
+  });
+  const rows = db
+    .select({ id: operators.id, handle: operators.handle })
+    .from(operators)
+    .where(eq(operators.resident, true))
+    .all();
+  residentIds = new Map(rows.map((row) => [row.handle, row.id]));
+  return residentIds;
+}
+
+// The residents' launches that have come due since the last time (or since
+// RESIDENT_BACKFILL ago, on a fresh start), in time order. settle launches
+// each in turn, between the collisions that come before and after it, so
+// every object gets its id in the order things happened, as on a server that
+// was running all along (a collision's outcome is drawn from its objects'
+// ids, collide.ts).
+let residentsThrough = -Infinity;
+function residentsDue(now: number): Slot[] {
+  if (RESIDENT_RATE <= 0) return [];
+  const from = Math.max(residentsThrough, now - RESIDENT_BACKFILL);
+  if (now <= from) return [];
+  residentsThrough = now;
+  return slotsBetween(from, now, RESIDENT_RATE);
+}
+
+// A resident's launch, when it was due, unless it has been made already, it
+// would put more than RESIDENT_CAP of theirs up at that time, or the sky is
+// half full.
+function launchResident(slot: Slot): SkyObject | null {
+  const operator = residentOperators(slot.at).get(slot.handle);
+  if (operator === undefined) return null;
+  const theirs = db
+    .select({ ...columns, fate: objects.fate, fateAt: objects.fateAt })
+    .from(objects)
+    .where(
+      and(
+        inArray(objects.operator, [...residentOperators(slot.at).values()]),
+        lt(objects.launchedAt, slot.at + 1),
+        or(eq(objects.fate, "live"), gt(objects.fateAt, slot.at)),
+      ),
+    )
+    .all()
+    .map(toObject);
+  if (theirs.some((o) => o.operator === operator && o.launchedAt === slot.at)) return null;
+  const up = theirs.filter((o) => o.fate !== "live" || reentryAt(o) > slot.at).length;
+  if (up >= RESIDENT_CAP) return null;
+  const satellites = db.select({ n: count() }).from(objects).where(liveSatellites).get()?.n ?? 0;
+  if (satellites >= SKY_CAP / 2) return null;
+  const object = toObject(
+    db
+      .insert(objects)
+      .values({
+        kind: "satellite",
+        operator,
+        callsign: slot.callsign,
+        beacon: slot.beacon,
+        band: slot.band,
+        launchedAt: slot.at,
+        ...placeInBand(slot.band, slot.at, seeded(slot.seed)),
+      })
+      .returning(columns)
+      .get(),
+  );
+  publish({ type: "launch", object });
+  return object;
+}
+
 // ── a collision to watch (ADR 0008) ───────────────────────────────────────
 
 // When nothing is coming, a visitor could watch for an hour and see no
@@ -472,16 +568,18 @@ export function keepDerelicts(now = Date.now(), baseline = DERELICT_BASELINE): v
 
 // ── keeping the sky up to date ────────────────────────────────────────────
 
-// Brings the sky up to `now`: every collision that has come, in order (each
-// one's fragments can hit something sooner, so the schedule is worked out
-// again after each), then every burn-up, then the derelicts topped up.
+// Brings the sky up to `now`: every collision and resident's launch (ADR
+// 0015) that has come, in order (each one's fragments, or a new satellite,
+// can hit something sooner, so the schedule is worked out again after each),
+// then every burn-up, then the derelicts topped up.
 // Every read of the sky runs this first, so a server that was stopped catches
 // up before it answers; a timer runs it as each event comes while it's
 // running.
 //
 // Most reads come between events, with nothing to do: until the next
-// collision or burn-up (and at least every QUIET_MS, for the derelicts),
-// settling returns at once. A launch or a new derelict ends the quiet.
+// collision, burn-up or resident's launch (and at least every QUIET_MS, for
+// the derelicts), settling returns at once. A launch or a new derelict ends
+// the quiet.
 const QUIET_MS = 15_000;
 let quietFrom = Infinity;
 let quietUntil = -Infinity;
@@ -535,10 +633,21 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
   }
   if (now >= quietFrom && now < quietUntil) return { decayed: [], collisions: [] };
   const applied: CollisionReport[] = [];
+  const due = residentsDue(now);
   let sky = live();
   refreshMeetings(sky);
   for (;;) {
     const next = nextHit();
+    // a launch at the same moment as a collision goes first, as it would
+    // have on a server that was running
+    if (due.length > 0 && (!next || due[0].at <= next.at)) {
+      const object = launchResident(due.shift()!);
+      if (object) {
+        sky = sky.concat(object);
+        refreshMeetings(sky);
+      }
+      continue;
+    }
     if (!next || next.at > now) break;
     try {
       const report = collide(next, sky);
@@ -559,7 +668,7 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
   if (DERELICT_BASELINE > 0 && listening() > 0) stageCollision(now);
   refreshMeetings(live());
   announce(now);
-  const next = wakeForNext();
+  const next = wakeForNext(now);
   quietFrom = now;
   quietUntil = Math.min(next, now + QUIET_MS);
   return { decayed, collisions: applied };
@@ -567,13 +676,13 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
 
 export const settleDecay = (now = Date.now()): SkyObject[] => settle(now).decayed;
 
-// Wakes for the next burn-up or collision, or within a minute regardless,
-// so a timer never sleeps past a launch that burns up sooner.
-// Returns when the next one is.
+// Wakes for the next burn-up, collision or resident's launch after `now`,
+// or within a minute regardless, so a timer never sleeps past a launch that
+// burns up sooner. Returns when the next one is.
 let wake: ReturnType<typeof setTimeout> | undefined;
-function wakeForNext(): number {
+function wakeForNext(now = Date.now()): number {
   clearTimeout(wake);
-  let next = nextHit()?.at ?? Infinity;
+  let next = Math.min(nextHit()?.at ?? Infinity, nextSlotAfter(now, RESIDENT_RATE));
   for (const object of live()) next = Math.min(next, reentryAt(object));
   const wait = Math.min(Math.max(next - Date.now(), 0) + 5, 60_000);
   wake = setTimeout(() => {
@@ -835,6 +944,8 @@ export interface History {
   band: Band;
   launchedAt: number;
   handle: string | null;
+  // launched by a resident operator (ADR 0015), not a person
+  resident: boolean;
   mine: boolean;
   fate: Fate;
   fateAt: number | null;
@@ -869,7 +980,7 @@ const objectById = (id: number): SkyObject | null => {
 export function historyOf(id: number, who: Who, now = Date.now()): History | null {
   settle(now);
   const row = db
-    .select({ ...columns, fate: objects.fate, fateAt: objects.fateAt, handle: operators.handle })
+    .select({ ...columns, fate: objects.fate, fateAt: objects.fateAt, handle: operators.handle, resident: operators.resident })
     .from(objects)
     .leftJoin(operators, eq(objects.operator, operators.id))
     .where(eq(objects.id, id))
@@ -946,6 +1057,7 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
     band: object.band,
     launchedAt: object.launchedAt,
     handle: row.handle,
+    resident: row.resident === true,
     mine,
     fate: row.fate,
     fateAt: row.fateAt,
