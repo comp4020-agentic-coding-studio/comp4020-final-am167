@@ -2489,3 +2489,4 @@ whose bodies are inside the box and exclude the heading. Both failed
 first. `pnpm check` green (305 tests, 0 errors, 0 warnings) against a
 fresh build. Checked in Chrome at 1920x1080 (all three folded, still
 folded after a reload) and on an iPhone 14 (390 wide, no overflow).
+Commit `80ba3a6`.
