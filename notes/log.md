@@ -418,6 +418,8 @@ launchpad and the sky. Not scheduled yet.
 
 ## 2026-10-06 — The launchpad in Three.js, and a launch that becomes the sky
 
+Commit `5c41ccd`.
+
 I liked the launchpad's layout but wanted it more striking, and the launch
 more realistic. The SVG rocket is now a Three.js scene behind the unchanged
 form (ADR 0006, proposed).
