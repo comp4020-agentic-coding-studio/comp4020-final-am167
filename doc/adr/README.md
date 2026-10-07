@@ -15,5 +15,5 @@ be edited until it's accepted.
 | [0006](0006-three-js-launchpad.md) | The launchpad is a Three.js scene, and the launch hands off to the sky | accepted |
 | [0007](0007-orbital-decay-in-closed-form.md) | Orbital decay in closed form, ending in a scripted burn-up | accepted |
 | [0008](0008-collisions-predicted-in-closed-form.md) | Collisions predicted in closed form, with orbits going both ways | accepted |
-| [0009](0009-an-operator-you-can-claim.md) | A person is a cookie, and an operator you can claim | proposed |
-| [0010](0010-every-screen-names-who-caused-it.md) | Every screen names who caused a collision, as it happens | proposed |
+| [0009](0009-an-operator-you-can-claim.md) | A person is a cookie, and an operator you can claim | accepted |
+| [0010](0010-every-screen-names-who-caused-it.md) | Every screen names who caused a collision, as it happens | accepted |

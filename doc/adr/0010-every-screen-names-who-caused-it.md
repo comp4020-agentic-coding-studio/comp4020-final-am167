@@ -1,7 +1,7 @@
 # 0010. Every screen names who caused a collision, as it happens
 
-**Status:** proposed (2026-10-06). The C9 decision about how the app behaves
-with several people in it.
+**Status:** accepted (2026-10-07; proposed 2026-10-06). The C9 decision
+about how the app behaves with several people in it.
 
 ## Context
 

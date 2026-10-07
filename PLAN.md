@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-07 (C9 built and on `main`; write-ups outstanding)._
+_Last updated 2026-10-07 (ADRs 0009 and 0010 accepted; C9 write-ups outstanding)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -30,7 +30,7 @@ _Last updated 2026-10-07 (C9 built and on `main`; write-ups outstanding)._
     accepted; `41f32ef`); launches any number up, five minutes apart
     (`5cf1247`).
   - Collisions drawn on every screen, blame traced through lineage, and
-    claimable operators (ADRs 0009 and 0010, both still **proposed**;
+    claimable operators (ADRs 0009 and 0010, accepted 2026-10-07;
     `44487ac`).
   - The adversarial review's must-fixes and most should-fixes acted on
     (`2dc518c`); recorded, not fixed: signing out skips the launch gap, and
@@ -43,17 +43,16 @@ _Last updated 2026-10-07 (C9 built and on `main`; write-ups outstanding)._
     (the `/kessler/` page still says "Not built yet"), and conjunction
     alerts and dodging (moved to C10).
 - **Next, for C9:**
-  1. Advay accepts (or revises) ADR 0010, the C9 written decision about
-     several people at once, and ADR 0009.
-  2. `README.md` brought up to date: it still says "one live satellite
-     each" and "a second launch is refused", and says nothing of
-     collisions, debris, blame or operators; the tested list predates
-     them. Advay's words, and his confirmation of which sources he has
-     read.
-  3. `PROCESS.md`: the C9 part (it stops at the C8 slice), from
+  1. `PROCESS.md`: the C9 part (it stops at the C8 slice), from
      `notes/log.md`.
-  4. `reflections/crit-9.md` (Advay's).
-  5. Decide whether deorbiting is built for C9 or deferred, and record it.
+  2. `reflections/crit-9.md` (Advay's).
+  3. Decide whether deorbiting is built for C9 or deferred, and record it.
+- **Later (low priority, near the end of the project):** `README.md`,
+  in Advay's words. It still says "one live satellite each" and "a second
+  launch is refused", says nothing of collisions, debris, blame or
+  operators, and its tested list predates them. ADR 0010 is judged by what
+  the README says good means, so the rewrite should say it. Advay also
+  confirms which sources he has read.
 - **Never deploy, flip public or commit without Advay's say-so** (CLAUDE.md).
 
 ## The idea
@@ -141,13 +140,15 @@ summary, the records are the source of truth.
 | Question | Decision | Record |
 |---|---|---|
 | Stack | Astro on Node, SQLite via Drizzle on `/data` | `0001-astro-and-sqlite-stack.md` |
-| What counts as a person | An anonymous cookie, one active satellite each (**proposed**, may change) | `0002-a-person-is-an-anonymous-cookie.md` |
+| What counts as a person | An anonymous cookie, plus an operator handle you can claim with a passphrase | `0009-an-operator-you-can-claim.md` (supersedes `0002-a-person-is-an-anonymous-cookie.md`) |
 | What persists | The sky decays, every object's record stays forever | `0003-the-sky-decays-the-record-stays.md` |
 | How a change reaches everyone | SSE events; the server's clock is the only clock | `0004-server-sent-events-and-one-clock.md` |
 
 ### What counts as a person
 
-_Proposed, not final: the working assumption for C8, likely to be revisited._
+_The C8 decision, kept as history: superseded by ADR 0009 (accepted
+2026-10-07), which keeps the cookie and adds an operator you can claim, and
+by the launch limits of 2026-10-06 (any number up, five minutes apart)._
 
 **An anonymous browser cookie, plus the callsign you pick at launch.**
 

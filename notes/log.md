@@ -1107,3 +1107,19 @@ device, and your name on what they do", or "Launching as *handle*"), and
 the same offer on the notice straight after launching, which then stays up
 twice as long on desktop. Tests in `spec/operator.test.ts`. Committed as
 `487f0a4`.
+
+## 2026-10-07 — C9: what's outstanding, and the last two decisions accepted
+
+Asked what was outstanding for C9, the agent went through `PLAN.md`, the
+log and the repo (the course site was blocked from its sandbox, so not
+against the spec itself): no `reflections/crit-9.md`, `PROCESS.md` stopping
+at C8, a README still describing C8 ("one live satellite each"), ADRs 0009
+and 0010 still proposed, a stale status section in the plan, the last log
+entry missing its hash, and deorbiting not built. The plan's status and
+the hash were fixed first (`408d5f7`, pushed to `main` on my say-so).
+
+After the agent read me both records, I accepted ADR 0009 (an operator you
+can claim) and ADR 0010 (every screen names who caused a collision, the C9
+decision about several people at once). The README rewrite is low priority:
+I'll write it near the end of the project. Next for C9: the C9 part of
+`PROCESS.md`, `reflections/crit-9.md`, and whether to build deorbiting.

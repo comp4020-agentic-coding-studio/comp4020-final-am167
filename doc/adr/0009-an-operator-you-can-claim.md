@@ -1,6 +1,6 @@
 # 0009. A person is a cookie, and an operator you can claim
 
-**Status:** proposed (2026-10-06). Supersedes 0002.
+**Status:** accepted (2026-10-07; proposed 2026-10-06). Supersedes 0002.
 
 ## Context
 
