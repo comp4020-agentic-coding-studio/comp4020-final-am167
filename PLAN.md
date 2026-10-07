@@ -38,7 +38,8 @@ _Last updated 2026-10-07 (ADRs 0009 and 0010 accepted; C9 write-ups outstanding)
   - The catalogue as a filterable, sortable, paged table (`37f104c`); a
     bright collision the view turns to follow (`90dfab9`); the "in orbit"
     notice dropped once that satellite is gone (`811236f`); a nudge towards
-    claiming a handle at launch (`487f0a4`).
+    claiming a handle at launch (`487f0a4`), then as a pop-up on arriving
+    at the launchpad (once a visit, closable, never a gate; PR #2).
   - Not built, though once listed for C9: deorbiting your own satellite
     (the `/kessler/` page still says "Not built yet"), and conjunction
     alerts and dodging (moved to C10).

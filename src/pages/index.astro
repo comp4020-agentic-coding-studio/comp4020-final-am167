@@ -209,7 +209,55 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
         </p>
       )}
     </section>
+
+    <!-- the same offer as a pop-up on arrival, once a visit; closing it is
+         launching without one, as before (ADR 0009) -->
+    {!operator && !form && (
+      <dialog class="handle-prompt" id="handle-prompt" aria-labelledby="handle-prompt-title">
+        <div class="handle-prompt-body">
+          <h2 id="handle-prompt-title">Launch under a handle?</h2>
+          <p>
+            Without one, what you launch is tied to this browser: clear your cookies
+            or switch devices and it's no longer yours. With one, your satellites
+            follow you, and when they collide, every screen names you.
+          </p>
+          <div class="handle-prompt-actions">
+            <a class="handle-prompt-claim" href="/operator/">Claim a handle</a>
+            <a href="/operator/#sign-in-title">I have one: sign in</a>
+          </div>
+          <form method="dialog">
+            <button type="submit" class="handle-prompt-skip">Launch without a handle</button>
+          </form>
+        </div>
+      </dialog>
+    )}
   </main>
+
+  <script>
+    // Opens the handle pop-up on arrival, once a visit. Without this script
+    // it stays closed, and the line under the Launch button makes the offer.
+    const prompt = document.getElementById("handle-prompt") as HTMLDialogElement | null;
+    const SEEN = "kessler:handle-prompt";
+    let seen = false;
+    try {
+      seen = sessionStorage.getItem(SEEN) !== null;
+    } catch {
+      // no storage: show it, as for a first visit
+    }
+    if (prompt && !seen) {
+      prompt.showModal();
+      // seen, however it's left: closed, or followed to the operator page
+      try {
+        sessionStorage.setItem(SEEN, "1");
+      } catch {
+        // shown again next time, which is fine
+      }
+      // a click on the backdrop closes it too (the content fills the box)
+      prompt.addEventListener("click", (e) => {
+        if (e.target === prompt) prompt.close();
+      });
+    }
+  </script>
 
   <script>
     // Counts down the gap between your launches, and opens the form when
@@ -940,5 +988,78 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     .ground {
       display: none;
     }
+  }
+  /* The handle pop-up: over the pad, before anything's launched. */
+  .handle-prompt {
+    width: min(32rem, calc(100vw - 2rem));
+    padding: 0;
+    border: 1px solid var(--grid-strong);
+    border-top: 3px solid var(--amber);
+    border-radius: 6px;
+    background: var(--night-deep);
+    color: var(--ink);
+    box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.6);
+  }
+
+  .handle-prompt::backdrop {
+    background: rgb(6 11 24 / 0.7);
+  }
+
+  .handle-prompt-body {
+    padding: 1.5rem;
+  }
+
+  .handle-prompt h2 {
+    margin: 0 0 0.75rem;
+    font-size: var(--step-2);
+  }
+
+  .handle-prompt p {
+    margin: 0 0 1.25rem;
+    color: var(--ink-dim);
+  }
+
+  .handle-prompt-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .handle-prompt-actions a {
+    color: var(--amber);
+  }
+
+  .handle-prompt-actions .handle-prompt-claim {
+    padding: 0.7rem 1.2rem;
+    border-radius: 3px;
+    background: var(--amber);
+    color: var(--night-deep);
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  .handle-prompt-actions .handle-prompt-claim:hover {
+    background: #ffbb5c;
+  }
+
+  .handle-prompt form {
+    margin: 0;
+  }
+
+  .handle-prompt .handle-prompt-skip {
+    width: auto;
+    padding: 0.5rem 0;
+    font-size: var(--step-0);
+    font-weight: 600;
+    color: var(--ink-dim);
+    background: none;
+    text-decoration: underline;
+  }
+
+  .handle-prompt .handle-prompt-skip:hover {
+    background: none;
+    color: var(--ink);
   }
 </style>

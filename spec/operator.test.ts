@@ -195,6 +195,15 @@ describe("nudging an anonymous launcher towards a handle", () => {
     expect(page.querySelector("form[data-launch] fieldset")?.hasAttribute("disabled")).toBe(false);
   });
 
+  it("as a pop-up on the launchpad, that can be closed to launch without one", async () => {
+    const page = doc(await (await new Session(baseUrl).get("/")).text());
+    const popup = page.querySelector("dialog#handle-prompt");
+    expect(popup, "no pop-up on the launchpad").not.toBeNull();
+    expect(popup!.querySelector('a[href^="/operator/"]'), "the pop-up offers no handle").not.toBeNull();
+    // closing it is always on offer, and needs no JavaScript beyond the dialog's own
+    expect(popup!.querySelector('form[method="dialog"] button')?.textContent).toMatch(/without/i);
+  });
+
   it("right after launching, on the sky's notice", async () => {
     const a = new Session(baseUrl);
     const res = await a.launch({ band: "low", callsign: callsign(), beacon: "nudge me" });
@@ -210,6 +219,7 @@ describe("nudging an anonymous launcher towards a handle", () => {
     const pad = doc(await (await a.get("/")).text());
     expect(pad.querySelector(".console")?.textContent).toContain(`Launching as ${h}`);
     expect(nudge(pad)).toHaveLength(0);
+    expect(pad.querySelector("dialog#handle-prompt"), "a pop-up for someone with a handle").toBeNull();
     const res = await a.launch({ band: "low", callsign: callsign(), beacon: "no nudge" });
     const sky = doc(await (await a.get(res.headers.get("location")!)).text());
     expect(sky.getElementById("launched-notice")!.querySelector('a[href^="/operator/"]')).toBeNull();
