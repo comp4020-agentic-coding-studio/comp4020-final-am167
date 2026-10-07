@@ -65,9 +65,12 @@ which starts its own server and database and writes reports to the ignored
   `APP_URL` pointing at it and a scratch `DATABASE_PATH`). Note the PID when
   you start a server, so you stop that one and nothing else.
 - Keep `spec/invariants.test.ts` green; don't delete it.
-- **Never commit without my approval.** Get the checks green, then show me what
-  changed and wait for me to say commit. Green checks aren't the go-ahead, a red
-  state is never committed, and approval is per-commit.
+- **On `main`, never commit without my approval.** Get the checks green, then
+  show me what changed and wait for me to say commit. Green checks aren't the
+  go-ahead there, and approval is per-commit.
+- **On any other branch, commit without asking** once the checks are green,
+  and push to that branch. Merging into `main` (or opening a PR into it)
+  still waits for me. Either way, a red state is never committed.
 - **Never suggest, ask about, or perform publishing/deploying** (flipping the
   repo public, `flyctl deploy`, pushing to `main` once public) unless I
   explicitly say so.

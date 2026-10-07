@@ -1754,3 +1754,14 @@ timeout, `pnpm test` now runs `fit.test.ts` on its own after the rest
 `pnpm check` green: 220 then 2, no errors or warnings.
 
 Commit `1c289f4` (the fix, the test, the rule and the review's changes).
+
+## 2026-10-07 — Committing off `main` without asking
+
+The commit for the one-screen fix sat waiting for an hour: the rule was
+"never commit without my approval", the session's permission check blocked
+the commit for the same reason, and I hadn't said "commit" in so many words,
+only "raise a PR when done". Advay changed the rule in `CLAUDE.md` and
+`AGENTS.md`: on `main`, a commit still waits for his say; on any other
+branch an agent commits and pushes to that branch once the checks are
+green, and only merging into `main` (or opening a PR into it) waits for
+him. A red state is never committed either way.
