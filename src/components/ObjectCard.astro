@@ -1,0 +1,119 @@
+---
+// The card an object's history pops up in (ADR 0012, 0015): empty until a
+// link to an object, or an object in the sky, is clicked, then filled from
+// /object/<id>/panel by src/scripts/object-card.ts. Without JavaScript the
+// links go to the object's own page instead. On the sky it sits down the
+// right, so the object stays in view (a sheet from the bottom on a phone);
+// elsewhere it's centred.
+interface Props {
+  side?: boolean;
+}
+const { side = false } = Astro.props;
+---
+<dialog id="object-card" class:list={["object-card", { side }]} aria-labelledby="object-card-title">
+  <div class="object-card-frame">
+    <button type="button" class="object-card-close" aria-label="Close">×</button>
+    <div class="object-card-body history-body"></div>
+  </div>
+</dialog>
+<!-- what screen readers hear when a card opens: its name, once -->
+<p class="visually-hidden" role="status" id="object-card-status"></p>
+
+<style is:global>
+  .object-card {
+    width: min(48rem, calc(100vw - 2rem));
+    max-height: min(52rem, calc(100svh - 2rem));
+    padding: 0;
+    border: 1px solid var(--grid-strong);
+    border-top: 3px solid var(--amber);
+    border-radius: 6px;
+    background: var(--night-deep);
+    color: var(--ink);
+    box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.6);
+  }
+
+  .object-card::backdrop {
+    background: rgb(6 11 24 / 0.7);
+  }
+
+  /* fills the box, so a click that lands on the dialog itself is the backdrop */
+  .object-card-frame {
+    position: relative;
+    padding: 1.25rem 1.5rem 1.5rem;
+  }
+
+  .object-card h2 {
+    margin: 0 2.5rem 0 0;
+    font-size: var(--step-2);
+    font-variation-settings: "wdth" 112;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .object-card h2:focus {
+    outline: none;
+  }
+
+  .object-card-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: none;
+    color: var(--ink-dim);
+    font: inherit;
+    font-size: var(--step-2);
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .object-card-close:hover {
+    border-color: var(--grid-strong);
+    color: var(--amber);
+  }
+
+  .object-card .history-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin: 1.25rem 0 0;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--grid);
+    font-size: var(--step--1);
+  }
+
+  .object-card .history-error {
+    margin: 0;
+    color: var(--ink-dim);
+  }
+
+  /* over the sky: down the right, over the view buttons, with the sky only
+     lightly dimmed, so what was clicked stays in view */
+  .object-card.side {
+    width: min(26rem, 40vw);
+    max-height: calc(100svh - 6.5rem);
+    margin: 5.25rem var(--gutter) auto auto;
+  }
+
+  .object-card.side::backdrop {
+    background: rgb(3 6 14 / 0.3);
+  }
+
+  .object-card.side h2 {
+    font-size: var(--step-1);
+  }
+
+  /* on a phone, a sheet from the bottom */
+  @media (max-width: 52rem) {
+    .object-card.side {
+      width: 100%;
+      max-width: none;
+      max-height: 78svh;
+      margin: auto 0 0;
+      border-radius: 10px 10px 0 0;
+    }
+  }
+</style>

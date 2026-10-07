@@ -1,19 +1,21 @@
 ---
+import ManoeuvreControls from "./ManoeuvreControls.astro";
 import { ago, falling, km, until } from "../lib/format.ts";
-import { BANDS, climbing, fallRate, heightKm, radiusAt } from "../lib/orbit.ts";
+import { BANDS, fallRate, heightKm, radiusAt } from "../lib/orbit.ts";
 import { stationOver } from "../lib/stations.ts";
 import type { History } from "../lib/sky.ts";
 import { blame, collisionOf, couplet, describe, headline, titleOf, type StoryParty } from "../lib/story.ts";
 import { countdown } from "../scripts/countdown.ts";
 
-// One object's history (ADR 0012), for its own page and for the panel the
-// sky opens when you click it: where it came from, what it said, how it
-// ended and what followed. The wording is the collision story's (ADR 0010):
-// two objects collide, debris destroys.
+// One object's history (ADR 0012), for its own page and for the card that
+// pops up when you click it (ADR 0015): where it came from, what it said,
+// how it ended and what followed. The wording is the collision story's (ADR
+// 0010): two objects collide, debris destroys. Your own satellite, while
+// it's up, carries its controls (ADR 0011).
 interface Props {
   history: History;
   now: number;
-  // the level of its section headings: 2 on its own page, 3 in the panel
+  // the level of its section headings: 2 on its own page, 3 in the card
   level: 2 | 3;
 }
 const { history: h, now, level } = Astro.props;
@@ -33,6 +35,11 @@ const self: StoryParty = {
 const met = h.end && ([self, h.end.with] as [StoryParty, StoryParty]);
 const theirLine = met ? couplet(met).find((line) => line.callsign !== h.callsign) : undefined;
 const live = h.orbit !== null;
+// yours, and up: boost it or bring it down from here
+const controls =
+  h.mine && h.kind === "satellite" && h.orbit
+    ? { id: h.id, callsign: h.callsign, ...h.orbit, deorbitedAt: h.deorbitedAt, boosts: h.boosts }
+    : null;
 const radius = h.orbit ? radiusAt(h.orbit, now) : null;
 const overhead = h.orbit ? stationOver(h.orbit, now) : null;
 const f = h.followed;
@@ -112,10 +119,15 @@ const moreLosses = f.destroyed.length - shownLosses.length;
     )}
     {h.orbit && radius !== null && h.reentryAt !== null && (
       <p>
-        In orbit at {km(heightKm(radius))}, {climbing(h.orbit, now) ? "climbing" : "falling"}{" "}
-        {falling(fallRate(h.orbit, now))}. It burns up in{" "}
+        In orbit at <span data-height>{km(heightKm(radius))}, {falling(fallRate(h.orbit, now))}</span>. It
+        burns up in{" "}
         <span data-reentry={h.reentryAt}>about {until(h.reentryAt - now)}</span>.
       </p>
+    )}
+    {controls && (
+      <div class="history-controls">
+        <ManoeuvreControls object={controls} back="object" now={now} />
+      </div>
     )}
     {h.fate === "decayed" && h.fateAt !== null && (
       <p>Burned up on re-entry <time datetime={new Date(h.fateAt).toISOString()}>{ago(now - h.fateAt)}</time>.</p>

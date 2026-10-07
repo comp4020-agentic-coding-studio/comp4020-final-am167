@@ -1,10 +1,9 @@
 ---
 import Base from "../../layouts/Base.astro";
-import ManoeuvreControls from "../../components/ManoeuvreControls.astro";
 import FirstLaunch from "../../components/FirstLaunch.astro";
 import ManoeuvreDialogs from "../../components/ManoeuvreDialogs.astro";
+import ObjectCard from "../../components/ObjectCard.astro";
 import { ago, embed } from "../../lib/format.ts";
-import { REFUSALS, isRefusal } from "../../lib/manoeuvre.ts";
 import { skyCount } from "../../lib/story.ts";
 import { BANDS, bandAt, radiusAt, type Band } from "../../lib/orbit.ts";
 import { STATIONS } from "../../lib/stations.ts";
@@ -27,11 +26,6 @@ const launched = sky.find((o) => o.id === launchedParam && o.mine) ?? null;
 const mine = sky.find((o) => o.mine) ?? null;
 // straight after someone's first launch ever, the sky explains itself
 const first = launched !== null && isFirstLaunch(viewer, launched.id);
-// back from bringing one down or boosting it without JavaScript (ADR 0011)
-const yoursById = (name: string) => sky.find((o) => o.mine && o.id === Number(Astro.url.searchParams.get(name))) ?? null;
-const deorbited = yoursById("deorbited");
-const boosted = yoursById("boosted");
-const refused = Astro.url.searchParams.get("refused");
 // how many of the latest launches the summary lists (sky.ts keeps it live):
 // people's, not the derelicts the server adds or debris
 const RECENT = 6;
@@ -81,24 +75,6 @@ const view = launched ? "canberra" : null;
            (ADR 0010); over the scene, or under it on a phone -->
       <div id="collision-card" class="collision-card" role="status" hidden></div>
 
-      <!-- an object's history (ADR 0012), opened by clicking it in the sky or
-           a name in the latest launches; filled from /object/<id>/panel -->
-      <aside id="history-panel" class="history-panel" aria-labelledby="history-title" tabindex="-1" hidden>
-        <button type="button" class="history-close" aria-label="Close the history">×</button>
-        <div class="history-body"></div>
-      </aside>
-      <!-- what screen readers hear when a history opens: its name, once -->
-      <p id="history-status" class="visually-hidden" role="status"></p>
-
-      {!launched && boosted && (
-        <p class="notice launched" id="launched-notice" role="status">
-          <strong>{boosted.callsign}</strong> is climbing a band. It stays up far longer.
-        </p>
-      )}
-      {!launched && !boosted && isRefusal(refused) && (
-        <p class="notice launched" id="launched-notice" role="alert">{REFUSALS[refused]}</p>
-      )}
-
       {launched && (
         <p class="notice launched" id="launched-notice" role="status">
           <strong>{launched.callsign}</strong> is in orbit. Its beacon is broadcast
@@ -127,13 +103,11 @@ const view = launched ? "canberra" : null;
               </li>
             ))}
           </ol>
+          <!-- what yours is doing; boosting it or bringing it down is on its
+               card and in Yours (ADR 0015), never here, since this line
+               moves on to whichever of yours passes next -->
           {mine && <p id="your-pass" class="your-pass" data-id={mine.id}>Yours: {mine.callsign}.</p>}
-          {mine && (
-            <div id="your-controls" class="your-controls">
-              <ManoeuvreControls object={mine} now={now} />
-              <p id="manoeuvre-error" class="manoeuvre-error" role="alert"></p>
-            </div>
-          )}
+          {mine && <p class="your-manage"><a href="/catalogue/?show=mine">Boost or bring down yours</a></p>}
         </section>
 
         <section class="summary" aria-labelledby="summary-title" data-recent={RECENT}>
@@ -174,7 +148,10 @@ const view = launched ? "canberra" : null;
       </div>
     </section>
 
-    <ManoeuvreDialogs thanks={deorbited ? (deorbited.callsign ?? "Your satellite") : null} />
+    <!-- an object's history (ADR 0012), opened by clicking it in the sky or
+         a name in the latest launches, with your own's controls (ADR 0015) -->
+    <ObjectCard side />
+    <ManoeuvreDialogs />
     {first && <FirstLaunch callsign={launched!.callsign ?? "Your satellite"} signedIn={Boolean(operator)} />}
   </main>
 
@@ -460,58 +437,6 @@ const view = launched ? "canberra" : null;
     font-size: var(--step--1);
   }
 
-  /* An object's history (ADR 0012): down the right of the scene, under the
-     view buttons, above everything else over it. */
-  .sky-page .history-panel {
-    position: absolute;
-    top: 4.25rem;
-    right: var(--gutter);
-    z-index: 2;
-    width: min(24rem, 36vw);
-    max-height: calc(100% - 5.5rem);
-    overflow-y: auto;
-    padding: 1rem 1.1rem 1.1rem;
-    border: 1px solid var(--grid-strong);
-    border-radius: 4px;
-    background: rgb(6 11 24 / 0.86);
-    backdrop-filter: blur(6px);
-  }
-
-  .sky-page .history-panel:focus {
-    outline: none;
-  }
-
-  .sky-page .history-panel h2 {
-    margin-right: 2rem;
-    overflow-wrap: anywhere;
-  }
-
-  .sky-page .history-close {
-    position: absolute;
-    top: 0.6rem;
-    right: 0.6rem;
-    width: 2rem;
-    height: 2rem;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    background: none;
-    color: var(--ink-dim);
-    font: inherit;
-    font-size: var(--step-1);
-    line-height: 1;
-    cursor: pointer;
-  }
-
-  .sky-page .history-close:hover {
-    border-color: var(--grid-strong);
-    color: var(--amber);
-  }
-
-  .sky-page .history-panel .history-links {
-    margin: 1rem 0 0;
-    font-size: var(--step--1);
-  }
-
   .sky-page .pick-hint {
     margin: 0.25rem 0 0;
     color: var(--ink-dim);
@@ -643,19 +568,9 @@ const view = launched ? "canberra" : null;
     box-sizing: content-box;
   }
 
-  /* boost it, or bring it down (ADR 0011): the one the line is about */
-  .sky-page .your-controls {
-    margin-top: 0.5rem;
-  }
-
-  .sky-page .manoeuvre-error {
+  .sky-page .your-manage {
     margin: 0.35rem 0 0;
     font-size: var(--step--1);
-    color: var(--danger);
-  }
-
-  .sky-page .manoeuvre-error:empty {
-    display: none;
   }
 
   .sky-page .summary {
@@ -863,13 +778,6 @@ const view = launched ? "canberra" : null;
       -webkit-line-clamp: 3;
       line-clamp: 3;
       height: calc(3 * 1.25 * var(--beacon-size));
-    }
-
-    .sky-page .history-panel {
-      position: static;
-      width: auto;
-      max-height: none;
-      margin: 1rem var(--gutter) 0;
     }
 
     /* under the scene, like the notice: over it, a long one hides the beacons */

@@ -1,0 +1,48 @@
+---
+import ManoeuvreControls from "./ManoeuvreControls.astro";
+import { falling, km, until } from "../lib/format.ts";
+import { BANDS, bandAt, climbing, fallRate, heightKm, radiusAt, reentryAt, type Band, type Orbit } from "../lib/orbit.ts";
+import { nextStation, stationOver } from "../lib/stations.ts";
+import { countdown } from "../scripts/countdown.ts";
+
+// One of your satellites in orbit, in Yours (ADR 0015): its beacon, which
+// you always see; where it is and what it's doing, counting down
+// (src/scripts/history.ts); and its controls (ADR 0011). Its name opens its
+// card.
+interface Props {
+  object: Required<Orbit> & {
+    id: number;
+    callsign: string | null;
+    beacon: string | null;
+    band: Band;
+    deorbitedAt: number | null;
+    boosts: number;
+  };
+  now: number;
+}
+const { object: o, now } = Astro.props;
+const radius = radiusAt(o, now);
+const over = stationOver(o, now);
+const pass = over ? null : nextStation(o, now);
+const doing =
+  o.deorbitedAt !== null
+    ? "coming down"
+    : climbing(o, now)
+      ? `climbing to the ${BANDS[bandAt(radiusAt(o, o.until ?? now))].label.toLowerCase()} band`
+      : `${BANDS[bandAt(radius)].label.toLowerCase()} band`;
+const orbit = { radius: o.radius, phase: o.phase, period: o.period, epoch: o.epoch, direction: o.direction, rate: o.rate, until: o.until };
+---
+<li class="your-sat" data-yours={o.id} data-orbit={JSON.stringify(orbit)}>
+  <p class="your-sat-head">
+    <span class="swatch" style={`--hue: ${(o.id * 137.508) % 360}`}></span>
+    <a href={`/object/${o.id}/`}><strong>{o.callsign}</strong></a>
+    <span class="your-sat-doing">{doing}</span>
+  </p>
+  {o.beacon && <blockquote class="your-sat-beacon"><q>{o.beacon}</q></blockquote>}
+  <p class="your-sat-now">
+    <span data-height>{km(heightKm(radius))}, {falling(fallRate(o, now))}</span>.{" "}
+    <span data-pass>{over ? `It's over ${over.name} now.` : pass === null ? "It burns up before it next gets to one." : `Next over ${pass.station.name} in ${countdown(pass.in)}.`}</span>{" "}
+    Burns up in <span data-reentry>about {until(reentryAt(o) - now)}</span>.
+  </p>
+  <ManoeuvreControls object={o} back="yours" now={now} />
+</li>

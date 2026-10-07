@@ -627,10 +627,11 @@ export type Fate = CatalogueEntry["fate"];
 export const SORTS = ["launched", "name", "kind", "band", "height", "status", "operator"] as const;
 export type Sort = (typeof SORTS)[number];
 export interface CatalogueQuery {
-  show: "live" | "all";
+  // what's up now, everything ever, or everything of yours (ADR 0015)
+  show: "live" | "all" | "mine";
   kind: Kind | null;
   band: Band | null;
-  // only with show "all": live is what "In orbit" shows
+  // only with show "all" or "mine": live is what "In orbit" shows
   fate: Fate | null;
   // a callsign or an operator's handle, or part of one
   q: string;
@@ -658,7 +659,7 @@ const oneOf = <T extends string>(value: string | null, options: readonly T[]): T
   value !== null && (options as readonly string[]).includes(value) ? (value as T) : null;
 
 export function readCatalogueQuery(params: URLSearchParams): CatalogueQuery {
-  const show = params.get("show") === "all" ? "all" : "live";
+  const show = oneOf(params.get("show"), ["all", "mine"] as const) ?? "live";
   const sort = oneOf(params.get("sort"), SORTS) ?? "launched";
   const whole = (value: string | null, fallback: number, min: number, max: number) => {
     const n = Math.floor(Number(value));
@@ -668,7 +669,7 @@ export function readCatalogueQuery(params: URLSearchParams): CatalogueQuery {
     show,
     kind: oneOf(params.get("kind"), ["satellite", "derelict", "debris"] as const),
     band: oneOf(params.get("band"), Object.keys(BANDS) as Band[]),
-    fate: show === "all" ? oneOf(params.get("fate"), ["live", "decayed", "deorbited", "destroyed"] as const) : null,
+    fate: show !== "live" ? oneOf(params.get("fate"), ["live", "decayed", "deorbited", "destroyed"] as const) : null,
     q: (params.get("q") ?? "").trim().slice(0, 40),
     mine: params.get("mine") === "1",
     sort,
@@ -696,6 +697,7 @@ export function browse(query: CatalogueQuery, who: Who, now = Date.now()): Catal
   settle(now);
   const pattern = `%${query.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
   const fate = query.show === "live" ? "live" : query.fate;
+  const mine = query.mine || query.show === "mine";
   const rows = db
     .select({
       id: objects.id,
@@ -725,7 +727,7 @@ export function browse(query: CatalogueQuery, who: Who, now = Date.now()): Catal
         fate ? eq(objects.fate, fate) : undefined,
         query.kind ? eq(objects.kind, query.kind) : undefined,
         query.band ? eq(objects.band, query.band) : undefined,
-        query.mine ? ownerIs(who) : undefined,
+        mine ? ownerIs(who) : undefined,
         query.q
           ? sql`(${objects.callsign} LIKE ${pattern} ESCAPE '\\' OR ${operators.handle} LIKE ${pattern} ESCAPE '\\')`
           : undefined,
@@ -848,6 +850,9 @@ export interface History {
   reentryAt: number | null;
   // and its orbit, so a page can keep those counting down
   orbit: Required<Orbit> | null;
+  // what its owner has done with it (ADR 0011), for its controls (ADR 0015)
+  deorbitedAt: number | null;
+  boosts: number;
   // boosts and deorbits (ADR 0011), oldest first, with the band each aimed for
   manoeuvres: { kind: ManoeuvreKind; at: number; to: Band }[];
   // for debris: the collision it came from, what met, and who that traces to
@@ -964,6 +969,8 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
           until: object.until,
         }
       : null,
+    deorbitedAt: object.deorbitedAt,
+    boosts: object.boosts,
     manoeuvres: manoeuvresOf(id).map((m) => ({ kind: m.kind, at: m.at, to: bandAt(m.toRadius) })),
     origin: source && { collision: source.c.id, at: source.c.at, parties: source.parties, roots: rootsOf(source.c.id) },
     end: own && { collision: own.c.id, at: own.c.at, with: own.parties[own.c.a === id ? 1 : 0] },

@@ -3,15 +3,16 @@ import { REFUSALS, canManoeuvre, type Manoeuvrable } from "../lib/manoeuvre.ts";
 import { BANDS } from "../lib/orbit.ts";
 
 // Boost a satellite of yours up a band, or bring it down (ADR 0011), from
-// the sky's station panel: two plain forms that work without JavaScript.
-// Each is there but hidden when it doesn't apply, so the page's script can
-// switch them as the satellite the panel is about changes; with
-// JavaScript, bringing one down asks first (src/scripts/manoeuvres.ts).
+// its card or from Yours in the catalogue (ADR 0015): two plain forms that
+// work without JavaScript, and come back to `back` (the manoeuvre route
+// knows where that is). Each is there but hidden when it doesn't apply;
+// with JavaScript, bringing one down asks first (src/scripts/manoeuvres.ts).
 interface Props {
   object: Manoeuvrable & { id: number; callsign: string | null };
+  back: "yours" | "object";
   now?: number;
 }
-const { object, now = Date.now() } = Astro.props;
+const { object, back, now = Date.now() } = Astro.props;
 const can = canManoeuvre(object, now);
 const to = can.to ? BANDS[can.to].label : "";
 // why there's no boost, while there's still a way down
@@ -20,6 +21,7 @@ const spent = can.deorbit === null ? can.boost : null;
 <div class="manoeuvres" data-manoeuvres data-id={object.id}>
   <form method="post" action="/manoeuvre/" data-manoeuvre hidden={can.boost !== null}>
     <input type="hidden" name="id" value={object.id} />
+    <input type="hidden" name="back" value={back} />
     <button type="submit" name="action" value="boost" data-callsign={object.callsign}>
       Boost to <span data-to>{to}</span>
     </button>
@@ -29,58 +31,14 @@ const spent = can.deorbit === null ? can.boost : null;
   </span>
   <form method="post" action="/manoeuvre/" data-manoeuvre hidden={can.deorbit !== null}>
     <input type="hidden" name="id" value={object.id} />
+    <input type="hidden" name="back" value={back} />
     <button type="submit" name="action" value="deorbit" data-callsign={object.callsign}>
       Bring it down
     </button>
   </form>
+  <!-- what a background post that was refused says (src/scripts/manoeuvres.ts) -->
+  <p class="manoeuvre-error" data-manoeuvre-error role="alert"></p>
 </div>
 
-<style>
-  .manoeuvres {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-  }
-
-  .manoeuvres form {
-    margin: 0;
-  }
-
-  .manoeuvres[hidden] {
-    display: none;
-  }
-
-  .manoeuvres form[hidden],
-  .spent[hidden] {
-    display: none;
-  }
-
-  .spent {
-    align-self: center;
-    font-size: var(--step--1);
-    color: var(--ink-dim);
-  }
-
-  button {
-    padding: 0.3rem 0.65rem;
-    font: inherit;
-    font-size: var(--step--1);
-    font-weight: 700;
-    color: var(--ink);
-    background: rgb(219 228 239 / 0.06);
-    border: 1px solid var(--grid-strong);
-    border-radius: 3px;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  button:hover,
-  button:focus-visible {
-    border-color: var(--amber);
-    color: var(--amber);
-  }
-
-  button[value="deorbit"] {
-    border-color: rgb(242 165 65 / 0.55);
-  }
-</style>
+<!-- styles: src/styles/global.css (.manoeuvres), since a card fetched into
+     a page carries these forms -->

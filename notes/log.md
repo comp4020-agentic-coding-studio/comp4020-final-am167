@@ -1644,3 +1644,71 @@ pop-up and both errors shown; filled in, pop-up, errors gone, and "Launch
 without a handle" landed on the sky; a beacon with a link, no pop-up and
 "No links". No spec test: the suite is HTTP only and this is the page
 script. `pnpm check` green (220 tests). Commit `3b41406`.
+
+## 2026-10-07 — Yours, and every object as a pop-up card (ADR 0015)
+
+Three of my asks in one piece, since they share the controls: a section of
+the catalogue for just me with the management in it; no boosting or
+bringing down on the sky page; an object's own page as a pop-up with its
+info and, if it's mine, the buttons.
+
+Written up as ADR 0015 (proposed, for me to accept). It supersedes where
+ADR 0011 put the controls and how ADR 0012 opened a history. The agent's
+reasoning: the station panel's controls were for "whichever of yours is next
+over a station", which changes under your hand once you have several up;
+putting every control on one named satellite (its card) means there's never
+a question of which.
+
+- **Yours** is a third catalogue view, `/catalogue/?show=mine` ("Yours (3
+  up)"): who you're launching as (handle, or this browser with a claim
+  link), a card for each of yours in orbit (beacon in full, height, next
+  pass and burn-up counting down, Boost to X / Bring it down, or "Highest
+  band" / "Boost used"), then your whole record as the catalogue's table
+  (status filter, no "Only yours" box since it's all yours). The global
+  collisions list stays on the other two views.
+- **Every object's history pops up as a card** (`<dialog>`), on the sky and
+  the catalogue: any link to `/object/<id>/` opens it in place, so does
+  clicking an object in the sky. Your own live satellite's card carries its
+  controls. On the sky it sits down the right with the sky only lightly
+  dimmed (a sheet from the bottom on a phone); elsewhere it's centred, and
+  wide enough that its parts sit in two columns. The old history panel's
+  care moved into the shared script (`src/scripts/object-card.ts`): a slow
+  answer to an earlier click is dropped, a refresh doesn't throw focus out,
+  closing goes back to the link that opened it (found again if the list
+  was rebuilt), a text selection ending on the backdrop doesn't close it.
+- **`/object/<id>/`** stays for a link opened on its own and for no
+  JavaScript, now as the same card centred on the page (two columns when
+  wide) instead of a narrow column down the left.
+- **The station panel** offers no controls; it still says what yours is
+  doing, with a "Boost or bring down yours" link to Yours.
+- **Without JavaScript** each form carries `back` (`yours` or `object`, a
+  fixed token looked up in a `Map`), and the server goes back there with
+  the thank-you or the refusal; anything else goes to Yours. With
+  JavaScript a boost or deorbit happens in place: the card and the Yours
+  list are fetched again from the server, so the page never works out what
+  the server already knows. A refusal is said beside the buttons that
+  asked. The control styles moved to the global sheet, since the card's
+  markup is fetched into pages that don't otherwise render the component.
+
+Tests first (`spec/manoeuvre-http.test.ts`, rewritten around Yours and the
+card): no manoeuvre forms anywhere on the sky page and a link to Yours; a
+"Yours" tab; your card with both forms coming back to `yours`, your
+beacon, "Boost to Mid"; nobody else's satellites in yours; the empty
+state with a launch link; the high band's "Highest band"; the owner's card
+(fragment and page) with the forms, a stranger's with none; deorbit and
+boost without JavaScript landing on Yours (and on the object page with
+`back=object`), thank-you open; `back` values `//evil.example/`,
+`https://…`, `/sky/`, `__proto__`, `constructor` and empty all going to
+Yours; a refusal coming back with its reason. Thirteen failed first for the
+expected reasons. `pnpm check` green (227 tests).
+
+Checked in Chromium at 1920x1080 and iPhone 14 against a busy scratch sky:
+Yours with three of mine (low, mid, high); KESTREL's card from the list,
+"Boost to High" in the card, and both the card and its Yours card switched
+to "climbing to the high band" with "Boost used"; HERON's card from the
+sky's latest launches, down the right; on the phone, the sheet from the
+bottom. Fixed on the way: the card's countdown spans ran into each other
+("115 km/h.Next over"), and the sky's card now covers the view buttons
+rather than half-overlapping them (they're inert behind it anyway).
+
+![Yours in the catalogue: a card for each of mine in orbit with its beacon, countdowns and controls, then my record](screenshots/2026-10-07-yours-in-the-catalogue.png)

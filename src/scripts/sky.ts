@@ -1,11 +1,10 @@
 import { ago, until } from "../lib/format.ts";
-import { REFUSALS, canManoeuvre } from "../lib/manoeuvre.ts";
 import { BANDS, bandAt, climbing, plungeAt, radiusAt, reentryAt, type Band } from "../lib/orbit.ts";
 import { STATIONS, nextStation, stationOver, untilStation, type StationId } from "../lib/stations.ts";
 import { blame, couplet, headline, skyCount, type StoryParty } from "../lib/story.ts";
 import { countdown } from "./countdown.ts";
-import { keepCounting } from "./history.ts";
 import { wireManoeuvres } from "./manoeuvres.ts";
+import { objectCard } from "./object-card.ts";
 
 // Keeps the shared sky live, and starts the scene that draws it. Positions
 // come from each object's orbit and the server's clock, never from the
@@ -164,9 +163,8 @@ import("./scene.ts")
         document.getElementById("views")!,
         ...(document.getElementById("launched-notice") ? [document.getElementById("launched-notice")!] : []),
         document.getElementById("collision-card")!,
-        historyPanel,
       ],
-      selected: () => showing,
+      selected: () => historyCard?.showing() ?? null,
     });
     if (!started) return noScene();
     requestAnimationFrame(() => requestAnimationFrame(() => canvas.classList.add("drawn")));
@@ -187,7 +185,7 @@ import("./scene.ts")
     const reach = (event: MouseEvent) => ((event as PointerEvent).pointerType === "touch" ? 32 : 22);
     canvas.addEventListener("click", (event) => {
       const id = started.pick(event.clientX, event.clientY, reach(event));
-      if (id !== null) openHistory(id);
+      if (id !== null) historyCard?.open(id);
     });
     canvas.addEventListener("mousemove", (event) => {
       canvas.style.cursor = started.pick(event.clientX, event.clientY, reach(event)) === null ? "" : "pointer";
@@ -202,87 +200,12 @@ import("./scene.ts")
 
 // ── an object's history (ADR 0012) ───────────────────────────────────────
 
-// The panel over the scene (under it on a phone), filled with the history
-// the server tells; it works out nothing itself. A collision anywhere can
-// add to what followed an object, so the open one is asked for again.
-const historyPanel = document.getElementById("history-panel")!;
-const historyBody = historyPanel.querySelector<HTMLElement>(".history-body")!;
-const historyStatus = document.getElementById("history-status")!;
-// the object the panel is for: set on the click, so an event arriving
-// while it loads refreshes the new one, not the last
-let showing: number | null = null;
-let stopCounting = () => {};
-// where focus was when the panel opened, to go back to on close
-let opener: HTMLElement | null = null;
-// the latest ask: a slow answer to an earlier one is dropped
-let asked = 0;
-async function openHistory(id: number, refresh = false) {
-  const ask = ++asked;
-  const opening = historyPanel.hidden;
-  if (!refresh) {
-    showing = id;
-    if (opening) opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  }
-  let html: string | null = null;
-  try {
-    const res = await fetch(`/object/${id}/panel`);
-    if (res.ok) html = await res.text();
-  } catch {
-    // offline: said below, unless it was only a refresh
-  }
-  if (ask !== asked || showing !== id) return;
-  if (html === null && refresh) return;
-  // a refresh mustn't drop focus from a link in the panel
-  const hadFocus = historyPanel.contains(document.activeElement);
-  stopCounting();
-  if (html === null) {
-    historyBody.innerHTML = '<p class="history-error">Its history couldn\'t be loaded. Try again in a moment.</p>';
-    stopCounting = () => {};
-  } else {
-    historyBody.innerHTML = html;
-    const article = historyBody.querySelector<HTMLElement>(".history");
-    stopCounting = article ? keepCounting(article, serverNow) : () => {};
-  }
-  historyPanel.hidden = false;
-  if (hadFocus) historyPanel.focus({ preventScroll: true });
-  if (refresh) return;
-  historyStatus.textContent = `History of ${historyBody.querySelector("h2")?.textContent ?? "the object"} opened.`;
-  historyPanel.focus({ preventScroll: true });
-  // on a phone it's under the scene
-  if (opening && getComputedStyle(historyPanel).position === "static") {
-    historyPanel.scrollIntoView({ block: "nearest", behavior: reduced ? "auto" : "smooth" });
-  }
-}
-function closeHistory() {
-  asked++;
-  stopCounting();
-  showing = null;
-  historyPanel.hidden = true;
-  historyStatus.textContent = "";
-  // the latest launches are rebuilt as the sky changes: the same link, then
-  const href = opener?.getAttribute("href");
-  const back = opener?.isConnected ? opener : href ? document.querySelector<HTMLElement>(`#recent a[href="${href}"]`) : null;
-  back?.focus({ preventScroll: true });
-  opener = null;
-}
-const refreshHistory = (id?: number) => {
-  if (showing !== null && (id === undefined || id === showing)) openHistory(showing, true);
-};
-historyPanel.querySelector(".history-close")!.addEventListener("click", closeHistory);
-document.addEventListener("keydown", (event) => {
-  // a manoeuvre's dialog closes first
-  if (event.key === "Escape" && !historyPanel.hidden && !document.querySelector("dialog[open]")) closeHistory();
-});
-// a name in the latest launches, or another object named in a history,
-// opens in the panel; "Its own page" and modified clicks go to the page
-document.addEventListener("click", (event) => {
-  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  const link = (event.target as Element).closest<HTMLAnchorElement>("#recent a, .history-body .history a");
-  const id = link?.getAttribute("href")?.match(/^\/object\/(\d+)\/$/)?.[1];
-  if (!id) return;
-  event.preventDefault();
-  openHistory(Number(id));
-});
+// Its card pops up down the right (ADR 0015), filled with the history the
+// server tells, for a click in the scene or on any name. A collision
+// anywhere can add to what followed an object, so the open one is asked
+// for again.
+const historyCard = objectCard(serverNow);
+const refreshHistory = (id?: number) => historyCard?.refresh(id);
 
 // ── what the stations hear (ADR 0014) ─────────────────────────────────────
 
@@ -374,38 +297,7 @@ function listen() {
   } else if (yourPass && yours) {
     say(`${yours.callsign} ${burnedUp(yours)} ${ago(time - yours.at)}. `, true);
   }
-  control(mine ?? null, time);
   news(time);
-}
-
-// Boosting it, or bringing it down (ADR 0011): the controls under your line
-// are for the satellite it's about, and only what it can still do.
-const yourControls = document.getElementById("your-controls");
-let controlled = "";
-function control(sat: Satellite | null, time: number) {
-  if (!yourControls) return;
-  const can = sat ? canManoeuvre(sat, time) : null;
-  const key = sat && can ? `${sat.id}:${can.boost}:${can.deorbit}:${can.to}` : "";
-  if (key === controlled) return;
-  controlled = key;
-  for (const form of yourControls.querySelectorAll<HTMLFormElement>("form[data-manoeuvre]")) {
-    const button = form.querySelector<HTMLButtonElement>("button[name=action]")!;
-    const allowed = can !== null && (button.value === "boost" ? can.boost : can.deorbit) === null;
-    form.hidden = !allowed;
-    if (!sat || !can) continue;
-    form.querySelector<HTMLInputElement>("input[name=id]")!.value = String(sat.id);
-    button.dataset.callsign = sat.callsign ?? "";
-    const to = button.querySelector("[data-to]");
-    if (to && can.to) to.textContent = BANDS[can.to].label;
-  }
-  // why there's no boost, while there's still a way down
-  const spent = yourControls.querySelector<HTMLElement>("[data-spent]");
-  if (spent) {
-    const why = can && can.deorbit === null ? can.boost : null;
-    spent.hidden = why === null;
-    spent.textContent = why === "top-band" ? "Highest band" : "Boost used";
-    if (why) spent.title = REFUSALS[why];
-  }
 }
 
 // Your satellite's line, with a way back to the pad once it's gone.
@@ -629,15 +521,13 @@ function manoeuvred(sat: Satellite) {
   rebuildHits();
   renderSummary();
 }
-const manoeuvreError = document.getElementById("manoeuvre-error");
+// from your satellite's card: its new orbit, here at once, and the card
+// asked for again
 wireManoeuvres<Satellite>({
   inPlace: (sat) => {
-    if (manoeuvreError) manoeuvreError.textContent = "";
     manoeuvred(sat);
     listen();
-  },
-  refused: (message) => {
-    if (manoeuvreError) manoeuvreError.textContent = message;
+    refreshHistory(sat.id);
   },
 });
 
