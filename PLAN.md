@@ -6,55 +6,54 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-06 (collisions, operators)._
+_Last updated 2026-10-07 (C9 built and on `main`; write-ups outstanding)._
 
-- **Done:** idea chosen; the decisions below agreed with Advay; person,
+- **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
   record in `doc/adr/` (0001–0004; 0002, the person, superseded by 0009).
   2026-10-04: the C8 open questions resolved (scope, overhead, launch flow,
   beacon rules, launch limits, bands); the rest deferred to C9 or later, see
   "Now and later". Stack restored (`618d80a`). C8 slice built (`4be85b1`):
-  launchpad, launch rules, the sky chart and catalogue, SSE; spec tests in
-  `spec/launch.test.ts` and `spec/live.test.ts`.
-- **C9, in progress (branch `C9`):** the sky page redrawn with Three.js as a
-  horizon view from Advay's sketch (ADR 0005, accepted 2026-10-07): the limb, stars, the
-  bands over the horizon, satellites crossing with trails and labels, the
-  station panel over the scene, the catalogue below (`f8f7003`). Then a
-  zoom-out to the whole planet, so the rest of the sky (and C9's collisions)
-  can be seen.
-  2026-10-06: the launchpad redrawn in Three.js too (ADR 0006, accepted 2026-10-07):
-  a dusk pad scene, and a launch that climbs through a gravity turn while
-  the camera pulls back to the planet's limb and hands off to the sky page.
-  2026-10-06: a page explaining Kessler syndrome at `/kessler/` (uncommitted),
-  linked from the nav, the launchpad's intro and the sky's "Sky now" card.
-  2026-10-06: **collisions on the server** (ADR 0008, accepted 2026-10-07): orbits
-  go either way, the server predicts every collision and announces it, and
-  catches up exactly after a restart. ADRs 0009 (claimable operators) and
-  0010 (every screen names who caused a collision) drafted.
-  2026-10-06: launches **any number up, five minutes apart** (`5cf1247`).
-  The sky page draws collisions (a ring where one is coming, a flash when
-  it happens, on every screen at once), a card tells each one with both
-  beacons and who launched what, and the catalogue keeps each fragment's
-  lineage and a record of collisions. **Operators** (ADR 0009): claim a
-  handle with a passphrase, sign in on another device; collisions name
-  handles. Adversarial review recorded in `notes/log.md` (2026-10-06), not
-  yet acted on. **Next:** its four must-fixes (a collision a marker can
-  see in ten minutes; blame dodged by a "The derelict" callsign; sign-in
-  throttling that locks people out and blocks the event loop; the settle
-  timer crashing the process), then the should-fixes, then `PROCESS.md`
-  and `reflections/crit-9.md`. `README.md` still says "one live satellite
-  each" (Advay's rewrite).
-  2026-10-06: **orbital decay** (ADR 0007, accepted): every
-  orbit falls, faster the lower it is, and ends in a 30-second burn-up drawn
-  as a real re-entry (fireball, cooling wake, breakup, sparks). Bands are
-  now ranges of one height with one period law; the server marks burn-ups
-  `decayed` and sends a `decay` event.
+  launchpad, launch rules, the sky chart and catalogue, SSE. First README
+  (`7c49d7a`), `PROCESS.md` (`f6bbe13`) and `reflections/crit-8.md`
+  (`5ad94df`).
 - **C8 cutoff:** Tue 6 Oct 2026, 12:00 (moved from Monday for Labour Day).
-- **Next, in order:**
-  1. Advay rewrites the agent's README draft (`README.md`, published at
-     `/readme/`) in his own words, and confirms which sources he has
-     actually read; the small-web reading the brief asks for isn't cited yet.
-  2. `PROCESS.md` overview and `reflections/crit-8.md`.
+- **C9, built (on `main`, merged from branch `C9`):**
+  - The sky as a Three.js horizon view over the station (ADR 0005,
+    accepted; `f8f7003`), zooming out to the whole planet (`9cc3927`); the
+    catalogue on its own page (`455789e`); soft band edges (`baf5342`).
+  - The launchpad in Three.js, with a launch that hands off to the sky
+    (ADR 0006, accepted; `5c41ccd`).
+  - A page explaining Kessler syndrome at `/kessler/` (`356e469`).
+  - Orbital decay ending in a burn-up (ADR 0007, accepted; `fb51cae`).
+  - Collisions predicted, announced and replayed by the server (ADR 0008,
+    accepted; `41f32ef`); launches any number up, five minutes apart
+    (`5cf1247`).
+  - Collisions drawn on every screen, blame traced through lineage, and
+    claimable operators (ADRs 0009 and 0010, both still **proposed**;
+    `44487ac`).
+  - The adversarial review's must-fixes and most should-fixes acted on
+    (`2dc518c`); recorded, not fixed: signing out skips the launch gap, and
+    no server-side cookie expiry or "sign out everywhere".
+  - The catalogue as a filterable, sortable, paged table (`37f104c`); a
+    bright collision the view turns to follow (`90dfab9`); the "in orbit"
+    notice dropped once that satellite is gone (`811236f`); a nudge towards
+    claiming a handle at launch (`487f0a4`).
+  - Not built, though once listed for C9: deorbiting your own satellite
+    (the `/kessler/` page still says "Not built yet"), and conjunction
+    alerts and dodging (moved to C10).
+- **Next, for C9:**
+  1. Advay accepts (or revises) ADR 0010, the C9 written decision about
+     several people at once, and ADR 0009.
+  2. `README.md` brought up to date: it still says "one live satellite
+     each" and "a second launch is refused", and says nothing of
+     collisions, debris, blame or operators; the tested list predates
+     them. Advay's words, and his confirmation of which sources he has
+     read.
+  3. `PROCESS.md`: the C9 part (it stops at the C8 slice), from
+     `notes/log.md`.
+  4. `reflections/crit-9.md` (Advay's).
+  5. Decide whether deorbiting is built for C9 or deferred, and record it.
 - **Never deploy, flip public or commit without Advay's say-so** (CLAUDE.md).
 
 ## The idea

@@ -1105,4 +1105,5 @@ button, which would cut into the launch animation: a line under the button
 ("Launching without a handle. Claim one to keep your satellites on any
 device, and your name on what they do", or "Launching as *handle*"), and
 the same offer on the notice straight after launching, which then stays up
-twice as long on desktop. Tests in `spec/operator.test.ts`.
+twice as long on desktop. Tests in `spec/operator.test.ts`. Committed as
+`487f0a4`.
