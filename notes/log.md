@@ -1722,3 +1722,5 @@ Checked the other resident tests for the same flaw: "launches each one as
 it comes due" needed at least one launch in a two-hour window, missing
 about one run in 400; it now spans four hours (about one in 160,000).
 `pnpm check` green (245 tests) against a fresh build.
+
+Commit `70d1fea`.
