@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-07 (slower orbits and three ground stations built, ADRs 0013 and 0014 accepted, PR #4; C9 write-ups outstanding)._
+_Last updated 2026-10-07 (PRs #3 and #4 merged, so all C9 building is done; stale C9 items tidied; C9 write-ups outstanding)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -41,37 +41,37 @@ _Last updated 2026-10-07 (slower orbits and three ground stations built, ADRs 00
     claiming a handle at launch (`487f0a4`), then as a pop-up on arriving
     at the launchpad (once a visit, closable, never a gate; PR #2), since
     moved to open on the first Launch of a visit instead of on arrival.
+  - **Deorbiting and boosting** (Advay, 2026-10-07; ADR 0011, accepted;
+    `948998e`, review acted on in `e010756` and `f35f752`; PR #3): bring
+    your own satellite down in a two-minute descent, with a dialog thanking
+    you for keeping the sky clear; or boost it up a band (low to mid, mid
+    to high, once) in a 90-second climb. Buttons in the sky's station panel
+    only (not the launchpad: too cluttered). No fuel.
+  - **Click a satellite or fragment to see its history** (Advay,
+    2026-10-07; ADR 0012, accepted; `93f8735`): in the sky, clicking an
+    object opens its record, also at `/object/<id>/` and linked from the
+    catalogue. Framed as "the sky remembers" (Ostrom: seeing what each
+    takes): who launched it, when, any manoeuvre, for debris the collision
+    it came from and its roots, how it ended, and **what followed** (its
+    fragments, how many are still up, what they destroyed). A live
+    satellite's beacon stays hidden (heard only overhead, with a countdown
+    to the next pass); once it's gone the beacon is shown as its epitaph;
+    its owner always sees their own.
+  - **Slower orbits and three ground stations** (Advay, 2026-10-07; ADRs
+    0013 and 0014, accepted; `85c97ff`, `67b29a9`; PR #4). Every period
+    three times longer, so a beacon is up long enough to read; three
+    stations at the Deep Space Network's sites (Canberra, Goldstone,
+    Madrid), all heard by everyone, to give the passes back; the sky opens
+    on the whole planet with a beacon panel per station, and the horizon
+    over any station one click away.
   - Not built, though once listed for C9: conjunction alerts and dodging
     (moved to C10).
-- **Next, for C9:**
+- **C9 cutoff:** Mon 12 Oct 2026, 12:00.
+- **Next, for C9 (write-ups only; nothing left to build):**
   1. `PROCESS.md`: the C9 part (it stops at the C8 slice), from
      `notes/log.md`.
   2. `reflections/crit-9.md` (Advay's).
-  3. **Deorbiting and boosting: built, in review** (Advay, 2026-10-07; ADR
-     0011, accepted): bring your own satellite down in a two-minute descent,
-     with a dialog thanking you for keeping the sky clear; or boost it up a
-     band (low to mid, mid to high, once) in a 90-second climb. Buttons in
-     the sky's station panel only (not the launchpad: too cluttered). On
-     branch `claude/c9-outstanding-work-17iuus` (with PR #2's handle
-     pop-up), as PR #3.
-  4. **Click a satellite or fragment to see its history** (Advay,
-     2026-10-07; ADR 0012, accepted; built, `93f8735`): in the sky, clicking an
-     object opens its record, also at `/object/<id>/` and linked from the
-     catalogue. Framed as "the sky remembers" (Ostrom: seeing what each
-     takes): who launched it, when, any manoeuvre, for debris the collision
-     it came from and its roots, how it ended, and **what followed** (its
-     fragments, how many are still up, what they destroyed). A live
-     satellite's beacon stays hidden (heard only overhead, with a countdown
-     to the next pass); once it's gone the beacon is shown as its epitaph;
-     its owner always sees their own.
-  5. **Slower orbits and three ground stations: built** (Advay,
-     2026-10-07; ADRs 0013 and 0014, accepted). Every period three times
-     longer, so a beacon is up long enough to read; three stations at the
-     Deep Space Network's sites (Canberra, Goldstone, Madrid), all heard
-     by everyone, to give the passes back; the sky opens on the whole
-     planet with a beacon panel per station, and the horizon over any
-     station one click away. On branch
-     `claude/stations-globe-view-design-fd3851`, as PR #4.
+  3. Before the cutoff: `pnpm check` against a fresh build, then preflight.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or
@@ -152,7 +152,10 @@ across each band.
 ## Co-presence
 
 - Launches, collisions and fragment clouds appear on every open screen at once.
-- **Conjunction alerts** (likely the C9 decision): when two satellites are on a
+- **Who caused it** (the C9 decision, ADR 0010): every screen names the
+  operators behind a collision, traced through lineage.
+- **Conjunction alerts** (C10; once the likely C9 decision, replaced by ADR
+  0010 when dodging moved out): when two satellites are on a
   collision course, both owners are warned and either can spend limited fuel to
   dodge. If both are online, who moves? If an owner is offline, they can't
   dodge, so being absent makes you vulnerable. (Precedent: ESA moving Aeolus
@@ -202,8 +205,9 @@ by the launch limits of 2026-10-06 (any number up, five minutes apart)._
   after the machine has been stopped.
 - Rejected: deleting decayed objects (no lineage, nothing for C10) and keeping
   only counts (loses "who caused this", which is the argument).
-- Open: beacon text is kept forever, so it needs a rule (length, moderation,
-  whether a decayed satellite's beacon is still shown).
+- Beacon text is kept forever, so it has a rule: 60 characters, plain text,
+  no URLs, a blocklist (2026-10-04); once a satellite is gone its beacon is
+  shown as its epitaph (ADR 0012).
 
 ### How a change reaches everyone
 
@@ -225,8 +229,8 @@ by the launch limits of 2026-10-06 (any number up, five minutes apart)._
   by altitude.
 - **History:** the public catalogue above. Each fragment traces back to the
   collision that made it and who launched what was involved.
-- **Visibility:** open. Whether the catalogue shows owners' callsigns next to
-  the debris they caused is a decision to make.
+- **Visibility:** open. Every screen, the catalogue and each object's record
+  name the operators whose satellites a collision traces back to (ADR 0010).
 - **What we chose not to build:** debris cleanup, a reset, accounts, and any
   channel to talk to other operators beyond beacons and alerts.
 
@@ -293,10 +297,10 @@ by the launch limits of 2026-10-06 (any number up, five minutes apart)._
   it gets a decision record when it's adopted. The orbit maths in
   `src/lib/orbit.ts` is renderer-agnostic, so swapping the canvas for Three.js
   only touches the drawing code.
-- **C9 (week 10):** server-side collisions making debris, boot-time replay of
-  missed time, orbital decay, deorbiting your own satellite (and the
-  cooldown taking effect), conjunction alerts and dodging with fuel. Decide
-  the deferred tuning (below) with the sim running.
+- **C9 (week 10), built:** server-side collisions making debris, boot-time
+  replay of missed time, orbital decay, deorbiting your own satellite (the
+  cooldown became a five-minute gap between launches). Conjunction alerts
+  and dodging with fuel moved to C10. See "Status and next steps".
 - **A page explaining Kessler syndrome (added 2026-10-06; built
   2026-10-06).** People Advay has shown the app to don't know what Kessler
   syndrome is, so the name and the argument don't land. A short plain-language
@@ -307,21 +311,18 @@ by the launch limits of 2026-10-06 (any number up, five minutes apart)._
   deorbiting and lineage. Linked from the nav, the launchpad and the sky.
   The launchpad's intro now carries a one-line explanation ("in a crowded
   orbit one collision can set off the next: Kessler syndrome"), for Advay to
-  confirm. When collisions land in C9, drop the page's "not built yet" tags
-  for whatever is built.
+  confirm. The "not built yet" tags are gone now that all four are built.
 - **Seeing a burn-up on demand (added 2026-10-06, for later).** The shortest
   lifetime is hours and everyone has one satellite, so a visitor (or a
   marker) only sees a re-entry if someone else's falls while they watch.
   Ideas: replay the latest burn-up on request, or a short "watch the last
   re-entry" clip from the sky page. Not decided; see ADR 0007.
-- **Boosting a satellite (added 2026-10-06, for later).** The other half of
-  deorbiting: an owner spends something (fuel?) to raise their own orbit and
-  stay up longer, fighting decay. Pairs with the deorbit control and with
-  fuel for dodging (both C9 ideas above). It changes the stored orbit, so a
-  boost would be a new epoch for that object, and it needs a decision record.
-  Shelved; not decided.
+- **Boosting a satellite (added 2026-10-06; built 2026-10-07, ADR 0011).**
+  The other half of deorbiting: an owner raises their own orbit one band,
+  once, to stay up longer. No fuel; a boost is a new epoch for that object.
 - **C10 (week 11):** server-side logs as evidence (launches per band,
-  collisions, dodges, deorbits), and the catalogue's lineage.
+  collisions, dodges, deorbits); conjunction alerts and dodging with fuel
+  (moved from C9). The catalogue's lineage was built in C9.
 - **Week 12:** visual polish (light trails, collision effects), README and
   PROCESS write-up.
 
@@ -383,8 +384,12 @@ Questions to settle first:
 - The blocklist has to run on mixed words too: two clean beacons can combine
   into something that isn't.
 - If fragments carry words, the debris record needs them, which is a data
-  model change and gets a decision record. So decide this before (or with)
-  the C9 debris table, not after.
+  model change and gets a decision record.
+
+Settled for C9 (2026-10-06, built): the connection is causal; a collision
+shows **both beacons as a couplet** on every screen, in the catalogue and in
+each object's record. Fragments carrying words can come later as a nullable
+column, so deferring it is cheap.
 
 ## A purpose (future work, needs thought)
 
@@ -444,19 +449,19 @@ flow, beacon rules, launch limits, bands.
   satellite, none from debris; a 2% chance a meeting; debris decays like
   everything else. Advay chose the gentler rate: 1 to 5 collisions an hour
   in a quiet sky, about half of satellites burning up before a hit.
-- **C9:** collision radius, tuned so a marker sees something happen within
-  ten minutes while the sky still lasts days. Decay can't do this alone
-  (the shortest lifetime is an hour), so collisions carry it. Decay rates are
-  set (ADR 0007: hours, about a day, a few days); revisit them once
-  collisions run.
-- **C9:** how fuel works, and whether it refills.
+- ~~**C9:** collision radius~~: settled in ADR 0008 (hit distance and a 2%
+  chance a meeting), with the head-on chance tripled in ADR 0013 to keep
+  collisions per hour once orbits slowed.
+- **C10:** how fuel works, and whether it refills (moved with dodging;
+  boosting needs none).
 - ~~**C9:** exact cooldown length~~: replaced by a five-minute gap between
   launches (2026-10-06).
-- **Week 12 (or sooner):** whether, and how far, to move the sky's rendering
-  to Three.js (see "Now and later").
+- ~~**Week 12 (or sooner):** whether to move the sky's rendering to
+  Three.js~~: done in C9 (ADRs 0005 and 0006).
 - **Before the final README:** the name (Kessler stays the working title).
-- **Open:** whether the catalogue shows owners' callsigns next to the debris
-  they caused.
-- **Before the C9 debris table:** how colliding beacons connect, and what of
-  them the wreck keeps (see "Collisions that mean something").
+- ~~**Open:** whether the catalogue shows owners' callsigns next to the
+  debris they caused~~: yes, on every screen (ADR 0010).
+- ~~**Before the C9 debris table:** how colliding beacons connect~~: a
+  couplet; words on fragments later (see "Collisions that mean something").
 - **Open:** which of the purpose ideas to adopt (see "A purpose").
+- **Open:** seeing a burn-up on demand (see "Now and later").

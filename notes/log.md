@@ -1456,3 +1456,14 @@ again with a three-line news item: the latest launches drop to three below
 960 px and go below 864, and the hint goes with the beacons' note below
 656. Fits at every height from 544 to 1080. `pnpm check` green (213
 tests).
+
+## 2026-10-07 — Plan tidied after PRs #3 and #4
+
+Checked what's left for C9 (cutoff Mon 12 Oct, 12:00): nothing to build,
+only the write-ups (`PROCESS.md`'s C9 part, `reflections/crit-9.md`) and a
+`pnpm check` plus preflight before the cutoff. Brought `PLAN.md` up to date
+to match: deorbiting/boosting, object history and the three stations moved
+into "built" with their hashes; boosting no longer "shelved"; conjunction
+alerts and fuel moved to C10 everywhere; open questions that ADRs 0008,
+0010, 0012 and 0013 had already settled (collision radius, who sees the
+blame, the couplet, beacon epitaphs, Three.js) struck through or rewritten.
