@@ -1,4 +1,4 @@
-import { and, count, countDistinct, desc, eq, gt, inArray, isNotNull, isNull, lt, max, ne, sql, type SQL } from "drizzle-orm";
+import { and, count, countDistinct, desc, eq, gt, inArray, isNotNull, isNull, lt, max, ne, or, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { fatalMeeting, fragmentsOf, impactOf, nextMeeting } from "./collide.ts";
 import { listening, publish } from "./events.ts";
@@ -290,10 +290,10 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
   // what's still up at that moment (anything burned up by then has left,
   // whether or not it has been marked yet), less the two that met
   const up = sky.filter((object) => object.launchedAt <= at && reentryAt(object) > at).length - 2;
-  const all = fragmentsOf(a, b, at);
-  // each fragment carries a piece of both lines (ADR 0017)
-  const shards = shardsOf({ id: a.id, text: lineOf(a) }, { id: b.id, text: lineOf(b) }, all.length);
-  const pieces = all.slice(0, Math.max(0, LIVE_CAP - up));
+  const pieces = fragmentsOf(a, b, at).slice(0, Math.max(0, LIVE_CAP - up));
+  // each fragment carries a piece of both lines (ADR 0017), cut for the
+  // fragments there's room for, so a crowded sky loses no words
+  const shards = shardsOf({ id: a.id, text: lineOf(a) }, { id: b.id, text: lineOf(b) }, pieces.length);
   const report = db.transaction((tx) => {
     const row = tx
       .insert(collisions)
@@ -431,9 +431,15 @@ export interface Encounter extends CollisionStory {
 
 // What happened to the viewer's satellites since `since` (their last look
 // at Yours): encounters, and how many people heard them (each once, however
-// many of theirs they heard).
-export function newsSince(who: Who, since: number, now = Date.now()): { encounters: Encounter[]; heardBy: number } {
-  const encounters = encountersOf(who, now).filter((e) => e.at > since);
+// many of theirs they heard). `known`: all their encounters, if the caller
+// already has them.
+export function newsSince(
+  who: Who,
+  since: number,
+  now = Date.now(),
+  known?: Encounter[],
+): { encounters: Encounter[]; heardBy: number } {
+  const encounters = (known ?? encountersOf(who, now, { since })).filter((e) => e.at > since);
   const ids = viewerOf(who).person
     ? db.select({ id: objects.id }).from(objects).where(ownerIs(who)).all().map((row) => row.id)
     : [];
@@ -448,8 +454,9 @@ export function newsSince(who: Who, since: number, now = Date.now()): { encounte
   return { encounters, heardBy };
 }
 
-// Every collision a satellite of the viewer's was in, newest first.
-export function encountersOf(who: Who, now = Date.now()): Encounter[] {
+// Every collision a satellite of the viewer's was in, newest first: those
+// after `since`, and only the latest `limit`, if asked.
+export function encountersOf(who: Who, now = Date.now(), { since = 0, limit }: { since?: number; limit?: number } = {}): Encounter[] {
   if (!viewerOf(who).person && viewerOf(who).operator === null) return [];
   settle(now);
   const ids = db
@@ -459,12 +466,12 @@ export function encountersOf(who: Who, now = Date.now()): Encounter[] {
     .all()
     .map((row) => row.id);
   if (ids.length === 0) return [];
-  const rows = db
+  const query = db
     .select()
     .from(collisions)
-    .where(sql`${collisions.a} IN ${ids} OR ${collisions.b} IN ${ids}`)
-    .orderBy(desc(collisions.at), desc(collisions.id))
-    .all();
+    .where(and(gt(collisions.at, since), or(inArray(collisions.a, ids), inArray(collisions.b, ids))))
+    .orderBy(desc(collisions.at), desc(collisions.id));
+  const rows = limit === undefined ? query.all() : query.limit(limit).all();
   const mine = new Set(ids);
   return storiesOf(rows).map((story) => {
     const [a, b] = story.parties;
@@ -1017,7 +1024,7 @@ export interface History {
   followed: { left: number; collisions: number; fragments: number; up: number; destroyed: Root[] };
 }
 
-const objectById = (id: number): SkyObject | null => {
+export const objectById = (id: number): SkyObject | null => {
   const row = db.select(columns).from(objects).where(eq(objects.id, id)).get();
   return row ? toObject(row) : null;
 };

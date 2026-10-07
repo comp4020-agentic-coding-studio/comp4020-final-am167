@@ -1,15 +1,15 @@
 ---
-import { historyOf } from "../../../lib/sky.ts";
+import { objectById } from "../../../lib/sky.ts";
 
 // An object's own address (ADR 0012): the catalogue, with its card open
 // over it (ADR 0015), for a link opened on its own and without JavaScript.
 // The address stays this one. What came back from bringing it down or
 // boosting it without JavaScript (`deorbited`, `boosted`, `refused`) goes
 // along.
-const { person, operator } = Astro.locals;
 // one address per object: digits, no leading zero
 const id = /^[1-9]\d{0,15}$/.test(Astro.params.id ?? "") ? Number(Astro.params.id) : null;
-if (id === null || !historyOf(id, { person, operator: operator?.id ?? null })) {
+// (the catalogue tells its history: here, only whether there is one)
+if (id === null || !objectById(id)) {
   return new Response("Nothing by that number has been in this sky.", { status: 404 });
 }
 const params = new URLSearchParams();

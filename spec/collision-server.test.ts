@@ -318,6 +318,29 @@ describe("who a collision names (ADR 0010)", async () => {
 
 // the review, 2026-10-07: a derelict carries an echo of a gone satellite's
 // last words, so a collision with one still breaks someone's words
+// a review of the overnight round, 2026-10-08: in a nearly full sky only a
+// few fragments are left, and the words dealt to the rest were lost
+describe("a wreck in a nearly full sky", async () => {
+  process.env.LIVE_CAP = "2";
+  const { sky, db, schema } = await freshServer();
+  delete process.env.LIVE_CAP;
+  const put = (owner: string, beacon: string, elements: Elements) => ({
+    ...db.insert(schema.objects).values({ kind: "satellite", owner, callsign: owner.toUpperCase(), beacon, band: "low", launchedAt: T, ...elements }).returning().get(),
+    kind: "satellite" as const,
+    direction: elements.direction,
+  });
+  const a = put("ann", "the long way round is still the way home", orbit(1.3, 0, 1));
+  const b = put("ben", "every light up here was somebody's idea", orbit(1.3 + HIT.headOn / 2, 2, -1));
+
+  it("still carries every word of both, in the fragments it has room for", () => {
+    const at = Math.round(nextMeeting(a, b, T, fatalMeeting(a, b))!);
+    const [hit] = sky.settle(at + 1).collisions;
+    expect(hit.fragments).toHaveLength(2);
+    const carried = hit.fragments.flatMap((f) => (f.words ? wordsOf(f.words) : []));
+    expect(carried.sort()).toEqual([...wordsOf(a.beacon!), ...wordsOf(b.beacon!)].sort());
+  });
+});
+
 describe("a derelict's echo", async () => {
   const { sky, db, schema } = await freshServer();
   it("is nothing while nothing has gone", () => {
@@ -343,6 +366,8 @@ describe("a derelict's echo", async () => {
     expect(sky.encountersOf("mo", at + 1)[0].other).toMatchObject({ kind: "derelict", echoOf: "LANTERN" });
     expect(sky.newsSince("mo", T, at + 1).encounters).toHaveLength(1);
     expect(sky.newsSince("mo", at + 1, at + 1).encounters).toHaveLength(0);
+    expect(sky.encountersOf("mo", at + 1, { since: at - 1, limit: 1 })).toHaveLength(1);
+    expect(sky.encountersOf("mo", at + 1, { since: at + 1 })).toHaveLength(0);
   });
 });
 

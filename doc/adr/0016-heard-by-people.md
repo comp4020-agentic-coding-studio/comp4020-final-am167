@@ -74,10 +74,19 @@ over a station; the sky keeps a log of what was heard, shown as a feed.**
   that has loaded something here besides the stream (a page, a card, a
   form). Each browser that has is kept (`visitors`, hashed as below), so a
   stream reconnecting after a restart still counts; a cookie made up for a
-  stream alone, or made for it just then, isn't anyone. The server counts
+  stream alone, or made for it just then, isn't anyone. A browser is kept
+  only once it comes back with its cookie (its page's stream, or anything
+  else); until then it's held in memory for ten minutes, so what never
+  keeps a cookie (a crawler, a link preview), or makes up a new one each
+  time, leaves no row. A restart in those ten minutes forgets it, so its
+  stream isn't counted until it loads something else. The server counts
   **people**, not tabs: each listener is their operator if signed in,
   otherwise a one-way hash of their cookie (the cookie itself is never
-  stored again). A tab hidden for a minute stops listening, as does one
+  stored again). Signing in or claiming a handle carries what that cookie
+  heard over to the operator (less anything of the operator's own), and a
+  tab opened before it listens as the operator until it reconnects, so
+  nobody is two people. Signing out is someone new, as it is for
+  launching. A tab hidden for a minute stops listening, as does one
   opened hidden. The sky page says how many are listening now.
 - **Hearing.** Every second the server works out what each station is
   broadcasting, by the same rule the screens play by. A beacon is
@@ -127,7 +136,7 @@ over a station; the sky keeps a log of what was heard, shown as a feed.**
   counts at most 200 listeners, at random. It counts people who had the
   page open while the line was on air, not people who read it.
 - Storage grows only while people listen: one row per pass heard, one per
-  new listener per satellite, and one per browser that has visited.
+  new listener per satellite, and one per browser that has come back.
   Nothing is pruned yet. At a busy hour (20 satellites, someone always
   watching) that's about 30,000 passes a day, a few megabytes; nothing is
   stored while nobody's there.

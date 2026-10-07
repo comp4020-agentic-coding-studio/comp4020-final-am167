@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { and, count, desc, eq, inArray, isNotNull, max, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { audience, publish } from "./events.ts";
@@ -7,6 +6,7 @@ import { periodNow, reentryAt, type Band } from "./orbit.ts";
 import { isOwnedBy, liveSky, rootsOf, type Fate, type Kind, type Root, type SkyObject, type Viewer } from "./sky.ts";
 import { STATIONS, stationOver, type StationId } from "./stations.ts";
 import { lineOf } from "./wreck.ts";
+import { listenerKey, sameAs } from "./listener.ts";
 
 // Being heard (ADR 0016). A beacon is heard when it's on air over a ground
 // station while people have the sky open: that pass is a transmission,
@@ -17,17 +17,7 @@ import { lineOf } from "./wreck.ts";
 
 const { objects, operators, transmissions, listens, visitors } = schema;
 
-// A listener, as the server keeps them: their operator, once signed in, so
-// two devices are one listener; otherwise a one-way hash of their cookie,
-// so the cookie (which is what lets them act as themselves) isn't kept
-// again. Shared by the event stream, which tags each listener with it.
-export function listenerKey(viewer: Viewer): string {
-  if (viewer.operator !== null) return `o:${viewer.operator}`;
-  return `p:${createHash("sha256")
-    .update(viewer.person ?? "")
-    .digest("hex")
-    .slice(0, 24)}`;
-}
+export { listenerKey };
 
 // The browsers that have asked for something here besides the event
 // stream (a page, a card, a form), as listener keys: read once, then kept
@@ -35,23 +25,60 @@ export function listenerKey(viewer: Viewer): string {
 let known: Set<string> | null = null;
 const visitorsSeen = () => (known ??= new Set(db.select({ listener: visitors.listener }).from(visitors).all().map((row) => row.listener)));
 
-// A browser asked for something here: from now on its stream counts as
-// someone listening. Kept, so a stream reconnecting after a restart still
-// counts.
-export function visited(person: string, now = Date.now()): void {
-  const key = listenerKey({ person, operator: null });
-  const seen = visitorsSeen();
-  if (seen.has(key)) return;
+// Browsers seen once and when, by a cookie that hasn't been written down:
+// written down when it comes back (its page's stream, or anything else),
+// so what never keeps a cookie (a crawler, a link preview), or makes up a
+// new one each time, leaves nothing behind. Forgotten after a while, and
+// never too many.
+const NEW_FOR = 10 * 60_000;
+const NEW_MOST = 10_000;
+const newcomers = new Map<string, number>();
+
+function keep(key: string, now: number): void {
   db.insert(visitors).values({ listener: key, at: now }).onConflictDoNothing().run();
-  seen.add(key);
+  visitorsSeen().add(key);
+  newcomers.delete(key);
+}
+
+// Seen with this cookie: true once it's been seen before (here, or by its
+// stream), and from then on it's kept.
+function seen(key: string, now: number): boolean {
+  if (visitorsSeen().has(key)) return true;
+  const first = newcomers.get(key);
+  if (first !== undefined && now - first < NEW_FOR) {
+    keep(key, now);
+    return true;
+  }
+  // new, or back too late: from now, at the end of the line
+  newcomers.delete(key);
+  for (const [old, at] of newcomers) {
+    if (now - at < NEW_FOR && newcomers.size < NEW_MOST) break;
+    newcomers.delete(old);
+  }
+  newcomers.set(key, now);
+  return false;
+}
+
+// A browser asked for something here: once it has more than once, its
+// stream counts as someone listening, and it's kept, so a stream
+// reconnecting after a restart still counts.
+export function visited(person: string, now = Date.now()): void {
+  seen(listenerKey({ person, operator: null }), now);
 }
 
 // Who an open stream counts as listening, if anyone: only a browser that
 // has loaded something here, so a cookie made up for a stream (or made for
 // it just now) isn't anyone. A script that loads a page first still is, as
 // each new browser is someone new for launching (ADR 0009).
-export function listenerFor(locals: { person: string | undefined; operator: { id: number } | null }): string | null {
-  if (!locals.person || !visitorsSeen().has(listenerKey({ person: locals.person, operator: null }))) return null;
+export function listenerFor(locals: { person: string | undefined; operator: { id: number } | null }, now = Date.now()): string | null {
+  if (!locals.person) return null;
+  const key = listenerKey({ person: locals.person, operator: null });
+  // (a stream alone isn't a sighting: it's the second look, or nothing)
+  if (!visitorsSeen().has(key)) {
+    const first = newcomers.get(key);
+    if (first === undefined || now - first >= NEW_FOR) return null;
+    keep(key, now);
+  }
   return listenerKey({ person: locals.person, operator: locals.operator?.id ?? null });
 }
 
@@ -162,10 +189,15 @@ export function listen(from: number, to: number, ears: ReadonlySet<string> = aud
   // the last look (the ear's ticks drift a little past a second)
   const times: number[] = [];
   for (let t = to; t > start && (t === to || t - start >= 500); t -= 1000) times.unshift(t);
-  const everyone = [...ears];
+  // (a tab opened before its person signed in listens as them now)
+  const everyone = [...new Set([...ears].map(sameAs))];
   const owners = new Map<number, Set<string>>();
-  // the passes this look started or credited someone to, with who and when
-  const touched = new Map<Pass, { object: SkyObject; station: StationId; started: boolean; fresh: [string, number][] }>();
+  // the passes this look started or credited someone to, with who and when,
+  // and the pass a started one replaced (to put back if the write fails)
+  const touched = new Map<
+    Pass,
+    { key: string; was: Pass | undefined; object: SkyObject; station: StationId; started: boolean; fresh: [string, number][] }
+  >();
   for (const t of times) {
     const overhead = new Map<StationId, (Speaker & { object: SkyObject })[]>();
     for (const object of speaking) {
@@ -183,6 +215,7 @@ export function listen(from: number, to: number, ears: ReadonlySet<string> = aud
       const object = now.speaker.object;
       const key = `${object.id}:${station}`;
       let pass = passesNow.get(key);
+      const was = pass;
       const started = pass === undefined || t - pass.last >= periodNow(object, t) / 2;
       if (pass === undefined || started) {
         pass = { at: t, last: t, row: 0, heard: new Set() };
@@ -197,27 +230,44 @@ export function listen(from: number, to: number, ears: ReadonlySet<string> = aud
       );
       for (const listener of fresh) credited.add(listener);
       if (!started && fresh.length === 0) continue;
-      const told = touched.get(pass) ?? touched.set(pass, { object, station, started, fresh: [] }).get(pass)!;
+      const told = touched.get(pass) ?? touched.set(pass, { key, was, object, station, started, fresh: [] }).get(pass)!;
       told.fresh.push(...fresh.map((listener): [string, number] => [listener, t]));
     }
   }
   // forget passes long over
   if (passesNow.size > 5000) for (const [key, pass] of passesNow) if (to - pass.last > 3_600_000) passesNow.delete(key);
   if (touched.size === 0) return [];
-  db.transaction((tx) => {
-    for (const [pass, { object, station, started, fresh }] of touched) {
-      if (started) {
-        pass.row = tx
-          .insert(transmissions)
-          .values({ object: object.id, station, at: pass.at, listeners: pass.heard.size })
-          .returning({ id: transmissions.id })
-          .get().id;
-      } else {
-        tx.update(transmissions).set({ listeners: pass.heard.size }).where(eq(transmissions.id, pass.row)).run();
+  try {
+    db.transaction((tx) => {
+      for (const [pass, { object, station, started, fresh }] of touched) {
+        if (started) {
+          pass.row = tx
+            .insert(transmissions)
+            .values({ object: object.id, station, at: pass.at, listeners: pass.heard.size })
+            .returning({ id: transmissions.id })
+            .get().id;
+        } else {
+          tx.update(transmissions).set({ listeners: pass.heard.size }).where(eq(transmissions.id, pass.row)).run();
+        }
+        for (const [listener, at] of fresh) tx.insert(listens).values({ object: object.id, listener, at }).onConflictDoNothing().run();
       }
-      for (const [listener, at] of fresh) tx.insert(listens).values({ object: object.id, listener, at }).onConflictDoNothing().run();
+    });
+  } catch (error) {
+    // nothing was kept, so nothing is remembered as kept: a pass that
+    // didn't get logged starts again at the next look, and whoever this
+    // look credited is credited then
+    // newest first, so a key that started two passes this look gets back
+    // the one it had before either
+    for (const [pass, { key, was, started, fresh }] of [...touched].reverse()) {
+      if (started) {
+        if (was) passesNow.set(key, was);
+        else passesNow.delete(key);
+      } else {
+        for (const [listener] of fresh) pass.heard.delete(listener);
+      }
     }
-  });
+    throw error;
+  }
   const items = new Map(feedOf([...new Set([...touched.values()].map((p) => p.object.id))]).map((item) => [item.id, item]));
   for (const [pass, { object, station }] of touched) {
     const item = items.get(object.id);
@@ -360,7 +410,7 @@ export function recentlyHeard(limit: number, who?: Viewer | string, now = Date.n
   return feedOf([...place.keys()], who).sort((a, b) => place.get(a.id)! - place.get(b.id)!);
 }
 
-// How many different people have heard an object, and over how many passes.
+// How many different people have heard an object.
 export function heardBy(id: number): number {
   return db.select({ n: count() }).from(listens).where(eq(listens.object, id)).get()?.n ?? 0;
 }

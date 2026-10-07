@@ -6,11 +6,21 @@ import type { AstroCookies } from "astro";
 export const SEEN_COOKIE = "kessler_seen";
 const A_YEAR = 365 * 24 * 60 * 60;
 
-// when they last looked, or 0 if they never have
-export function lastLooked(cookies: AstroCookies): number {
-  const at = Number(cookies.get(SEEN_COOKIE)?.value);
+// The encounter the sky's notice told them of, by when it happened, once
+// they've dismissed it there: set by the page's script, so not httpOnly.
+export const MET_COOKIE = "kessler_met";
+
+const timeIn = (cookies: AstroCookies, name: string) => {
+  const at = Number(cookies.get(name)?.value);
   return Number.isFinite(at) && at > 0 ? at : 0;
-}
+};
+
+// when they last looked, or 0 if they never have
+export const lastLooked = (cookies: AstroCookies): number => timeIn(cookies, SEEN_COOKIE);
+
+// What's news on the sky: anything after their last look at Yours, or
+// after the encounter whose notice they dismissed, whichever is later.
+export const newsFrom = (cookies: AstroCookies): number => Math.max(lastLooked(cookies), timeIn(cookies, MET_COOKIE));
 
 export function looked(cookies: AstroCookies, now: number, url: URL, headers: Headers): void {
   const https = url.protocol === "https:" || headers.get("x-forwarded-proto") === "https";

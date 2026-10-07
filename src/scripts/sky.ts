@@ -389,12 +389,17 @@ setInterval(listen, 250);
 listen();
 
 // "One of yours met something" stays until it's dismissed: it's news, and
-// the reason to go and look (ADR 0017).
+// the reason to go and look (ADR 0017). Dismissed, it stays dismissed: the
+// server tells it again only for a newer one.
 const metNotice = document.getElementById("met-notice");
 const dismiss = metNotice?.querySelector<HTMLButtonElement>(".notice-close");
 if (metNotice && dismiss) {
   dismiss.hidden = false;
-  dismiss.addEventListener("click", () => (metNotice.hidden = true));
+  dismiss.addEventListener("click", () => {
+    metNotice.hidden = true;
+    const secure = location.protocol === "https:" ? "; secure" : "";
+    document.cookie = `${metNotice.dataset.cookie}=${metNotice.dataset.at}; path=/; max-age=31536000; samesite=lax${secure}`;
+  });
 }
 
 // The "in orbit" notice after a launch floats over the scene; it fades after

@@ -45,14 +45,16 @@ const rows = result.rows;
 const counts = catalogueCounts();
 const yours = query.show === "mine";
 const yoursUp = satellitesOf(viewer).filter((o) => o.launchedAt <= now);
-const yoursHeard = heardTotals(yoursUp.map((o) => o.id));
+// (only Yours shows them)
+const yoursHeard = heardTotals(yours ? yoursUp.map((o) => o.id) : []);
 // every collision one of yours was in (ADR 0017): the only way you meet a
 // stranger here
 const ENCOUNTERS = 20;
-const encounters = yours ? encountersOf(viewer, now).slice(0, ENCOUNTERS) : [];
+const everyEncounter = yours ? encountersOf(viewer, now) : [];
+const encounters = everyEncounter.slice(0, ENCOUNTERS);
 // what's new since they last looked here, and now they have
 const since = lastLooked(Astro.cookies);
-const news = yours ? newsSince(viewer, since, now) : null;
+const news = yours ? newsSince(viewer, since, now, everyEncounter) : null;
 if (yours) looked(Astro.cookies, now, Astro.url, Astro.request.headers);
 const fresh = new Set(news?.encounters.map((e) => e.id) ?? []);
 // back from bringing one down or boosting it without JavaScript

@@ -1,4 +1,5 @@
 import type { HeardItem } from "./heard.ts";
+import { sameAs } from "./listener.ts";
 import type { CollisionReport, Conjunction, SkyObject } from "./sky.ts";
 
 // In-process pub/sub behind the SSE endpoint. One machine, so no broker needed.
@@ -26,10 +27,11 @@ const listeners = new Map<Listener, string | null>();
 // How many are listening: an open page's stream, or a test.
 export const listening = () => listeners.size;
 
-// The people listening (ADR 0016): each once, however many tabs they have open.
+// The people listening (ADR 0016): each once, however many tabs they have
+// open, and whether those tabs were opened before they signed in.
 export function audience(): Set<string> {
   const people = new Set<string>();
-  for (const who of listeners.values()) if (who) people.add(who);
+  for (const who of listeners.values()) if (who) people.add(sameAs(who));
   return people;
 }
 

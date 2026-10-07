@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { DECAY, bandAt, burnAt, periodAt } from "../src/lib/orbit.ts";
 import { OVERHEAD_HALF_WIDTH, STATIONS, stationOver } from "../src/lib/stations.ts";
@@ -154,6 +154,21 @@ describe("a beacon passing over a station", () => {
     const before = told.length;
     expect(heard.listen(T + 8_000, T + 10_000, ears("bob", "carol"))).toEqual([]);
     expect(told.length).toBe(before);
+  });
+
+  // a review of the overnight round, 2026-10-08: a write that failed at a
+  // pass's first second left the server thinking it was logged, so the rest
+  // of the pass credited people to a transmission that didn't exist
+  it("is logged once the disk takes it, if the first write of a pass fails", async () => {
+    const { heard, put, ears, db, schema } = await freshServer();
+    const sat = put("alice");
+    db.run(sql`CREATE TRIGGER full BEFORE INSERT ON transmissions BEGIN SELECT RAISE(ABORT, 'disk full'); END`);
+    expect(() => heard.listen(T, T + 4_000, ears("bob"))).toThrow(/disk full/);
+    db.run(sql`DROP TRIGGER full`);
+    const [pass] = heard.listen(T + 4_000, T + 8_000, ears("bob", "carol"));
+    expect(pass).toMatchObject({ object: sat.id, listeners: 2 });
+    expect(db.select().from(schema.transmissions).all()).toEqual([expect.objectContaining({ object: sat.id, listeners: 2 })]);
+    expect(heard.heardBy(sat.id)).toBe(2);
   });
 
   // the second review: one stranger hearing three of yours read "3 more people"
@@ -403,6 +418,61 @@ describe("listening", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // a review of the overnight round, 2026-10-08: anything that never keeps
+  // its cookie (a crawler, a link preview), or makes up a new one each time,
+  // was written down as a visitor on every request, for good
+  it("writes a browser down only once it comes back with its cookie", async () => {
+    const { heard, db, schema } = await freshServer();
+    const kept = () => db.select().from(schema.visitors).all().length;
+    heard.visited("crawler", T);
+    heard.visited("browser", T);
+    heard.visited("returning", T);
+    expect(kept()).toBe(0);
+    // the browser's page opens its stream: it's listening, and kept
+    expect(heard.listenerFor({ person: "browser", operator: null }, T + 5_000)).toBe(heard.listenerKey({ person: "browser", operator: null }));
+    // one that asks for anything else with it is kept too
+    heard.visited("returning", T + 5_000);
+    expect(kept()).toBe(2);
+    // a cookie that never came back is forgotten after a while
+    expect(heard.listenerFor({ person: "crawler", operator: null }, T + 60 * 60_000)).toBeNull();
+    heard.visited("crawler", T + 60 * 60_000);
+    expect(kept()).toBe(2);
+  });
+
+  // a review of the overnight round, 2026-10-08: someone who listened
+  // signed out, then claimed a handle, was two people
+  it("is still one person after they sign in, even in a tab still open from before", async () => {
+    const { heard, put, ears, hear } = await freshServer();
+    const operators = await import("../src/lib/operators.ts");
+    const sat = put("alice");
+    const lap = Math.round(periodAt(1.3)) - 5_000;
+    hear(T, T + lap, ears("bob"));
+    expect(heard.heardBy(sat.id)).toBe(1);
+    const claimed = await operators.claim("bob", { action: "claim", handle: "bob_listens", passphrase: "long enough" }, "test");
+    if (!claimed.ok) throw new Error("couldn't claim");
+    // a tab opened before still listens as the cookie it had
+    hear(T + lap, T + 2 * lap, ears("bob"));
+    hear(T + 2 * lap, T + 3 * lap, new Set([heard.listenerKey({ person: "bob", operator: claimed.operator.id })]));
+    expect(heard.heardBy(sat.id)).toBe(1);
+  });
+
+  // the review of those fixes: a second device signing in carried what it
+  // heard of the operator's own satellites over as the owner hearing them
+  it("doesn't count an operator as hearing their own, from a device that signs in later", async () => {
+    const { heard, put, ears, hear } = await freshServer();
+    const operators = await import("../src/lib/operators.ts");
+    const sat = put("alice-laptop");
+    const claimed = await operators.claim("alice-laptop", { action: "claim", handle: "alice_ops", passphrase: "long enough" }, "test");
+    if (!claimed.ok) throw new Error("couldn't claim");
+    const lap = Math.round(periodAt(1.3)) - 5_000;
+    // her phone, signed out, is someone else: it hears hers
+    hear(T, T + lap, ears("alice-phone"));
+    expect(heard.heardBy(sat.id)).toBe(1);
+    const signed = await operators.signIn("alice-phone", { action: "sign-in", handle: "alice_ops", passphrase: "long enough" }, "test");
+    expect(signed.ok).toBe(true);
+    expect(heard.heardBy(sat.id)).toBe(0);
   });
 
   it("knows a signed-in operator as the same listener on any device, and never keeps a cookie", async () => {

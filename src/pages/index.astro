@@ -321,7 +321,9 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     if (beacon && counter) {
       const max = beacon.maxLength;
       const show = () => {
-        const used = [...beacon.value].length;
+        // counted as the field counts to its limit (UTF-16 units, so an
+        // emoji is two), or the count says there's room the field won't give
+        const used = beacon.value.length;
         counter.textContent = `${used} / ${max}`;
         counter.classList.toggle("near", used > max - 20);
       };

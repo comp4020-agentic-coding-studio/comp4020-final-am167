@@ -2345,3 +2345,70 @@ notice clear of the buttons), 1920x1080, 1366x768 (switching cards) and
 an iPhone 14 (390 wide, no overflow, the notice dismissed).
 
 Commit `5f14155`.
+
+## 2026-10-08 — A code review of PR 7, its fixes, and an adversarial review of those
+
+A `/code-review` of PR 7 (high effort) reported ten findings. Fixed, test
+first where there was a contract to test:
+
+- **The wreck lost words in a nearly full sky.** Shards were cut for every
+  fragment `fragmentsOf` made, then the fragments were cut to `LIVE_CAP`,
+  so the words dealt to the dropped ones went with them (at the cap, all of
+  them). Now the shards are cut for the fragments there's room for. New
+  test, with `LIVE_CAP=2`: every word of both still survives.
+- **A failed write left `listen()` thinking a pass was logged.** The
+  in-memory pass (and who it had credited) was set before the transaction;
+  if it threw, the rest of the pass updated transmission row 0 (nothing)
+  while still inserting `listens`, so "heard by" could be above zero with
+  no passes. Now a failed write puts the passes back as they were (newest
+  first), so the pass starts again at the next look. Tested with a trigger
+  that aborts the insert.
+- **"One of yours met something" came back on every visit** after it was
+  dismissed, since only Yours moved the seen cookie. Dismissing now sets
+  `kessler_met` to the encounter's time, and the sky tells only encounters
+  after the later of that and the last look at Yours (`newsFrom`, new
+  `spec/seen.test.ts`).
+- **Every request without a cookie wrote a `visitors` row, for good**
+  (crawlers, link previews). A cookie the server hasn't kept is now held in
+  memory (ten minutes, at most 10,000) and written down when it comes back:
+  its page's stream, or any other request.
+- **One person was two listeners** once they signed in (`p:<hash>`, then
+  `o:<id>`). `link()` (claim and sign-in) now moves the cookie's `listens`
+  rows to the operator. `listenerKey` moved to `src/lib/listener.ts`, so
+  `operators.ts` can use it without an import cycle.
+- Efficiency: `encountersOf` takes `since` and `limit` in SQL. Yours reads
+  its encounters once (`newsSince` takes the list). The sky asks for one
+  encounter, not every story. `/object/<id>/` checks existence with
+  `objectById` instead of a second `historyOf`. `heardTotals` runs only in
+  Yours.
+- The beacon counter counts as the textarea's `maxlength` does (UTF-16
+  units), so it never says there's room the field won't give.
+- One finding was half wrong: `heardBy(id)` in `heard.ts` isn't dead (the
+  spec uses it), but its comment claimed it counted passes. The comment is
+  fixed.
+
+Then a fresh Sonnet reviewer attacked the fixes. It judged 1, 3, 5–9
+complete, and 2, 4 and 10 partial:
+
+- **Rollback order**: two passes started for one key in one look would
+  restore the wrong one. Fixed by rolling back newest first.
+- **A second device signing in** carried over what it had heard of the
+  operator's own satellites, as the owner hearing their own. `link()` now
+  drops those rows (new test).
+- **A tab still open from before signing in** kept crediting the old cookie
+  key. Signing in now maps that key to the operator in memory
+  (`listener.ts`), for crediting and for the listening count (the sign-in
+  test now listens through such a tab).
+- **A made-up cookie, new each time**, was still written down, since it
+  was well formed. Now any cookie the server hasn't kept needs a second
+  sighting, so the "minted" flag is gone and the middleware is simpler.
+
+Left as said in ADR 0016 (updated, still proposed): a restart within ten
+minutes of someone's first page forgets them until they load something
+else. Signing out makes someone new, as it does for launching. A
+dismissal is per browser. No HTTP test drives the met notice, since an
+encounter can't be staged over HTTP. Re-review not run: the revision was
+four targeted fixes, each with its own test.
+
+`pnpm check` green (297 tests, 0 errors, 0 warnings) against a fresh
+build on a scratch database; `pnpm check:evidence` green.
