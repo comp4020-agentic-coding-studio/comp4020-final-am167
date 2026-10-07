@@ -2017,3 +2017,51 @@ database holder could link owners to listening); the new tables
 unbounded. Opinions: the Why page leans preachy in places; the question
 turning at 10–11 am in Canberra suits the marker less than midnight
 there. And a list of README claims now stale, for my rewrite.
+
+## 2026-10-07 — Review fix 1: heard means on air, by people already here
+
+Acting on the review's findings 1, 4, 9 and part of 3:
+
+- **Heard means on air.** The stations' turn-taking is one shared rule now
+  (`onAir` in `src/lib/airtime.ts`): each beacon overhead takes its own
+  turn, and **all the static overhead shares one turn** between it (a
+  fragment a cycle), so a cascade's fragments can crowd a station but
+  never drown it (they took about 40% of every station's airtime before).
+  The server's ear no longer credits a satellite for coming into a window:
+  once a second it works out what each station is broadcasting by that
+  same rule, and a beacon is heard the first time it's on air in a pass
+  (the same pass until it's been off that station for half a lap). One
+  that never gets a turn isn't heard. This also fixes the undercount the
+  reviewer found when one look spans more than a lap (after a stall it
+  looks back up to ten minutes, a second at a time).
+- **Listeners are people who loaded a page.** A stream whose cookie was
+  made for it just then (a script, not a page someone opened) still hears
+  everything but isn't counted (`listenerFor`); a pass credits at most 200
+  listeners; a tab left hidden stops listening after a minute (its stream
+  closes, "Paused"; showing it again reconnects and catches up). Checked:
+  two cookieless `curl /api/events` streams open, and the sky still said
+  "Just you, listening". A second browser or private window is still
+  someone else here, as it is for launching (ADR 0009); the ADR now says
+  that, instead of "nobody can raise their own".
+- **The audience count**: a stream that broke is recounted when it's
+  dropped (it wasn't), and the number is announced once it settles (1.5 s),
+  so a page reloading doesn't tell everyone n−1 then n.
+- The station rows say "Heard by 3 people · 2 more overhead" instead of
+  "2 of 3 overhead".
+- ADR 0016 (still proposed) says all this, and owns up to what the
+  listener hash doesn't protect; ADR 0017 says static shares a turn.
+
+Tests first where they could be: `spec/airtime.test.ts` for the rule
+(nobody overhead; beacons in turn by id; six fragments and a beacon,
+about half each and every fragment heard in time; static alone). In
+`spec/heard-server.test.ts`: five 140-character lines over Canberra at
+once, heard fewer than five times, never twice in a pass, each on air by
+the rule when credited (this failed against the old entry-crediting code:
+all five were credited); a beacon gets through four fragments; heard only
+once it's up; a stream with a just-made cookie isn't a listener; the
+audience announced after settling and recounted when a stream breaks
+(fake timers); and the ear's own one-second timer crediting a pass by
+itself (fake timers; the reviewer noted deleting `startListening()` left
+the suite green). The lap test now looks at just under a lap: over a lap
+plus ten seconds the new code rightly finds Canberra twice. `pnpm check`
+green (277 tests), on a fresh database.

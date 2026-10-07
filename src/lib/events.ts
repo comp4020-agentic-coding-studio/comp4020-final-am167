@@ -33,13 +33,19 @@ export function audience(): Set<string> {
   return people;
 }
 
-// Everyone is told when the number of people listening changes.
-let heardCount = 0;
+// Everyone is told when the number of people listening changes, a moment
+// after it settles (a page reloading leaves and comes back: no news).
+let announced = 0;
+let settling: ReturnType<typeof setTimeout> | undefined;
 function recount(): void {
-  const now = audience().size;
-  if (now === heardCount) return;
-  heardCount = now;
-  publish({ type: "audience", listening: now });
+  clearTimeout(settling);
+  settling = setTimeout(() => {
+    const now = audience().size;
+    if (now === announced) return;
+    announced = now;
+    publish({ type: "audience", listening: now });
+  }, 1500);
+  settling.unref?.();
 }
 
 export function subscribe(fn: Listener, who: string | null = null): () => void {
@@ -55,11 +61,14 @@ export function subscribe(fn: Listener, who: string | null = null): () => void {
 // One broken stream mustn't stop the others hearing, or fail the launch that
 // caused the event (it's already saved): drop it and carry on.
 export function publish(event: SkyEvent): void {
+  let dropped = false;
   for (const fn of [...listeners.keys()]) {
     try {
       fn(event);
     } catch {
+      if (listeners.get(fn)) dropped = true;
       listeners.delete(fn);
     }
   }
+  if (dropped) recount();
 }

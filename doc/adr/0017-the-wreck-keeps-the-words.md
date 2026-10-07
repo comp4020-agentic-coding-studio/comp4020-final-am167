@@ -77,8 +77,10 @@ Yours.**
   filter (two clean lines can't spell anything run together, but it's
   checked anyway) and dropped if it fails.
 - **Static.** A fragment with words is heard over the stations like a
-  beacon: it takes turns, it's logged when someone's listening, and it
-  appears in the feed (ADR 0016), styled as static, from whose collision.
+  beacon: it's logged when someone's listening, and it appears in the feed
+  (ADR 0016), styled as static, from whose collision. All the static over
+  a station shares one turn between it (a fragment a cycle), so a crash
+  costs every beacon there a share of the airtime without drowning them.
   Silent fragments and derelicts stay silent.
 - **What the wreck says.** A collision is told with its two beacons (the
   couplet) and with its wreck: every fragment's shard in order, the ones

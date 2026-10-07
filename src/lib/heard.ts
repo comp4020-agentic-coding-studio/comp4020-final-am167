@@ -2,9 +2,11 @@ import { createHash } from "node:crypto";
 import { count, desc, eq, inArray, max, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { audience, publish } from "./events.ts";
-import type { Band } from "./orbit.ts";
+import { onAir, type Speaker } from "./airtime.ts";
+import { periodNow, reentryAt, type Band } from "./orbit.ts";
 import { isOwnedBy, liveSky, rootsOf, type Fate, type Kind, type Root, type SkyObject, type Viewer } from "./sky.ts";
-import { STATIONS, untilStation, type StationId } from "./stations.ts";
+import { STATIONS, stationOver, type StationId } from "./stations.ts";
+import { lineOf } from "./wreck.ts";
 
 // Being heard (ADR 0016). A beacon is heard when its satellite comes over a
 // ground station while people have the sky open: that pass is a
@@ -25,6 +27,13 @@ export function listenerKey(viewer: Viewer): string {
     .update(viewer.person ?? "")
     .digest("hex")
     .slice(0, 24)}`;
+}
+
+// Who an open stream counts as listening, if anyone: not a stream whose
+// cookie was made for it just now (a script, not a page someone opened).
+// Each new browser is still someone new, as it is for launching (ADR 0009).
+export function listenerFor(locals: { person: string | undefined; newPerson: boolean; operator: { id: number } | null }): string | null {
+  return locals.newPerson ? null : listenerKey({ person: locals.person, operator: locals.operator?.id ?? null });
 }
 
 // The keys an object's owner listens as: the operator it belongs to, and the
@@ -79,27 +88,59 @@ export const HEARD_FEED = 30;
 
 const stationName = (id: string) => STATIONS.find((s) => s.id === id)?.name ?? id;
 
-// Every pass over a station between `from` and `to`, heard by `ears` (the
-// people listening now, by default): logged, counted, and told to everyone.
-// The server runs this every second while anyone is listening; it's exact,
-// not sampled, since when a satellite comes into a window is closed form
-// (stations.ts, untilStation).
+// How many listeners one pass can credit: past this the sky is being
+// gamed (scripted streams), not listened to, and a pass shouldn't write
+// thousands of rows.
+export const MOST_COUNTED = 200;
+// how far back one look goes, after a stall: ten minutes, a second at a time
+const LONGEST_LOOK = 10 * 60_000;
+
+// Each pass credited so far, by object and station, with when it was last on
+// air there: it's the same pass until it has been off that station for
+// half a lap.
+const lastOnAir = new Map<string, number>();
+
+// Every pass heard between `from` and `to` by `ears` (the people listening
+// now, by default): looking once a second at what each station is
+// broadcasting (airtime.ts, the same rule every screen plays by), a beacon
+// is heard the first time it's on air in a pass, not merely for coming
+// over, so one that never gets a turn isn't. Logged, counted, and told to
+// everyone. The server runs this every second while anyone is listening.
 export function listen(from: number, to: number, ears: ReadonlySet<string> = audience()): Transmission[] {
   if (ears.size === 0 || to <= from) return [];
+  const speaking = liveSky(to).filter(speaks);
+  if (speaking.length === 0) return [];
+  const start = Math.max(from, to - LONGEST_LOOK);
+  const times: number[] = [];
+  for (let t = to; t > start; t -= 1000) times.unshift(t);
   const passes: { object: SkyObject; station: StationId; at: number; heard: string[] }[] = [];
-  for (const object of liveSky(to).filter(speaks)) {
-    // only from when it was up there on this orbit
-    const start = Math.max(from, object.epoch, object.launchedAt);
-    if (start >= to) continue;
-    const own = ownerKeys(object);
-    const heard = [...ears].filter((key) => !own.has(key));
-    for (const station of STATIONS) {
-      const ms = untilStation(object, start, station);
-      if (ms !== null && start + ms <= to) passes.push({ object, station: station.id, at: Math.round(start + ms), heard });
+  for (const t of times) {
+    const overhead = new Map<StationId, (Speaker & { object: SkyObject })[]>();
+    for (const object of speaking) {
+      // up there, on this orbit, and not yet burned up
+      if (object.launchedAt > t || object.epoch > t || t >= reentryAt(object)) continue;
+      const station = stationOver(object, t);
+      if (!station) continue;
+      const here = overhead.get(station.id) ?? [];
+      here.push({ id: object.id, text: lineOf(object) ?? "", static: object.kind === "debris", object });
+      overhead.set(station.id, here);
+    }
+    for (const [station, here] of overhead) {
+      const now = onAir(here, t);
+      if (!now) continue;
+      const object = now.speaker.object;
+      const key = `${object.id}:${station}`;
+      const last = lastOnAir.get(key);
+      lastOnAir.set(key, t);
+      if (last !== undefined && t - last < periodNow(object, t) / 2) continue;
+      const own = ownerKeys(object);
+      const heard = [...ears].filter((listener) => !own.has(listener)).slice(0, MOST_COUNTED);
+      passes.push({ object, station, at: t, heard });
     }
   }
+  // forget passes long over
+  if (lastOnAir.size > 5000) for (const [key, at] of lastOnAir) if (to - at > 3_600_000) lastOnAir.delete(key);
   if (passes.length === 0) return [];
-  passes.sort((a, b) => a.at - b.at || a.object.id - b.object.id);
   db.transaction((tx) => {
     for (const pass of passes) {
       tx.insert(transmissions)

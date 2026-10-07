@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { audience, subscribe } from "../../lib/events.ts";
 import type { SkyEvent } from "../../lib/events.ts";
-import { HEARD_FEED, heardCounts, listenerKey, recentlyHeard, startListening } from "../../lib/heard.ts";
+import { HEARD_FEED, heardCounts, listenerFor, recentlyHeard, startListening } from "../../lib/heard.ts";
 import { conjunctions, isOwnedBy, liveSky, recentCollisions, toPublic, watcherArrived } from "../../lib/sky.ts";
 
 // One stream per open page (ADR 0004). It opens with the server's time, a
@@ -43,9 +43,11 @@ export const GET: APIRoute = ({ request, locals }) => {
       // hold what the snapshot itself sets off (a burn-up it catches up on, a
       // collision staged for this viewer) until after it: hello comes first
       let held: SkyEvent[] | null = [];
+      // a stream with a cookie made just now (a script, not a page someone
+      // opened) hears everything but isn't counted as listening (ADR 0016)
       const unsubscribe = subscribe(
         (event) => (held ? held.push(event) : send(event.type, visible(event))),
-        listenerKey(viewer),
+        listenerFor(locals),
       );
       watcherArrived();
       startListening();

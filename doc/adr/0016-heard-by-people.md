@@ -67,18 +67,26 @@ over a station; the sky keeps a log of what was heard, shown as a feed.**
 - **A beacon is at most 140 characters**, with the same rules (plain text,
   no links, the word filter). The stations give each beacon overhead a turn
   long enough to read it (longer lines get longer turns, between 4 and 10
-  seconds), by the server's clock, so every screen still shows the same one.
-- **Listening** is having the sky open: its event stream. The server
-  counts **people**, not tabs: each listener is their operator if signed in,
-  otherwise a one-way hash of their cookie (the cookie itself is never
-  stored again). The sky page says how many are listening now.
-- **Hearing.** Every second the server looks at what came into a station's
-  window since its last look. A pass while at least one person is listening
-  is a **transmission**: logged with the station, the time and how many
-  were listening. Each listener who isn't the satellite's own owner is
-  recorded as having heard it, once per satellite, so **"heard by"** is the
-  number of different people who were there for at least one of its passes.
-  A pass with nobody listening isn't heard, and isn't logged. Everyone is
+  seconds), and all the static overhead (ADR 0017) one turn between them,
+  by the server's clock, so every screen still shows the same one
+  (`src/lib/airtime.ts`).
+- **Listening** is having the sky open: its event stream, from a page
+  someone loaded (a stream whose cookie was made for it just then, a
+  script's, isn't counted). The server counts **people**, not tabs: each
+  listener is their operator if signed in, otherwise a one-way hash of
+  their cookie (the cookie itself is never stored again). A tab left hidden
+  stops listening after a minute. The sky page says how many are
+  listening now.
+- **Hearing.** Every second the server works out what each station is
+  broadcasting, by the same rule the screens play by. A beacon is
+  **heard** the first time it's on air in a pass (not merely for coming
+  over: one that never gets a turn isn't heard). A pass heard while at
+  least one person is listening is a **transmission**: logged with the
+  station, the time and how many were listening. Each listener who isn't
+  the satellite's own owner is recorded as having heard it, once per
+  satellite (at most 200 a pass), so **"heard by"** is the number of
+  different people who were there for at least one of its turns on air. A
+  pass with nobody listening isn't heard, and isn't logged. Everyone is
   told (`heard`).
 - **The feed.** The sky page has a column (under the sky on a phone): the
   three stations, live, as before, and under them **Heard**: each beacon
@@ -103,10 +111,13 @@ over a station; the sky keeps a log of what was heard, shown as a feed.**
 - The page now has people on it: who said what, who heard it, how many are
   here now. Being online at the same time as someone matters: you're their
   audience, and they're yours.
-- "Heard by" is a score, and scores get gamed: one person with two browsers
-  counts twice (accepted, as ADR 0009 accepts it), and nobody can raise
-  their own count, since the owner isn't counted. It counts people who had
-  the page open, not people who read the line.
+- "Heard by" is a score, and scores get gamed. Your own listening never
+  counts towards your own, but a second browser (or a private window) is
+  someone else here, as it is for launching (ADR 0009's accepted cost), so
+  one determined person can raise their count. Scripted streams that never
+  loaded a page don't count, and a pass counts at most 200 listeners. It
+  counts people who had the page open while the line was on air, not people
+  who read it.
 - Storage grows only while people listen: one row per pass heard, one per
   new listener per satellite. At a busy hour (20 satellites, someone always
   watching) that's about 30,000 passes a day, a few megabytes; nothing is
@@ -117,7 +128,14 @@ over a station; the sky keeps a log of what was heard, shown as a feed.**
 - A beacon that's been heard is public in the feed while its satellite still
   flies. The station is no longer the only place a live beacon is read,
   but it's the only place it's heard: a beacon enters the log only by
-  passing over one while someone's there.
+  being on air over one while someone's there. As with ADR 0012, the
+  withholding before that is a rule of the game, not a secret: the sky
+  page's data carries every live beacon so the stations can play it.
+- The listener hash is plain SHA-256 of a random cookie: enough that the
+  log can't be used to act as anyone, but whoever holds the database also
+  holds the owners' cookies (`objects.owner`), so could link owners to
+  what they listened to. Accepted for a class project; a keyed hash with a
+  secret outside the database would close it.
 - Testable on the server against throwaway databases with the clock passed
   in: a pass with listeners is logged, the owner isn't counted, the same
   person twice counts once, a pass with nobody listening isn't logged, a

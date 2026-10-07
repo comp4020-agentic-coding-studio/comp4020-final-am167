@@ -1,4 +1,4 @@
-import { turnAt, turnLength } from "../lib/airtime.ts";
+import { onAir } from "../lib/airtime.ts";
 import { ago, until } from "../lib/format.ts";
 import { BANDS, bandAt, climbing, plungeAt, radiusAt, reentryAt, type Band } from "../lib/orbit.ts";
 import { STATIONS, nextStation, stationOver, untilStation, type StationId } from "../lib/stations.ts";
@@ -255,10 +255,15 @@ function listen() {
   const over = new Map(talking.map((sat) => [sat.id, stationOver(sat, time)]));
   for (const post of posts) {
     const here = talking.filter((sat) => over.get(sat.id)?.id === post.station.id).sort((a, b) => a.id - b.id);
-    // more than one overhead take turns, each long enough to read (by the
-    // server's clock, so every screen shows the same one at once)
-    const turn = turnAt(here.map((s) => turnLength(lineOf(s))), time);
-    const sat = here[turn];
+    // more than one overhead take turns, each beacon long enough to read and
+    // all the static sharing one, by the server's clock, so every screen
+    // shows the same one at once, and the server credits who was on air
+    // (airtime.ts)
+    const now = onAir(
+      here.map((s) => ({ id: s.id, text: lineOf(s), static: s.kind === "debris", sat: s })),
+      time,
+    );
+    const sat = now?.speaker.sat;
     const key = sat ? String(sat.id) : "";
     if (key !== post.key) {
       post.key = key;
@@ -276,7 +281,8 @@ function listen() {
       }
     }
     let said: string;
-    if (sat) said = here.length > 1 ? `${turn + 1} of ${here.length} overhead` : heardBy(heardCount.get(sat.id) ?? 0, sat.mine);
+    const more = here.length > 1 ? ` · ${here.length - 1} more overhead` : "";
+    if (sat) said = sat.kind === "debris" ? `${here.length} overhead` : `${heardBy(heardCount.get(sat.id) ?? 0, sat.mine)}${more}`;
     else {
       // the next to come into this station's window
       let soonest: { sat: Satellite; ms: number } | null = null;
@@ -701,8 +707,10 @@ const setConnection = (state: "live" | "offline") => {
 // EventSource retries a dropped connection by itself, but gives up for good
 // if a reconnect gets an error response (Fly answers 502/503 while a machine
 // starts or deploys), so start a fresh one when that happens.
+let current: EventSource | null = null;
 function connect() {
   const stream = new EventSource("/api/events");
+  current = stream;
 
   stream.addEventListener("hello", (event) => {
     const hello = JSON.parse(event.data) as {
@@ -794,7 +802,25 @@ function connect() {
 
   stream.addEventListener("error", () => {
     setConnection("offline");
-    if (stream.readyState === EventSource.CLOSED) setTimeout(connect, 3000);
+    if (stream.readyState === EventSource.CLOSED && current === stream) setTimeout(connect, 3000);
   });
 }
 connect();
+
+// A tab left hidden stops listening after a minute: it isn't anyone's
+// audience (ADR 0016). Coming back to it reconnects, and the stream's hello
+// catches the page up.
+let hiddenFor: ReturnType<typeof setTimeout> | undefined;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    hiddenFor = setTimeout(() => {
+      current?.close();
+      current = null;
+      connection.dataset.state = "offline";
+      connection.textContent = "Paused";
+    }, 60_000);
+  } else {
+    clearTimeout(hiddenFor);
+    if (!current) connect();
+  }
+});

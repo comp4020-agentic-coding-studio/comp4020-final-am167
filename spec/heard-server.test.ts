@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { DECAY, bandAt, burnAt, periodAt } from "../src/lib/orbit.ts";
-import { OVERHEAD_HALF_WIDTH, STATIONS } from "../src/lib/stations.ts";
+import { OVERHEAD_HALF_WIDTH, STATIONS, stationOver } from "../src/lib/stations.ts";
+import { onAir } from "../src/lib/airtime.ts";
 import type { SkyEvent } from "../src/lib/events.ts";
 
 // Being heard (ADR 0016): a beacon passing over a ground station while
@@ -101,8 +102,8 @@ describe("a beacon passing over a station", () => {
   it("counts each person once, however many passes they hear", async () => {
     const { heard, put, ears } = await freshServer();
     const sat = put("alice");
-    // a whole lap: over all three stations
-    const lap = Math.round(periodAt(1.3)) + 10_000;
+    // nearly a whole lap: over each of the three stations once
+    const lap = Math.round(periodAt(1.3)) - 5_000;
     const passes = heard.listen(T, T + lap, ears("bob", "carol"));
     expect(passes.map((p) => p.station).sort()).toEqual(["canberra", "goldstone", "madrid"]);
     heard.listen(T + lap, T + 2 * lap, ears("bob", "dan"));
@@ -118,11 +119,49 @@ describe("a beacon passing over a station", () => {
     expect(heard.recentlyHeard(10, undefined, T + 10_000)).toEqual([]);
   });
 
-  it("is heard only from when it's launched", async () => {
+  it("is heard only once it's up", async () => {
     const { heard, put, ears } = await freshServer();
-    // launched 5 s in, already in the window: it hasn't come into it
+    // launched 5 s in, straight into Canberra's window
     const sat = put("alice", { phase: CANBERRA.angle, epoch: T + 5_000 });
-    expect(heard.listen(T, T + 10_000, ears("bob")).filter((p) => p.object === sat.id)).toEqual([]);
+    expect(heard.listen(T, T + 4_000, ears("bob"))).toEqual([]);
+    const [pass] = heard.listen(T + 4_000, T + 10_000, ears("bob"));
+    expect(pass).toMatchObject({ object: sat.id, station: "canberra" });
+    expect(pass.at).toBeGreaterThanOrEqual(T + 5_000);
+  });
+
+  // the review, 2026-10-07: heard means on air, not merely overhead
+  it("is heard only when it gets a turn on air, and once a pass", async () => {
+    const { sky, heard, put, ears } = await freshServer();
+    // five long lines over Canberra at once: ten seconds a turn, in a
+    // window about thirteen seconds long, so not all of them get one
+    const long = "a line long enough to need a whole turn to itself, near the limit of what a beacon can say, and then a bit more".padEnd(140, ".");
+    const sats = ["a", "b", "c", "d", "e"].map((who) => put(who, { phase: NEAR_CANBERRA + 0.0001 * who.charCodeAt(0), beacon: long }));
+    const window = 60_000;
+    const passes = heard.listen(T, T + window, ears("zed"));
+    const ids = passes.map((p) => p.object);
+    // never the same satellite twice over one station in one pass
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.length).toBeLessThan(sats.length);
+    // and each was on air when it was heard, by the rule every screen plays
+    for (const pass of passes) {
+      const here = sky
+        .liveSky(pass.at)
+        .filter((o) => stationOver(o, pass.at)?.id === pass.station && o.beacon)
+        .map((o) => ({ id: o.id, text: o.beacon!, static: false }));
+      expect(onAir(here, pass.at)?.speaker.id).toBe(pass.object);
+    }
+  });
+
+  it("shares one turn between all the static overhead", async () => {
+    const { heard, db, schema, put, ears } = await freshServer();
+    const sat = put("alice");
+    const pieces = [1, 2, 3, 4].map((n) => put(null, { kind: "derelict", phase: NEAR_CANBERRA + n * 0.0001 }));
+    for (const piece of pieces) {
+      db.update(schema.objects).set({ kind: "debris", words: `piece ${piece.id} … of two lines` }).where(eq(schema.objects.id, piece.id)).run();
+    }
+    const passes = heard.listen(T, T + 20_000, ears("bob"));
+    // the beacon gets through
+    expect(passes.map((p) => p.object)).toContain(sat.id);
   });
 
   it("is never heard from a satellite that burns up first", async () => {
@@ -198,6 +237,50 @@ describe("listening", () => {
     expect(events.audience().size).toBe(2);
     for (const off of offs) off();
     expect(events.audience().size).toBe(0);
+  });
+
+  it("doesn't count a stream whose cookie was made just for it", async () => {
+    const { heard } = await freshServer();
+    expect(heard.listenerFor({ person: "fresh", newPerson: true, operator: null })).toBeNull();
+    expect(heard.listenerFor({ person: "kept", newPerson: false, operator: null })).toBe(heard.listenerKey({ person: "kept", operator: null }));
+  });
+
+  it("tells everyone how many are listening once it settles, and recounts a stream that broke", async () => {
+    vi.useFakeTimers();
+    try {
+      const { told } = await freshServer();
+      const events = await import("../src/lib/events.ts");
+      events.subscribe(() => {}, "p:one");
+      events.subscribe(() => {
+        throw new Error("gone");
+      }, "p:two");
+      await vi.advanceTimersByTimeAsync(2_000);
+      const counts = () => told.flatMap((e) => (e.type === "audience" ? [e.listening] : []));
+      expect(counts().at(-1)).toBe(2);
+      // the broken one is dropped the next time anything is told
+      events.publish({ type: "audience", listening: 0 });
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(counts().at(-1)).toBe(1);
+      expect(events.audience().size).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("listens every second by itself, once started", async () => {
+    vi.useFakeTimers({ now: T });
+    try {
+      const { heard, put, key } = await freshServer();
+      const events = await import("../src/lib/events.ts");
+      const sat = put("alice");
+      const off = events.subscribe(() => {}, key("bob"));
+      heard.startListening();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(heard.heardBy(sat.id)).toBe(1);
+      off();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("knows a signed-in operator as the same listener on any device, and never keeps a cookie", async () => {
