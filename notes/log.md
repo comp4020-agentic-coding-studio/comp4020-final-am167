@@ -1348,4 +1348,9 @@ What it found, and what changed:
   would be brittle), and checking picking in the zoomed-out view (it uses
   the same view bounds as the labels).
 
-`pnpm check` green (197 tests), against a fresh build.
+`pnpm check` green (197 tests), against a fresh build. Commit `93f8735`.
+
+Advay asked for a CLAUDE.md rule after I found port 8080 held by a server
+from another worktree: only kill servers you started, checking uptime
+(`ps -o etime`) and working directory (`lsof -d cwd`) first, and use
+another port otherwise.
