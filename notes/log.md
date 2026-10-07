@@ -1767,3 +1767,9 @@ green, and only merging into `main` (or opening a PR into it) waits for
 him. A red state is never committed either way.
 
 Commit `7093bf8`.
+
+Corrected straight after: committing off `main` needs no ask, but pushing
+still does. Advay says "push", or asks for something that needs one ("open
+a PR"). The rule as first written also let agents push and held back PRs
+into `main`, which he hadn't asked for.
+

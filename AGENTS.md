@@ -52,9 +52,9 @@ for.
 - **On `main`, never commit without my approval.** Get the checks green, then
   show me what changed and wait for me to say commit. Green checks aren't the
   go-ahead there, and approval is per-commit.
-- **On any other branch, commit without asking** once the checks are green,
-  and push to that branch. Merging into `main` (or opening a PR into it)
-  still waits for me. Either way, a red state is never committed.
+- **On any other branch, commit without asking** once the checks are green.
+  Pushing still waits for me: I'll say "push", or ask for something that
+  needs one, like "open a PR". Either way, a red state is never committed.
 - **Never suggest, ask about, or perform publishing/deploying** (flipping the
   repo public, `flyctl deploy`, pushing to `main` once public) unless I
   explicitly say so.
