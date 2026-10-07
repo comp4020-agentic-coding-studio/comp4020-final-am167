@@ -2411,4 +2411,4 @@ encounter can't be staged over HTTP. Re-review not run: the revision was
 four targeted fixes, each with its own test.
 
 `pnpm check` green (297 tests, 0 errors, 0 warnings) against a fresh
-build on a scratch database; `pnpm check:evidence` green.
+build on a scratch database; `pnpm check:evidence` green. Commit `bef0696`.
