@@ -1781,3 +1781,5 @@ Commit `43c965c`.
 `AGENTS.md` was a copy of `CLAUDE.md` for Codex sessions, which every rule
 change had to be made twice in. Advay had it removed; `CLAUDE.md` is the one
 set of instructions.
+
+Commit `a3c9abd`.
