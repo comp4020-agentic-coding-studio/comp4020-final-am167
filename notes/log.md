@@ -1712,3 +1712,5 @@ bottom. Fixed on the way: the card's countdown spans ran into each other
 rather than half-overlapping them (they're inert behind it anyway).
 
 ![Yours in the catalogue: a card for each of mine in orbit with its beacon, countdowns and controls, then my record](screenshots/2026-10-07-yours-in-the-catalogue.png)
+
+Commit `51e1fc0`.
