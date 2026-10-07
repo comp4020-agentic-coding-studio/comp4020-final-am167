@@ -2500,4 +2500,4 @@ claims with numbers, tests written as behaviour, trade-offs named
 honestly). The comments don't render on `/readme/`; the headings do, so
 the invariant test still passes. The old text is at `d8fb66a`.
 `pnpm check` green (305 tests, 0 errors, 0 warnings) against a fresh
-build.
+build. Commit `cce5e32`.
