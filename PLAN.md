@@ -44,6 +44,8 @@ _Last updated 2026-10-06 (collisions, operators)._
   timer crashing the process), then the should-fixes, then `PROCESS.md`
   and `reflections/crit-9.md`. `README.md` still says "one live satellite
   each" (Advay's rewrite).
+  2026-10-07: the nudge to claim a handle is now a pop-up on arriving at
+  the launchpad (once a visit, closable, never a gate).
   2026-10-06: **orbital decay** (ADR 0007, accepted): every
   orbit falls, faster the lower it is, and ends in a 30-second burn-up drawn
   as a real re-entry (fireball, cooling wake, breakup, sparks). Bands are

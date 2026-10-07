@@ -1106,3 +1106,24 @@ button, which would cut into the launch animation: a line under the button
 device, and your name on what they do", or "Launching as *handle*"), and
 the same offer on the notice straight after launching, which then stays up
 twice as long on desktop. Tests in `spec/operator.test.ts`.
+
+## 2026-10-07 — C9: the handle nudge becomes a pop-up on the launchpad
+
+Advay didn't think the line under the Launch button was enough, and wanted a
+pop-up on the launchpad. It opens on arrival (a modal `<dialog>`), before
+anything is launched, so it doesn't cut into the launch animation, the
+reason a pop-up was turned down last time. It says what's lost without a
+handle (your satellites are tied to this browser) and what one gives (they
+follow you, and collisions name you), with "Claim a handle", "I have one:
+sign in" and "Launch without a handle", which just closes it: still a nudge,
+never a gate (ADR 0009). Escape or a click on the backdrop closes it too.
+
+Once a visit (sessionStorage, marked when shown, so following a link to the
+operator page and coming back doesn't bring it up again), never for someone
+with a handle, and not when the form comes back with errors. Without
+JavaScript it stays closed and the line under the button still makes the
+offer. Test in `spec/operator.test.ts`, failing first against the old page.
+Checked in Chrome at 1920x1080 and iPhone 14: it opens, focus lands on
+"Claim a handle", closing works and a reload doesn't reopen it.
+
+![The launchpad on arrival without a handle: the pop-up over the pad, the old line still under the Launch button](screenshots/2026-10-07-launchpad-handle-popup.png)
