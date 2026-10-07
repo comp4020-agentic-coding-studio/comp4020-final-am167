@@ -1706,3 +1706,5 @@ while under half), the derelict minimum. Not tested: the retry after a
 failed write (needs a failing disk). Not acted on: disclosure on the
 catalogue and blame lines (Advay's call: no disclosure for now), and the
 README (to be rewritten later, noted in `PLAN.md`).
+
+Commit `b58c2ac`.
