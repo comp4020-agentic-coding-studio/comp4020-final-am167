@@ -192,6 +192,8 @@ describe("nudging an anonymous launcher towards a handle", () => {
     const page = doc(await (await new Session(baseUrl).get("/")).text());
     expect(page.querySelector(".console")?.textContent).toMatch(/without a handle/i);
     expect(nudge(page).length).toBeGreaterThan(0);
+    // and back to the launchpad afterwards, like the pop-up's
+    for (const a of nudge(page)) expect(a.getAttribute("href")).toMatch(/back=launchpad/);
     expect(page.querySelector("form[data-launch] fieldset")?.hasAttribute("disabled")).toBe(false);
   });
 
@@ -202,6 +204,49 @@ describe("nudging an anonymous launcher towards a handle", () => {
     expect(popup!.querySelector('a[href^="/operator/"]'), "the pop-up offers no handle").not.toBeNull();
     // closing it is always on offer, and needs no JavaScript beyond the dialog's own
     expect(popup!.querySelector('form[method="dialog"] button')?.textContent).toMatch(/without/i);
+  });
+
+  it("brings you back to the launchpad once you've claimed or signed in from it", async () => {
+    const pad = doc(await (await new Session(baseUrl).get("/")).text());
+    const links = [...pad.querySelectorAll<HTMLAnchorElement>('dialog#handle-prompt a[href^="/operator/"]')];
+    expect(links.length).toBeGreaterThan(0);
+    for (const a of links) expect(a.getAttribute("href"), "a pop-up link that won't come back").toMatch(/back=launchpad/);
+
+    // the operator page carries it through both its forms
+    const operator = await page(new Session(baseUrl), "/operator/?back=launchpad");
+    const kept = operator.querySelectorAll('form input[type="hidden"][name="back"][value="launchpad"]');
+    expect(kept).toHaveLength(2);
+
+    const h = handle();
+    const claimed = await post(new Session(baseUrl), "/operator/", { action: "claim", handle: h, passphrase: PASS, back: "launchpad" });
+    expect(claimed.status).toBe(303);
+    expect(claimed.headers.get("location")).toBe("/");
+    const signed = await post(new Session(baseUrl), "/operator/", { action: "sign-in", handle: h, passphrase: PASS, back: "launchpad" });
+    expect(signed.headers.get("location")).toBe("/");
+  });
+
+  it("brings you back to the sky once you've claimed from its launch notice or explainer", async () => {
+    const a = new Session(baseUrl);
+    const res = await a.launch({ band: "low", callsign: callsign(), beacon: "back to the sky" });
+    const sky = doc(await (await a.get(res.headers.get("location")!)).text());
+    const links = [
+      ...sky.querySelectorAll<HTMLAnchorElement>('#launched-notice a[href^="/operator/"], dialog#first-launch a[href^="/operator/"]'),
+    ];
+    expect(links.length).toBe(2);
+    for (const link of links) expect(link.getAttribute("href")).toMatch(/back=sky/);
+    const claimed = await post(a, "/operator/", { action: "claim", handle: handle(), passphrase: PASS, back: "sky" });
+    // the sky, not the launch again: that's been said
+    expect(claimed.headers.get("location")).toBe("/sky/");
+  });
+
+  it("goes nowhere else it's asked to after signing in", async () => {
+    // not a URL, and not something every object has, like __proto__
+    for (const back of ["https://example.com/", "//example.com/", "/sky/", "__proto__", "constructor", "toString"]) {
+      const res = await post(new Session(baseUrl), "/operator/", { action: "claim", handle: handle(), passphrase: PASS, back });
+      expect(res.headers.get("location")).toBe("/operator/");
+    }
+    const operator = await page(new Session(baseUrl), "/operator/?back=https://example.com/");
+    expect(operator.querySelector('input[name="back"]')).toBeNull();
   });
 
   it("right after launching, on the sky's notice", async () => {

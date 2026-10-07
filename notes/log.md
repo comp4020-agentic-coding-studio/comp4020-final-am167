@@ -1467,3 +1467,118 @@ into "built" with their hashes; boosting no longer "shelved"; conjunction
 alerts and fuel moved to C10 everywhere; open questions that ADRs 0008,
 0010, 0012 and 0013 had already settled (collision radius, who sees the
 blame, the couplet, beacon epitaphs, Three.js) struck through or rewritten.
+
+## 2026-10-07 — Launchpad: a draft that survives signing in, a rocket that holds still
+
+Two things noticed on the launchpad.
+
+**Signing in from the pop-up lost the launch.** Fill in the form, press
+Launch, follow the pop-up to claim a handle or sign in, and you landed on
+the operator page; back on the launchpad the band, callsign and beacon were
+empty. Now the pop-up's links (and "Claim one" under the form) go to
+`/operator/?back=launchpad`, both operator forms carry `back` through, and a
+successful claim or sign-in redirects to `/` instead of `/operator/`. `back`
+is a whitelisted token, not a URL, so it can't send anyone off-site (tested
+with `https://…`, `//…` and `/sky/`). The launchpad saves what's filled in to
+`sessionStorage` when you follow any link to the operator page, and fills it
+back in once on the next load, never over a refused launch's own values; a
+back-button return from the cache drops it. Tests first in
+`spec/operator.test.ts` (failed on the pop-up's plain `/operator/` link).
+Checked in Chrome: Mid / callsign / beacon, Launch, claim from the pop-up,
+landed on `/` as the new handle with all three restored; a reload after
+that starts empty.
+
+**The rocket grew as you scrolled.** Its height is the room between the
+bottom of the intro text and the ground, measured in viewport coordinates
+and re-measured on scroll, while the canvas is fixed. At 1512×757 the page
+scrolls 62 px, so the rocket swelled from its 9rem floor as the intro moved
+up, then shrank back: the "old rocket" flashing in. It now measures the
+intro where it sits unscrolled, so scrolling doesn't change it. That same
+measurement is why the rocket looks further away than it used to: the
+"What is Kessler syndrome?" button took the room under the intro, pinning
+the rocket at its 9rem minimum on a laptop. Screenshotted 9, 12.5, 16 and
+20rem at 1512×757 and 1920×1080 for a decision; I chose 20rem. The rocket
+is now at least 20rem (more where there's room under the intro, up to the
+old 26rem cap), but no wider than the ground between the intro and the form
+and no taller than the screen under the header, so at 900 px wide it still
+shrinks to fit. Checked at 1512×757, 1920×1080, 1280×720, 1366×600, 900×700
+and iPhone 14 (the phone's gutter rocket is unchanged). `pnpm check` green
+(215 tests).
+
+## 2026-10-07 — The sky explains itself after your first launch
+
+Asked for: on arriving at the sky after someone's first launch, a dialog
+that briefly says how it all works. "First" is decided on the server:
+`isFirstLaunch(who, id)` in `src/lib/sky.ts` is true when the launched
+object is the earliest satellite the person (or their operator) ever
+launched, up or long gone, so it's once per person, not per browser visit,
+and a second launch never gets it. `src/components/FirstLaunch.astro`
+renders open (works without JavaScript, like the deorbit thank-you), and
+the script makes it modal, starts focus on "Watch it fly", and drops
+`launched` from the address on close so a reload doesn't repeat it. Six
+short points in a two-column grid (one column on a phone, scrolling inside
+the dialog): it's heard at the three stations; it falls to atmospheric drag (hours low, days
+high; the beacon stays on record); it can collide, into debris, a Kessler
+cascade, and every screen names whose satellites; launch again in 5
+minutes, sky holds 200; boost once; or bring it down in 2 minutes, put
+as the responsible way to finish (wording asked for after the first look). Ends on
+where the controls are and "your mark on the sky", with a claim-a-handle
+link if anonymous. The figures come from `LAUNCH_GAP`, `SKY_CAP` and
+`MANOEUVRE`, not typed in. Tests first: an HTTP test (open after a first
+launch, covers each point, closable, absent on a plain `/sky/` and for
+someone else following the same link) and a server test (true for the
+first, false for a second after the first burned up, false for another
+person). Checked in Chrome at 1920×1080 and iPhone 14 via a real launch;
+fixed autofocus scrolling the phone dialog to the bottom. `pnpm check`
+green (217 tests).
+
+## 2026-10-07 — Adversarial review of the three launchpad/sky changes
+
+A fresh Sonnet reviewer, told to be adversarial, read the uncommitted
+rocket framing, draft-through-sign-in and first-launch explainer against
+the code, ADRs and spec. What it found and what changed:
+
+1. **`back=__proto__` broke the redirect after a successful claim**
+   (`BACK[back] ?? …` on a plain object returned `Object.prototype`, so
+   `Location: [object Object]`). Not an open redirect, but not the
+   whitelist claimed either. `BACK` is a `Map` now; the test tries
+   `__proto__`, `constructor` and `toString` too.
+2. **The explainer stripped `?launched=` on load, not on close**: the
+   script closed the no-JS dialog to reopen it modal, and that `close`
+   event (queued, so it reached the listener added after) ran the
+   clean-up. I'd seen the bare `/sky/` while it was open and not followed
+   it up. Now an inline script removes `open` as the dialog is parsed (no
+   close event, no flash) and the page script opens it modal later.
+3. **It covered the launch's arrival, and the notice's timer ran out
+   behind it.** It now waits until the sky is drawn (or can't be, or 4 s)
+   plus 1.5 s, and the "in orbit" notice starts its fade once the
+   explainer is closed.
+4. **Focus went straight to "Watch it fly"**, so a screen reader skipped
+   all six points (and on a phone it scrolled to the bottom). Focus starts
+   on the heading now; the scroll fix is gone. A text selection ending on
+   the backdrop no longer closes it.
+5. **The sky's "Claim a handle" links didn't come back**: the notice's and
+   the explainer's go to `/operator/?back=sky`, which returns to `/sky/`.
+6. **The saved draft was too eager**: any operator link (the header's too)
+   saved it and any later launchpad load restored it. Now only the
+   launchpad's own `back=launchpad` links save it, and it's restored only
+   when arriving from `/operator/`, else dropped. Checked in Chrome: the
+   header link saves nothing, a detour elsewhere drops it, the claim round
+   trip restores it.
+7. **Copy against the code**: beacons aren't sound ("plays" → "is
+   broadcast"); mid→high adds about a day, not days ("a day or two more");
+   bringing it down now says it can still be hit on the way, as the
+   confirm dialog does; "200 satellites" (debris doesn't count); "shows
+   who launched what collided" (anonymous ones aren't named); the boost
+   count comes from `FUEL`.
+8. **Test gaps**: added an explainer for someone signed in (no handle
+   offer), `isFirstLaunch` for an operator on a second device, the sky's
+   `back=sky` links and redirect, and `back=launchpad` on "Claim one".
+   Not added: a browser test of the draft (the spec suite is HTTP only;
+   checked by hand instead) and a second launch over HTTP (five-minute
+   gap; the server test covers it).
+
+Left as is: the no-JS explainer shows again on reloading the same
+`?launched=` URL (only the script can drop it), and the rocket's 20rem
+gives way to the room between intro and form on narrow desktops (the
+comment now says so). `pnpm check` green (220 tests).

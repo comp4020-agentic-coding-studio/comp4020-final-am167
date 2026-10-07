@@ -41,7 +41,7 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 const DAY = 86_400_000;
 const input = { band: "low" as const, callsign: "FALLER", beacon: "going down" };
-const launch = (person: string, values: typeof input, now: number) => sky.launch(person, values, now, random);
+const launch = (who: Parameters<Sky["launch"]>[0], values: typeof input, now: number) => sky.launch(who, values, now, random);
 
 describe("burning up, on the server", () => {
   it("takes a burned-up satellite out of the sky, dated to its burn-up, and says so", () => {
@@ -91,5 +91,32 @@ describe("burning up, on the server", () => {
     expect(up.map((o) => o.callsign)).toEqual(["FIRST", "SECOND"]);
     // someone else isn't held up by dana's gap
     expect(launch("erin", { ...input, callsign: "OTHER" }, start + sky.LAUNCH_GAP).ok).toBe(true);
+  });
+
+  it("knows a person's first launch ever, even once it's gone", () => {
+    const start = 9_000_000;
+    const first = launch("fern", { ...input, band: "low", callsign: "FERN1" }, start);
+    if (!first.ok) throw new Error("first launch refused");
+    expect(sky.isFirstLaunch("fern", first.object.id)).toBe(true);
+    // not someone else's first
+    expect(sky.isFirstLaunch("gil", first.object.id)).toBe(false);
+    // the first has burned up by the time of the second, which still isn't the first
+    const later = Math.ceil(reentryAt(first.object)) + 1_000;
+    const second = launch("fern", { ...input, callsign: "FERN2" }, later);
+    if (!second.ok) throw new Error("second launch refused");
+    expect(sky.liveSky(later).some((o) => o.id === first.object.id)).toBe(false);
+    expect(sky.isFirstLaunch("fern", second.object.id)).toBe(false);
+  });
+
+  it("knows an operator's first launch on any device they're signed in on", () => {
+    const start = 20_000_000;
+    const laptop = { person: "hana-laptop", operator: 4242 };
+    const first = launch(laptop, { ...input, callsign: "HANA1" }, start);
+    if (!first.ok) throw new Error("first launch refused");
+    expect(sky.isFirstLaunch({ person: "hana-phone", operator: 4242 }, first.object.id)).toBe(true);
+    expect(sky.isFirstLaunch({ person: "hana-phone", operator: 4343 }, first.object.id)).toBe(false);
+    const second = launch({ person: "hana-phone", operator: 4242 }, { ...input, callsign: "HANA2" }, start + sky.LAUNCH_GAP);
+    if (!second.ok) throw new Error("second launch refused");
+    expect(sky.isFirstLaunch(laptop, second.object.id)).toBe(false);
   });
 });

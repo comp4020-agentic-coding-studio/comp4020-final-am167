@@ -17,12 +17,21 @@ import { satellitesOf } from "../../lib/sky.ts";
 // Your operator (ADR 0009). Anyone can launch without one; claiming a handle
 // with a passphrase keeps your satellites, and the blame for them, on every
 // device you sign in on. Forms that work without JavaScript: a success
-// redirects back here, a refusal re-renders with the reasons.
+// redirects back here (or to the launchpad or sky, if you came from there),
+// a refusal re-renders with the reasons.
 const { person, operator } = Astro.locals;
 
 let errors: OperatorErrors = {};
 let failed: "claim" | "sign-in" | null = null;
 let handle = "";
+// where a successful claim or sign-in goes: back to the launchpad or the
+// sky when it came from there, and nowhere else, so it can't send you
+// off-site. A Map, so "__proto__" and the like aren't places.
+const BACK = new Map([
+  ["launchpad", "/"],
+  ["sky", "/sky/"],
+]);
+let back = Astro.url.searchParams.get("back") ?? "";
 
 if (Astro.request.method === "POST") {
   let form: FormData | null = null;
@@ -31,6 +40,7 @@ if (Astro.request.method === "POST") {
   } catch {
     // unreadable: shown as an error below
   }
+  back = String(form?.get("back") ?? "");
   const read = form && readOperatorForm(form);
   if (!read) {
     errors = { form: "That form couldn't be read. Try again." };
@@ -47,7 +57,7 @@ if (Astro.request.method === "POST") {
     if (result.ok) {
       // a new cookie for the signed-in device (its satellites are the operator's now)
       moveTo(person, newPerson(Astro.cookies, Astro.url, Astro.request.headers));
-      return Astro.redirect("/operator/", 303);
+      return Astro.redirect(BACK.get(back) ?? "/operator/", 303);
     }
     errors = result.errors;
     failed = read.action;
@@ -58,6 +68,7 @@ if (Astro.request.method === "POST") {
 
 const viewer = { person, operator: operator?.id ?? null };
 const up = satellitesOf(viewer).length;
+const comeBack = BACK.has(back) ? back : null;
 const errorFor = (form: "claim" | "sign-in", field: keyof OperatorErrors) => (failed === form ? errors[field] : undefined);
 ---
 <Base title="Kessler: your operator" current="operator">
@@ -95,6 +106,7 @@ const errorFor = (form: "claim" | "sign-in", field: keyof OperatorErrors) => (fa
           <form method="post" action="/operator/" novalidate aria-labelledby="claim-title">
             <h2 id="claim-title">Claim a handle</h2>
             <input type="hidden" name="action" value="claim" />
+            {comeBack && <input type="hidden" name="back" value={comeBack} />}
             <div class="field">
               <label for="claim-handle">Handle</label>
               <input
@@ -135,6 +147,7 @@ const errorFor = (form: "claim" | "sign-in", field: keyof OperatorErrors) => (fa
           <form method="post" action="/operator/" novalidate aria-labelledby="sign-in-title">
             <h2 id="sign-in-title">Sign in</h2>
             <input type="hidden" name="action" value="sign-in" />
+            {comeBack && <input type="hidden" name="back" value={comeBack} />}
             <div class="form-error" role="alert">{errorFor("sign-in", "form")}</div>
             <div class="field">
               <label for="sign-in-handle">Handle</label>

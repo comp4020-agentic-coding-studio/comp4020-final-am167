@@ -1,13 +1,14 @@
 ---
 import Base from "../../layouts/Base.astro";
 import ManoeuvreControls from "../../components/ManoeuvreControls.astro";
+import FirstLaunch from "../../components/FirstLaunch.astro";
 import ManoeuvreDialogs from "../../components/ManoeuvreDialogs.astro";
 import { ago, embed } from "../../lib/format.ts";
 import { REFUSALS, isRefusal } from "../../lib/manoeuvre.ts";
 import { skyCount } from "../../lib/story.ts";
 import { BANDS, bandAt, radiusAt, type Band } from "../../lib/orbit.ts";
 import { STATIONS } from "../../lib/stations.ts";
-import { conjunctions, liveSky, recentCollisions, toPublic } from "../../lib/sky.ts";
+import { conjunctions, isFirstLaunch, liveSky, recentCollisions, toPublic } from "../../lib/sky.ts";
 
 // The shared sky. The server renders a summary of what's in orbit (counts per
 // band and the latest launches), so the page is complete without JavaScript;
@@ -24,6 +25,8 @@ const sky = liveSky()
 const launchedParam = Number(Astro.url.searchParams.get("launched"));
 const launched = sky.find((o) => o.id === launchedParam && o.mine) ?? null;
 const mine = sky.find((o) => o.mine) ?? null;
+// straight after someone's first launch ever, the sky explains itself
+const first = launched !== null && isFirstLaunch(viewer, launched.id);
 // back from bringing one down or boosting it without JavaScript (ADR 0011)
 const yoursById = (name: string) => sky.find((o) => o.mine && o.id === Number(Astro.url.searchParams.get(name))) ?? null;
 const deorbited = yoursById("deorbited");
@@ -101,7 +104,7 @@ const view = launched ? "canberra" : null;
           <strong>{launched.callsign}</strong> is in orbit. Its beacon is broadcast
           each time it passes over a ground station.
           {!operator && (
-            <> <a href="/operator/">Claim a handle</a> to keep it on any device.</>
+            <> <a href="/operator/?back=sky">Claim a handle</a> to keep it on any device.</>
           )}
         </p>
       )}
@@ -172,6 +175,7 @@ const view = launched ? "canberra" : null;
     </section>
 
     <ManoeuvreDialogs thanks={deorbited ? (deorbited.callsign ?? "Your satellite") : null} />
+    {first && <FirstLaunch callsign={launched!.callsign ?? "Your satellite"} signedIn={Boolean(operator)} />}
   </main>
 
   <script type="application/json" id="sky-data" set:html={embed({ serverTime: now, sky, launched: launched?.id ?? null, view, conjunctions: coming, collisions: collided })} />

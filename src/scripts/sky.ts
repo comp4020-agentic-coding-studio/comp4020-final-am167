@@ -467,11 +467,15 @@ setInterval(listen, 250);
 listen();
 
 // The "in orbit" notice after a launch floats over the scene; it fades after
-// a few seconds (on a phone it sits in the page and stays).
+// a few seconds (on a phone it sits in the page and stays). After a first
+// launch, the seconds start once the explainer over it is closed.
 const notice = document.getElementById("launched-notice");
 if (notice && getComputedStyle(notice).position === "absolute") {
   // longer when it asks something of you (claiming a handle)
-  setTimeout(() => notice.classList.add("fading"), notice.querySelector("a") ? 12_000 : 6000);
+  const fade = () => setTimeout(() => notice.classList.add("fading"), notice.querySelector("a") ? 12_000 : 6000);
+  const explainer = document.getElementById("first-launch");
+  if (explainer) explainer.addEventListener("close", fade, { once: true });
+  else fade();
   notice.addEventListener("transitionend", () => (notice.hidden = true));
 }
 

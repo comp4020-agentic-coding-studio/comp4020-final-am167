@@ -204,7 +204,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
         <p class="launch-as">Launching as <strong>{operator.handle}</strong>.</p>
       ) : (
         <p class="launch-as">
-          Launching without a handle. <a href="/operator/">Claim one</a> to keep
+          Launching without a handle. <a href="/operator/?back=launchpad">Claim one</a> to keep
           your satellites on any device, and your name on what they do.
         </p>
       )}
@@ -222,8 +222,8 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
             follow you, and when they collide, every screen names you.
           </p>
           <div class="handle-prompt-actions">
-            <a class="handle-prompt-claim" href="/operator/">Claim a handle</a>
-            <a href="/operator/#sign-in-title">I have one: sign in</a>
+            <a class="handle-prompt-claim" href="/operator/?back=launchpad">Claim a handle</a>
+            <a href="/operator/?back=launchpad#sign-in-title">I have one: sign in</a>
           </div>
           <form method="dialog">
             <button type="submit" class="handle-prompt-skip" value="launch">Launch without a handle</button>
@@ -278,6 +278,65 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   </script>
 
   <script>
+    // Keeps what's been filled in across a detour to claim a handle or sign
+    // in: saved on following one of the launchpad's own links to the operator
+    // page (they come back here), filled back in only when arriving from that
+    // page, and dropped otherwise.
+    const DRAFT = "kessler:launch-draft";
+    const pad = document.querySelector<HTMLFormElement>("form[data-launch]");
+    const field = (name: string) => pad?.querySelector<HTMLInputElement>(`input[name=${name}]:not([type=radio])`);
+    if (pad) {
+      document.addEventListener("click", (e) => {
+        if (!(e.target instanceof Element) || !e.target.closest('a[href^="/operator/?back=launchpad"]')) return;
+        const draft = {
+          band: pad.querySelector<HTMLInputElement>("input[name=band]:checked")?.value,
+          callsign: field("callsign")?.value ?? "",
+          beacon: field("beacon")?.value ?? "",
+        };
+        if (!draft.callsign && !draft.beacon && draft.band === "low") return;
+        try {
+          sessionStorage.setItem(DRAFT, JSON.stringify(draft));
+        } catch {
+          // no storage: the form starts empty again, as before
+        }
+      });
+      // back without leaving (the page restored from the cache): nothing to fill in
+      addEventListener("pageshow", (e) => {
+        try {
+          if (e.persisted) sessionStorage.removeItem(DRAFT);
+        } catch {
+          // nothing was saved
+        }
+      });
+      const draft = ((): { band?: string; callsign?: string; beacon?: string } | null => {
+        try {
+          const saved = sessionStorage.getItem(DRAFT);
+          sessionStorage.removeItem(DRAFT);
+          return JSON.parse(saved ?? "null");
+        } catch {
+          // nothing saved, or unreadable: start empty
+          return null;
+        }
+      })();
+      const fromOperator = (() => {
+        try {
+          const from = new URL(document.referrer);
+          return from.origin === location.origin && from.pathname === "/operator/";
+        } catch {
+          return false;
+        }
+      })();
+      // only into a fresh form, never over a refused launch's own values
+      if (draft && fromOperator && !field("callsign")?.value && !field("beacon")?.value) {
+        const band = [...pad.querySelectorAll<HTMLInputElement>("input[name=band]")].find((r) => r.value === draft.band);
+        if (band) band.checked = true;
+        field("callsign")!.value = String(draft.callsign ?? "");
+        field("beacon")!.value = String(draft.beacon ?? "");
+      }
+    }
+  </script>
+
+  <script>
     // Counts down the gap between your launches, and opens the form when
     // it's over. Without this script, reloading the page does the same.
     const notice = document.getElementById("launch-wait");
@@ -318,8 +377,10 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
 
     // Where the rocket stands on the page: in the open ground between the
-    // intro and the form, no taller than the room under the intro; on a phone,
-    // in the gutter beside the intro, scrolling with it.
+    // intro and the form, close up (20rem, more where there's room under the
+    // intro), smaller only where that ground is too narrow or the screen under
+    // the header too short for it, down to 9rem; on a phone, in the gutter
+    // beside the intro, scrolling with it.
     function measure(width: number, height: number): Framing {
       // the text itself, not its grid cell, which stretches to the form's height
       const lines = [...intro.children].map((el) => el.getBoundingClientRect());
@@ -328,12 +389,19 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
         return { x: width - 1.9 * rem, y: panel.getBoundingClientRect().top - 0.75 * rem, height: 9 * rem };
       }
       const ground = height - 2.5 * rem;
-      const room = (ground - Math.max(...lines.map((r) => r.bottom)) - 2 * rem) * 0.78;
+      // where the text ends unscrolled: the canvas is fixed, so the rocket
+      // keeps its size while the page scrolls under it
+      const bottom = Math.max(...lines.map((r) => r.bottom)) + scrollY;
+      const room = (ground - bottom - 2 * rem) * 0.78;
       const right = Math.max(...lines.map((r) => r.right));
+      const left = panel.getBoundingClientRect().left;
+      // the tower and rocket are about 0.4 of the height across, and the
+      // mast stands about 1.3 times the height above the ground
+      const fits = Math.min((left - right) / 0.45, (ground - 5 * rem) / 1.3);
       return {
-        x: (right + panel.getBoundingClientRect().left) / 2,
+        x: (right + left) / 2,
         y: ground,
-        height: Math.min(26 * rem, Math.max(9 * rem, room)),
+        height: Math.max(9 * rem, Math.min(26 * rem, Math.max(20 * rem, room), fits)),
       };
     }
     // measured again only when the layout can have moved, not every frame

@@ -1067,6 +1067,18 @@ export function satellitesOf(who: Who): SkyObject[] {
     .map(toObject);
 }
 
+// Whether an object is the first a person ever launched, up or long gone:
+// the sky explains itself after that one only.
+export function isFirstLaunch(who: Who, id: number): boolean {
+  if (!viewerOf(who).person) return false;
+  const first = db
+    .select({ id: sql<number | null>`min(${objects.id})` })
+    .from(objects)
+    .where(and(ownerIs(who), eq(objects.kind, "satellite")))
+    .get();
+  return first?.id === id;
+}
+
 // ── deorbiting and boosting (ADR 0011) ────────────────────────────────────
 
 export type ManoeuvreKind = "deorbit" | "boost";

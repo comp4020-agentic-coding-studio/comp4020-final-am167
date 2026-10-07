@@ -1,0 +1,255 @@
+---
+import { FUEL } from "../lib/manoeuvre.ts";
+import { MANOEUVRE } from "../lib/orbit.ts";
+import { LAUNCH_GAP, SKY_CAP } from "../lib/sky.ts";
+
+// How the sky works, said once: on arriving at the sky after someone's first
+// launch ever. Without JavaScript it's open over the page from the start.
+// With it, it waits for the sky to be drawn, so the launch still arrives,
+// then opens modal; closing it takes the launch out of the address so a
+// reload doesn't say it again.
+interface Props {
+  callsign: string;
+  signedIn: boolean;
+}
+const { callsign, signedIn } = Astro.props;
+const gap = Math.round(LAUNCH_GAP / 60_000);
+const descent = Math.round(MANOEUVRE.descentMs / 60_000);
+const boosts = FUEL === 1 ? "once" : `${FUEL} times`;
+const climbs = FUEL === 1 ? "one climb" : `${FUEL} climbs`;
+---
+<dialog class="first-launch" id="first-launch" aria-labelledby="first-launch-title" open>
+  <form method="dialog" class="first-launch-body">
+    <p class="first-launch-kicker">Your first launch</p>
+    <!-- focus starts here, so a screen reader reads on from the top -->
+    <h2 id="first-launch-title" tabindex="-1" autofocus><span class="callsign">{callsign}</span> is in orbit</h2>
+    <p class="first-launch-lede">
+      Everyone here shares this one sky. Here's what happens to what you put in it.
+    </p>
+
+    <dl class="first-launch-points">
+      <div>
+        <dt>It's heard</dt>
+        <dd>
+          Each time it passes over Canberra, Goldstone or Madrid, its beacon is
+          broadcast to everyone watching.
+        </dd>
+      </div>
+      <div>
+        <dt>It falls</dt>
+        <dd>
+          Atmospheric drag pulls everything down: low orbits burn up in hours,
+          high ones in days. The beacon stays on the record after.
+        </dd>
+      </div>
+      <div>
+        <dt>It can collide</dt>
+        <dd>
+          Two objects that meet break into debris, and debris hits more. That's
+          Kessler syndrome: a cascade nobody can stop. Every screen shows who
+          launched what collided.
+        </dd>
+      </div>
+      <div>
+        <dt>Launch again in {gap} minutes</dt>
+        <dd>
+          Have as many up as you like, {gap} minutes apart, but every launch
+          crowds the orbit for everyone. The sky holds {SKY_CAP} satellites.
+        </dd>
+      </div>
+      <div>
+        <dt>Boost it, {boosts}</dt>
+        <dd>
+          Below the high band it carries fuel for {climbs}, a band up: hours
+          more from low, a day or two more from mid.
+        </dd>
+      </div>
+      <div>
+        <dt>Or bring it down</dt>
+        <dd>
+          The responsible way to finish: it leaves orbit in {descent} minutes and
+          burns up. It can still be hit on the way down; once it's gone, it's one
+          fewer thing for anyone to hit.
+        </dd>
+      </div>
+    </dl>
+
+    <p class="first-launch-where">
+      Both are under <strong>Beacons</strong>, next to your satellite. What you
+      launch is your mark on the sky: its beacon, and whatever it hits.
+      {!signedIn && <> <a href="/operator/?back=sky">Claim a handle</a> to put your name to it.</>}
+    </p>
+
+    <button type="submit" class="first-launch-go">Watch it fly</button>
+  </form>
+</dialog>
+<!-- with a script, closed at once (before it's drawn), and opened by the one
+     below once the sky is; removing the attribute raises no close event -->
+<script is:inline>document.getElementById("first-launch").removeAttribute("open");</script>
+
+<script>
+  const dialog = document.getElementById("first-launch") as HTMLDialogElement | null;
+  const chart = document.getElementById("chart");
+  const noView = document.getElementById("no-webgl");
+  if (dialog && !dialog.open) {
+    // a click on the backdrop closes it too (the content fills the box), but
+    // not a text selection that ends there
+    let downOnBackdrop = false;
+    dialog.addEventListener("pointerdown", (e) => (downOnBackdrop = e.target === dialog));
+    dialog.addEventListener("click", (e) => {
+      if (downOnBackdrop && e.target === dialog) dialog.close();
+    });
+    dialog.addEventListener("close", () => {
+      const url = new URL(location.href);
+      url.searchParams.delete("launched");
+      history.replaceState(history.state, "", url);
+    });
+
+    // once the sky is drawn (or can't be), a beat to see the launch arrive
+    let opened = false;
+    const open = () => {
+      if (opened) return;
+      opened = true;
+      setTimeout(() => dialog.showModal(), 1500);
+    };
+    const drawn = () => chart?.classList.contains("drawn") || (noView !== null && !noView.hidden);
+    if (drawn()) open();
+    else {
+      const watch = new MutationObserver(() => {
+        if (!drawn()) return;
+        watch.disconnect();
+        open();
+      });
+      for (const el of [chart, noView]) if (el) watch.observe(el, { attributes: true });
+      // whatever happens to the sky, it's said
+      setTimeout(open, 4000);
+    }
+  }
+</script>
+
+<style>
+  .first-launch {
+    width: min(38rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    padding: 0;
+    border: 1px solid var(--grid-strong);
+    border-top: 3px solid var(--amber);
+    border-radius: 6px;
+    background: var(--night-deep);
+    color: var(--ink);
+    box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.6);
+  }
+
+  /* open without JavaScript: not modal, so placed over the page by hand */
+  .first-launch[open]:not(:modal) {
+    position: fixed;
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    z-index: 30;
+    margin: 0;
+    overflow: auto;
+  }
+
+  .first-launch::backdrop {
+    background: rgb(6 11 24 / 0.7);
+  }
+
+  .first-launch-body {
+    margin: 0;
+    padding: 1.5rem 1.75rem 1.75rem;
+  }
+
+  .first-launch-kicker {
+    margin: 0 0 0.35rem;
+    font-size: var(--step--1);
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  h2 {
+    margin: 0 0 0.5rem;
+    outline: none;
+    font-size: var(--step-2);
+    line-height: 1.15;
+  }
+
+  .callsign {
+    color: var(--amber);
+  }
+
+  .first-launch-lede {
+    margin: 0 0 1.25rem;
+    color: var(--ink-dim);
+  }
+
+  .first-launch-points {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 1.5rem;
+    margin: 0 0 1.25rem;
+  }
+
+  .first-launch-points > div {
+    padding-left: 0.75rem;
+    border-left: 2px solid var(--grid-strong);
+  }
+
+  dt {
+    margin: 0 0 0.2rem;
+    font-weight: 800;
+    color: var(--ink);
+  }
+
+  dd {
+    margin: 0;
+    font-size: var(--step--1);
+    line-height: 1.45;
+    color: var(--ink-dim);
+  }
+
+  .first-launch-where {
+    margin: 0 0 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--grid);
+    font-size: var(--step--1);
+    line-height: 1.45;
+    color: var(--ink-dim);
+  }
+
+  .first-launch-where strong {
+    color: var(--ink);
+  }
+
+  .first-launch-go {
+    width: auto;
+    padding: 0.65rem 1.4rem;
+    font: inherit;
+    font-weight: 800;
+    border: 0;
+    border-radius: 3px;
+    color: var(--night-deep);
+    background: var(--amber);
+    cursor: pointer;
+  }
+
+  .first-launch-go:hover {
+    background: #ffbb5c;
+  }
+
+  @media (max-width: 36rem) {
+    .first-launch-body {
+      padding: 1.25rem;
+    }
+
+    .first-launch-points {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.85rem;
+    }
+
+    .first-launch-go {
+      width: 100%;
+    }
+  }
+</style>

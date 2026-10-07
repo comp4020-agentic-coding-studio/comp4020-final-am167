@@ -1,7 +1,7 @@
 import { JSDOM } from "jsdom";
 import { describe, expect, inject, it } from "vitest";
 import { bandAt, bandReach, heightKm, radiusAt } from "../src/lib/orbit.ts";
-import { Session, callsign } from "./session.ts";
+import { Session, callsign, post } from "./session.ts";
 
 // The sky page stays one screen: the scene, what the ground stations hear, and a
 // short summary of the sky. The full record of everything ever launched is
@@ -28,6 +28,38 @@ async function skyPage(session = new Session(baseUrl)) {
 }
 
 describe("the sky page", () => {
+  it("explains how the sky works after your first launch, and only then", async () => {
+    const a = new Session(baseUrl);
+    const res = await a.launch({ band: "low", callsign: callsign(), beacon: "first one" });
+    const where = res.headers.get("location")!;
+    const page = doc(await (await a.get(where)).text());
+    const dialog = page.querySelector("dialog#first-launch");
+    expect(dialog, "no explainer after a first launch").not.toBeNull();
+    // open without JavaScript too
+    expect(dialog!.hasAttribute("open")).toBe(true);
+    const text = dialog!.textContent!;
+    for (const point of [/beacon/i, /burns? up/i, /collide/i, /debris/i, /5 minutes/i, /boost/i, /bring it down/i]) {
+      expect(text, String(point)).toMatch(point);
+    }
+    // it can be closed without JavaScript beyond the dialog's own
+    expect(dialog!.querySelector('form[method="dialog"] button')).not.toBeNull();
+
+    // not on the sky otherwise, or for someone else following the same link
+    expect((await skyPage(a)).page.querySelector("dialog#first-launch")).toBeNull();
+    const b = doc(await (await new Session(baseUrl).get(where)).text());
+    expect(b.querySelector("dialog#first-launch")).toBeNull();
+  });
+
+  it("doesn't offer a handle in the explainer to someone who has one", async () => {
+    const a = new Session(baseUrl);
+    const h = `op_${Math.random().toString(36).slice(2, 10)}`;
+    await post(a, "/operator/", { action: "claim", handle: h, passphrase: "correct horse battery" });
+    const res = await a.launch({ band: "mid", callsign: callsign(), beacon: "signed in first" });
+    const dialog = doc(await (await a.get(res.headers.get("location")!)).text()).querySelector("dialog#first-launch");
+    expect(dialog, "no explainer for an operator's first launch").not.toBeNull();
+    expect(dialog!.querySelector('a[href^="/operator/"]')).toBeNull();
+  });
+
   it("sums up what's in orbit per band instead of listing it", async () => {
     await new Session(baseUrl).launch({ band: "high", callsign: callsign(), beacon: "counted" });
     const { page, sky, serverTime } = await skyPage();
