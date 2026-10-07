@@ -1796,3 +1796,5 @@ in `CLAUDE.md` under the checks says to rerun such a file on its own before
 treating it as a real failure. The `spec/README.md` sentence about running
 it last went too.
 
+
+Commit `6b5ef67`.
