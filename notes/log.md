@@ -2204,4 +2204,4 @@ Acting on the review's findings 2 and 8, and two of its opinions:
   400-orbit stations test gets 20 s, as the cascade test did, since it
   passed 5 s under a loaded suite.
 
-`pnpm check` green twice in a row on a fresh database (284 tests).
+`pnpm check` green twice in a row on a fresh database (284 tests). Commit `262e2b4`.
