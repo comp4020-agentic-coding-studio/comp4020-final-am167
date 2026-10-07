@@ -1629,6 +1629,8 @@ pushed to the branch as it goes):
    from the stations each day, and the "why" said on the launchpad and in
    the explainer.
 
+Logged with the first fix of the round: commit `3b41406`.
+
 ## 2026-10-07 — The handle pop-up waits for a launch worth making
 
 Pressing Launch on an empty form opened "Launch under a handle?", then
