@@ -2168,3 +2168,5 @@ launches beside the column, not modal, then switched to another object
 from the feed; on an iPhone 14, a 468 px sheet.
 
 ![An object's address: the catalogue, with the object's card popped up over it](screenshots/2026-10-07-object-address-card-over-catalogue.png)
+
+Commit `fe908a4`.
