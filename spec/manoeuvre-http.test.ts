@@ -153,3 +153,62 @@ describe("the sky's station panel", () => {
     expect(sky.querySelector('.station form[action="/manoeuvre/"]')).toBeNull();
   });
 });
+
+describe("who may manoeuvre, and from where", () => {
+  it("refuses a post from another site, and leaves the satellite as it was", async () => {
+    const a = new Session(baseUrl);
+    const { id, name } = await launched(a);
+    const res = await post(a, "/manoeuvre/", { id: String(id), action: "deorbit", back: "/" }, { origin: "https://evil.example" });
+    expect(res.status).toBe(403);
+    const { item } = await controls(a, name);
+    expect(item!.textContent).not.toMatch(/coming down/i);
+  });
+
+  it("only ever goes back to the launchpad or the sky", async () => {
+    const a = new Session(baseUrl);
+    const { id } = await launched(a);
+    const res = await manoeuvre(a, id, "boost", "//evil.example/");
+    expect(res.status).toBe(303);
+    expect(new URL(res.headers.get("location")!, baseUrl).origin).toBe(new URL(baseUrl).origin);
+  });
+
+  it("lets an operator manoeuvre their satellite from another device they're signed in on", async () => {
+    const handle = `mv_${Math.random().toString(36).slice(2, 10)}`;
+    const phone = new Session(baseUrl);
+    expect((await post(phone, "/operator/", { action: "claim", handle, passphrase: "correct horse battery" })).status).toBe(303);
+    const { id } = await launched(phone);
+    const laptop = new Session(baseUrl);
+    await laptop.get("/");
+    expect((await post(laptop, "/operator/", { action: "sign-in", handle, passphrase: "correct horse battery" })).status).toBe(303);
+    const res = await manoeuvre(laptop, id, "deorbit", "/", { accept: "application/json" });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("the catalogue", () => {
+  const row = async (s: Session, name: string) => {
+    const catalogue = await page(s, "/catalogue/");
+    return [...catalogue.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(name));
+  };
+
+  it("says a satellite is coming down, or climbing", async () => {
+    const a = new Session(baseUrl);
+    const down = await launched(a);
+    await manoeuvre(a, down.id, "deorbit");
+    expect((await row(a, down.name))?.textContent).toMatch(/in orbit, coming down/i);
+
+    const b = new Session(baseUrl);
+    const up = await launched(b);
+    await manoeuvre(b, up.id, "boost");
+    expect((await row(b, up.name))?.textContent).toMatch(/in orbit, climbing/i);
+  });
+});
+
+describe("a satellite that can't boost", () => {
+  it("says why on the launchpad", async () => {
+    const a = new Session(baseUrl);
+    const { name } = await launched(a, "high");
+    const { item } = await controls(a, name);
+    expect(item!.textContent).toMatch(/highest band/i);
+  });
+});

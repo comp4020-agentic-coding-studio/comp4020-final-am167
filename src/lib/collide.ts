@@ -100,6 +100,10 @@ function earliest(reached: (time: number) => boolean, from: number, to: number):
 //   changes steadily, so their heights cross at most once: they're close
 //   for a stretch either side of the crossing.
 //
+// (Within a piece the gap in height is taken to change one way on each side
+// of the crossing. Two objects manoeuvring at once could in principle bend
+// that; a brute-force scan of descents and climbs found no case.)
+//
 // While close, the angle between them changes one way only (head-on, both
 // sweep towards each other; same way, the lower is always the faster, so a
 // crossing of heights is a turning point and splits the stretch in two).

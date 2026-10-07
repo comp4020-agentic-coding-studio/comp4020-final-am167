@@ -1,7 +1,7 @@
 ---
 import Base from "../../layouts/Base.astro";
 import { ago, falling, km } from "../../lib/format.ts";
-import { BANDS, fallRate, heightKm, radiusAt, type Band } from "../../lib/orbit.ts";
+import { BANDS, climbing, fallRate, heightKm, radiusAt, type Band } from "../../lib/orbit.ts";
 import {
   FIRST_DIR,
   PER_PAGE,
@@ -195,6 +195,8 @@ const number = (n: number) => n.toLocaleString("en");
                       data-phase={o.phase}
                       data-period={o.period}
                       data-epoch={o.epoch}
+                      data-rate={o.rate}
+                      data-until={o.until ?? undefined}
                     >
                       <span class="km">{km(heightKm(radiusAt(o, now)))}</span>{" "}
                       <span class="falling">{falling(fallRate(o, now))}</span>
@@ -205,6 +207,8 @@ const number = (n: number) => n.toLocaleString("en");
                   <td class="launched"><time datetime={new Date(o.launchedAt).toISOString()}>{ago(now - o.launchedAt)}</time></td>
                   <td>
                     {fates[o.fate]}
+                    {o.fate === "live" && o.deorbitedAt !== null && <span class="lineage">, coming down</span>}
+                    {o.fate === "live" && climbing(o, now) && <span class="lineage">, climbing</span>}
                     {o.collidedWith && <span class="lineage"> with {whole(describe(o.collidedWith))}</span>}
                     {o.fateAt && <> <time class="fate-time" datetime={new Date(o.fateAt).toISOString()}>{ago(now - o.fateAt)}</time></>}
                   </td>
@@ -279,6 +283,9 @@ const number = (n: number) => n.toLocaleString("en");
           phase: Number(cell.dataset.phase),
           period: Number(cell.dataset.period),
           epoch: Number(cell.dataset.epoch),
+          // brought down or boosted (ADR 0011)
+          rate: Number(cell.dataset.rate ?? 1),
+          until: cell.dataset.until === undefined ? null : Number(cell.dataset.until),
         },
         height: cell.querySelector(".km")!,
         rate: cell.querySelector(".falling")!,

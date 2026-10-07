@@ -16,8 +16,9 @@ const minutes = Math.round(MANOEUVRE.descentMs / 60_000);
     <h2 id="deorbit-confirm-title">Bring <span data-callsign></span> down?</h2>
     <p>
       It leaves orbit over the next {minutes} minutes and burns up in the
-      atmosphere. Its beacon won't be heard again, and it won't be up there
-      for anyone to collide with either.
+      atmosphere. On the way down it crosses the orbits below, so it can
+      still be hit; once it's gone, it's one fewer thing for anyone to collide
+      with. Its beacon is heard for the last time on the way.
     </p>
     <div class="manoeuvre-dialog-actions">
       <button type="submit" value="yes" class="primary">Bring it down</button>
@@ -31,8 +32,9 @@ const minutes = Math.round(MANOEUVRE.descentMs / 60_000);
     <h2 id="thanks-title">Thank you for keeping the sky clear</h2>
     <p>
       <strong data-callsign>{thanks}</strong> is on its way down: it meets the
-      atmosphere in {minutes} minutes and burns up. Every object brought down is
-      one fewer for anyone to collide with, and one fewer to break into debris.
+      atmosphere in {minutes} minutes and burns up. Once it's gone, it's one
+      fewer object for anyone to collide with, and one fewer to break into
+      debris.
     </p>
     <p class="thanks-note">Everyone watching sees it come down.</p>
     <div class="manoeuvre-dialog-actions">

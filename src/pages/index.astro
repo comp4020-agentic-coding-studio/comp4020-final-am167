@@ -2,7 +2,7 @@
 import Base from "../layouts/Base.astro";
 import ManoeuvreControls from "../components/ManoeuvreControls.astro";
 import ManoeuvreDialogs from "../components/ManoeuvreDialogs.astro";
-import { every, lasting } from "../lib/format.ts";
+import { embed, every, lasting } from "../lib/format.ts";
 import { BEACON_MAX, CALLSIGN_MAX, readLaunch, type LaunchErrors, type LaunchValues } from "../lib/launch.ts";
 import { REFUSALS, isRefusal, standing } from "../lib/manoeuvre.ts";
 import { BANDS, MANOEUVRE, bandAt, lifetimeRange, radiusAt, type Band } from "../lib/orbit.ts";
@@ -55,6 +55,19 @@ const deorbited = param("deorbited");
 const boosted = param("boosted");
 const boostedTo = boosted && BANDS[bandAt(radiusAt(boosted, boosted.until ?? now))].label.toLowerCase();
 const refused = Astro.url.searchParams.get("refused");
+// your satellites' orbits for the page's script: never their owner
+const orbits = mine.map(({ id, radius, phase, period, epoch, direction, rate, until, deorbitedAt, boosts }) => ({
+  id,
+  radius,
+  phase,
+  period,
+  epoch,
+  direction,
+  rate,
+  until,
+  deorbitedAt,
+  boosts,
+}));
 const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 const hint: Record<Band, string> = {
   low: "Heard most often.",
@@ -133,7 +146,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
           <h3 id="yours-title">{mine.length === 1 ? "Yours in orbit" : `Yours in orbit (${mine.length})`}</h3>
           <ul>
             {mine.map((o) => (
-              <li>
+              <li data-id={o.id}>
                 <p class="yours-name">
                   <strong>{o.callsign ?? "Unnamed"}</strong>
                   <span class="yours-standing">{standing(o, now)}.</span>
@@ -146,6 +159,12 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
             Another launch is another beacon heard, and one more thing for everyone
             to share the sky with. <a href="/sky/">Watch the sky</a>
           </p>
+          <!-- their orbits, so the list keeps up as they climb, fall and burn up -->
+          <script
+            type="application/json"
+            id="yours-data"
+            set:html={embed({ serverTime: now, yours: orbits })}
+          />
         </section>
       )}
 
@@ -264,10 +283,42 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   </main>
 
   <script>
+    import { canManoeuvre, standing, type Manoeuvrable } from "../lib/manoeuvre.ts";
+    import { reentryAt } from "../lib/orbit.ts";
     import { wireManoeuvres } from "../scripts/manoeuvres.ts";
 
     // Asks before bringing a satellite down; the page it comes back to thanks you.
     wireManoeuvres();
+
+    // What came back in the address (brought down, boosted, refused) is said
+    // once: a reload doesn't say it again.
+    if (/[?&](deorbited|boosted|refused)=/.test(location.search)) history.replaceState(null, "", location.pathname);
+
+    // Your satellites' lines keep up: climbing, coming down, burning up, gone.
+    // Without this script, reloading does the same.
+    const data = document.getElementById("yours-data");
+    if (data) {
+      const { serverTime, yours } = JSON.parse(data.textContent!) as {
+        serverTime: number;
+        yours: (Manoeuvrable & { id: number })[];
+      };
+      const offset = serverTime - Date.now();
+      const tick = () => {
+        const time = Date.now() + offset;
+        for (const sat of yours) {
+          const item = document.querySelector<HTMLElement>(`[data-yours] li[data-id="${sat.id}"]`);
+          if (!item) continue;
+          const line = item.querySelector(".yours-standing")!;
+          const gone = time >= reentryAt(sat);
+          const text = gone ? (sat.deorbitedAt !== null ? "Brought down: burned up." : "Burned up.") : `${standing(sat, time)}.`;
+          if (line.textContent !== text) line.textContent = text;
+          // nothing to do once it's burning up
+          const controls = item.querySelector<HTMLElement>("[data-manoeuvres]");
+          if (controls) controls.hidden = gone || canManoeuvre(sat, time).deorbit !== null;
+        }
+      };
+      setInterval(tick, 1000);
+    }
   </script>
 
   <script>
@@ -801,12 +852,12 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     font-size: var(--step-0);
   }
 
-  /* about three at a time; more scroll */
+  /* three at a time; more scroll */
   .yours ul {
     margin: 0 0 0.5rem;
     padding: 0;
     list-style: none;
-    max-height: 9.5rem;
+    max-height: 11.5rem;
     overflow-y: auto;
   }
 

@@ -1207,3 +1207,34 @@ itself. `pnpm check` green three runs in a row (185 tests).
 ![The thank-you after bringing QUIET-SKY down from the launchpad: asked first, thanked after, and the list says it's coming down](screenshots/2026-10-07-deorbit-thank-you.png)
 
 ![The whole sky a minute later: QUIET-SKY burning up at the limb (bottom right) and HERON, brought down from the station panel, on its way](screenshots/2026-10-07-deorbit-descent-and-burn-up.png)
+
+Committed as `948998e`. Then a fresh Sonnet reviewer, with no shared
+context, attacked it against the ask and the ADR. It checked the maths
+itself: 12,000 random plain pairs met exactly as before the change, and
+about 1,700 meetings checked against a brute-force scan of descents and
+climbs found no mismatch. It also confirmed cross-site posts are refused,
+`back` can't redirect off the site, and the stream leaks no owner.
+Fixed from its findings:
+1. **The sky panel could bring down a different satellite from the one
+   you confirmed**: the panel moves on to whichever of yours is next
+   overhead, and the form was read after the question. It's read at the
+   click now.
+2. **The catalogue's live height went wrong after a second** for anything
+   manoeuvring (its script rebuilt the orbit without the rate); it now
+   carries the rate and the climb's end, and a live row says "coming down"
+   or "climbing".
+3. The dialogs overpromised ("won't be up there for anyone to collide
+   with"): a satellite coming down can still be hit for two minutes, and
+   now they say so.
+4. A satellite that can't boost says why ("Boost used", "Highest band").
+5. The launchpad list keeps up (climbing, coming down, burning up, gone)
+   and the address loses `?deorbited=` once it's been said, so a reload
+   doesn't thank you twice.
+6. A boost gets a news line on the sky too, and a boost from the top of a
+   band can't land just over the edge of the next.
+Tests added: the catalogue's wording, the missing boost's reason,
+cross-site posts, `back`, and an operator manoeuvring from a second device.
+Not fixed: "next over the station" estimates from the period now, so it's
+rough mid-manoeuvre; with several satellites the sky's panel offers its
+controls for the one it's talking about, not a choice (the launchpad has
+them all). `pnpm check` green (190 tests).

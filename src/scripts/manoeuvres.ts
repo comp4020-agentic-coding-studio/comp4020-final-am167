@@ -48,9 +48,7 @@ export function wireManoeuvres<T extends Manoeuvred>({ inPlace, refused }: Optio
     return new Promise((resolve) => confirm!.addEventListener("close", () => resolve(confirm!.returnValue === "yes"), { once: true }));
   }
 
-  async function post(form: HTMLFormElement, action: "deorbit" | "boost", callsign: string | null) {
-    const body = new URLSearchParams([...new FormData(form)].map(([key, value]) => [key, String(value)]));
-    body.set("action", action);
+  async function post(form: HTMLFormElement, body: URLSearchParams, action: "deorbit" | "boost", callsign: string | null) {
     try {
       // the attribute: `form.action` is the button named "action"
       const res = await fetch(form.getAttribute("action")!, {
@@ -78,10 +76,14 @@ export function wireManoeuvres<T extends Manoeuvred>({ inPlace, refused }: Optio
     const callsign = button.dataset.callsign ?? null;
     if (action === "boost" && !inPlace) return;
     e.preventDefault();
+    // which satellite, as it was when clicked: the sky's panel moves on to
+    // another of yours as they pass over, maybe while the question is open
+    const body = new URLSearchParams([...new FormData(form)].map(([key, value]) => [key, String(value)]));
+    body.set("action", action);
     if (action === "deorbit" && !(await ask(callsign))) return;
     if (inPlace) {
       button.disabled = true;
-      await post(form, action, callsign);
+      await post(form, body, action, callsign);
       button.disabled = false;
       return;
     }

@@ -569,6 +569,8 @@ export interface CatalogueEntry extends Orbit {
   sourceCollision: number | null;
   fate: "live" | "decayed" | "deorbited" | "destroyed";
   fateAt: number | null;
+  // when its owner started bringing it down (ADR 0011)
+  deorbitedAt: number | null;
   // its operator's handle, if it has one (ADR 0009)
   handle: string | null;
   mine: boolean;
@@ -674,6 +676,7 @@ export function browse(query: CatalogueQuery, who: Who, now = Date.now()): Catal
       sourceCollision: objects.sourceCollision,
       rate: objects.rate,
       until: objects.until,
+      deorbitedAt: objects.deorbitedAt,
     })
     .from(objects)
     .leftJoin(operators, eq(objects.operator, operators.id))
@@ -942,7 +945,11 @@ export function boost(who: Who, id: number, now = Date.now(), random = Math.rand
   if (!object) return refuse("not-yours");
   const { boost: why, to } = canManoeuvre(object, now);
   if (why || !to) return refuse(why ?? "top-band");
-  const target = placeInBand(to, now, random).radius;
+  // a height in the next band up, like a launch's, but not short of its
+  // lower edge, so a boost from the top of a band still climbs one
+  let target = placeInBand(to, now, random).radius;
+  for (let tries = 0; target < BANDS[to].minRadius && tries < 20; tries++) target = placeInBand(to, now, random).radius;
+  target = Math.max(target, BANDS[to].minRadius);
   return { ok: true, object: manoeuvre(object, "boost", climb(object, now, target), now, { boosts: object.boosts + 1 }) };
 }
 

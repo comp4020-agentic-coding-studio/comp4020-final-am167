@@ -1,5 +1,5 @@
 ---
-import { canManoeuvre, type Manoeuvrable } from "../lib/manoeuvre.ts";
+import { REFUSALS, canManoeuvre, type Manoeuvrable } from "../lib/manoeuvre.ts";
 import { BANDS } from "../lib/orbit.ts";
 
 // Boost a satellite of yours up a band, or bring it down (ADR 0011): two
@@ -16,6 +16,9 @@ interface Props {
 const { object, back, keep = false, now = Date.now() } = Astro.props;
 const can = canManoeuvre(object, now);
 const to = can.to ? BANDS[can.to].label : "";
+// why there's no boost, where there's still a way down
+const noBoost = !keep && can.deorbit === null && can.boost !== null;
+const noBoostLabel = can.boost === "top-band" ? "Highest band" : "Boost used";
 ---
 <div class="manoeuvres" data-manoeuvres data-id={object.id}>
   {(keep || can.boost === null) && (
@@ -27,6 +30,7 @@ const to = can.to ? BANDS[can.to].label : "";
       </button>
     </form>
   )}
+  {noBoost && <span class="spent" title={REFUSALS[can.boost!]}>{noBoostLabel}</span>}
   {(keep || can.deorbit === null) && (
     <form method="post" action="/manoeuvre/" data-manoeuvre hidden={can.deorbit !== null}>
       <input type="hidden" name="id" value={object.id} />
@@ -49,8 +53,18 @@ const to = can.to ? BANDS[can.to].label : "";
     margin: 0;
   }
 
+  .manoeuvres[hidden] {
+    display: none;
+  }
+
   .manoeuvres form[hidden] {
     display: none;
+  }
+
+  .spent {
+    align-self: center;
+    font-size: var(--step--1);
+    color: var(--ink-dim);
   }
 
   button {

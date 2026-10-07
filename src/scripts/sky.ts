@@ -354,6 +354,7 @@ function news(time: number) {
   };
   const falling = speaking().find((sat) => plungeAt(sat, time) !== null);
   const down = speaking().find((sat) => sat.deorbitedAt !== null && plungeAt(sat, time) === null);
+  const rising = speaking().find((sat) => climbing(sat, time));
   const last = latest();
   const story = stories.reduce<Story | null>((a, b) => (a && a.at > b.at ? a : b), null);
   const next = [...coming.values()].filter((c) => c.at > time).sort((a, b) => a.at - b.at)[0];
@@ -363,6 +364,7 @@ function news(time: number) {
   else if (falling)
     text = `${named(falling)} ${falling.deorbitedAt !== null ? "was brought down, and is burning up" : "is burning up on re-entry"}.`;
   else if (down) text = `${named(down)} is being brought down by its operator, to keep the sky clear.`;
+  else if (rising) text = `${named(rising)} is climbing to a higher band, to stay up longer.`;
   else if (next && next.at - time < 10 * 60_000)
     text = `Collision coming: ${who(next.a)} and ${who(next.b)}, in ${countdown(next.at - time)}.`;
   else if (story && since(story.at) < 15 * 60_000) text = `${headline(story.parties)} ${ago(since(story.at))}.`;
