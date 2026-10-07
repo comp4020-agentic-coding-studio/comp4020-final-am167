@@ -71,7 +71,8 @@ _Last updated 2026-10-07 (PRs #3 and #4 merged, so all C9 building is done; stal
     on a schedule seeded by the clock, each with its own bands, callsigns
     and lines. They fly, collide and take the blame like anyone's; nobody
     can sign in as one. Not disclosed on the page for now (Advay may add
-    it back). At most 20 up, in the derelicts' place.
+    it back). At most 20 up, in the derelicts' place. **May be removed
+    entirely later on** (Advay, 2026-10-07): see "Open questions".
   - Not built, though once listed for C9: conjunction alerts and dodging
     (moved to C10).
 - **C9 cutoff:** Mon 12 Oct 2026, 12:00.
@@ -475,3 +476,10 @@ flow, beacon rules, launch limits, bands.
   couplet; words on fragments later (see "Collisions that mean something").
 - **Open:** which of the purpose ideas to adopt (see "A purpose").
 - **Open:** seeing a burn-up on demand (see "Now and later").
+- **Later on:** whether to keep the resident operators at all (ADR 0015,
+  proposed until then). Against: they aren't disclosed, so activity a
+  marker sees may be the server's rather than other visitors'; they
+  roughly double collisions in a quiet sky; the app becomes less a record
+  of what people did. To remove: revert their commits, plus a migration
+  dropping `operators.resident` and the residents' operator rows if
+  they've been deployed. Their satellites stay in the record (ADR 0003).
