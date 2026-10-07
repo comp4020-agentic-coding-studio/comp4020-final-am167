@@ -33,12 +33,20 @@ const listed = (names: string[]) =>
   names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 
 // "ALPHA and BRAVO's collision": where debris came from. A cascade can trace
-// back to many: three are named, then "and 5 others'".
+// back to many: three people are named, then "2 others", and the derelicts
+// counted together at the end ("and 2 derelicts'"), never one by one.
 export function collisionOf(roots: readonly StoryRoot[]): string {
-  const names = roots.map(nameOf);
-  if (names.length <= 3) return `${listed(names)}'s collision`;
-  const rest = names.length - 3;
-  return `${names.slice(0, 3).join(", ")} and ${rest} ${rest === 1 ? "other's" : "others'"} collision`;
+  const people = roots.filter((root) => root.kind !== "derelict" && root.callsign).map((root) => root.callsign!);
+  const dead = roots.length - people.length;
+  const rest = people.length - 3;
+  const parts = [
+    ...people.slice(0, 3),
+    ...(rest > 0 ? [`${rest} ${rest === 1 ? "other" : "others"}`] : []),
+    ...(dead > 0 ? [dead === 1 ? "a derelict" : `${dead} derelicts`] : []),
+  ];
+  // "2 others'", "2 derelicts'", but "ATLAS's"
+  const plural = (rest > 1 && dead === 0) || dead > 1;
+  return `${listed(parts)}${plural ? "'" : "'s"} collision`;
 }
 
 // "debris from ALPHA and BRAVO's collision"

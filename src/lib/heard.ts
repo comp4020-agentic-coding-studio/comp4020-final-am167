@@ -198,18 +198,26 @@ function feedOf(ids: number[], who?: Viewer | string): HeardItem[] {
   });
 }
 
+// How far back the feed looks: the latest passes logged, however many
+// days of them there are, so a page doesn't read the whole log to open.
+const LOOK_BACK = 2000;
+
 // What the stations have heard, each beacon once, the latest pass first.
 export function recentlyHeard(limit: number, who?: Viewer | string, now = Date.now()): HeardItem[] {
-  const recent = db
-    .select({ object: transmissions.object, last: max(transmissions.at) })
+  const latest = db
+    .select({ object: transmissions.object, at: transmissions.at })
     .from(transmissions)
     .where(sql`${transmissions.at} <= ${now}`)
-    .groupBy(transmissions.object)
-    .orderBy(desc(max(transmissions.at)))
-    .limit(limit)
+    .orderBy(desc(transmissions.at), desc(transmissions.id))
+    .limit(LOOK_BACK)
     .all();
-  const order = new Map(recent.map((r, i) => [r.object, i]));
-  return feedOf(recent.map((r) => r.object), who).sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+  // the latest pass of each, in order
+  const order = new Map<number, number>();
+  for (const pass of latest) {
+    if (order.size >= limit) break;
+    if (!order.has(pass.object)) order.set(pass.object, order.size);
+  }
+  return feedOf([...order.keys()], who).sort((a, b) => order.get(a.id)! - order.get(b.id)!);
 }
 
 // How many different people have heard an object, and over how many passes.

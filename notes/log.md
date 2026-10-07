@@ -1943,3 +1943,17 @@ quoted question fixed).
 ![The launchpad: the intro saying what it's for, today's question above the beacon, and the box ticked to answer it](screenshots/2026-10-07-launchpad-why-and-question.png)
 
 Commit `248469e`.
+
+## 2026-10-07 — Two follow-ups: derelicts counted together, a bounded feed
+
+Seen on the phone against a busy sky: static "from a derelict, a derelict,
+T-ZV7T2S and 3 others' collision". `collisionOf` now names up to three
+people, then "2 others", then the derelicts counted together at the end
+("ALPHA and 2 derelicts' collision", "A1, B2, C3, 2 others and 2
+derelicts' collision"); one person and one derelict reads as before. A
+story test for it (written with the change). And the feed's query read
+every transmission ever logged to find the latest per beacon; it now reads
+only the latest 2,000 passes (by the time index), which is days of them at
+a busy hour. Typecheck and the affected tests green (47); the full HTTP
+suite waits for a rebuild after the adversarial review, which is using the
+running server.
