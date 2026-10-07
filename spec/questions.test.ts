@@ -3,10 +3,12 @@ import { DAY, QUESTIONS, answered, dayOf, questionOn } from "../src/lib/question
 import { sharedQuestion } from "../src/lib/story.ts";
 
 // The stations' question (ADR 0018): one a day, from a fixed list, the day
-// turning at midnight UTC. A launch says which day's question its form
-// showed, and answers it if that was today's or yesterday's.
+// turning at midnight in Canberra (standard time). A launch says which
+// day's question its form showed, and answers it if that was today's or
+// yesterday's.
 
-const noon = Date.UTC(2026, 9, 7, 12);
+// noon on 7 October in Canberra (AEST, UTC+10)
+const noon = Date.UTC(2026, 9, 7, 2);
 
 describe("the stations' question", () => {
   it("is a short question, from a list long enough to last weeks", () => {
@@ -18,10 +20,12 @@ describe("the stations' question", () => {
     expect(new Set(QUESTIONS).size).toBe(QUESTIONS.length);
   });
 
-  it("is the same all day, and the next one tomorrow", () => {
+  it("is the same all day in Canberra, and the next one from its midnight", () => {
     const today = dayOf(noon);
-    expect(dayOf(Date.UTC(2026, 9, 7, 0, 0, 1))).toBe(today);
-    expect(dayOf(Date.UTC(2026, 9, 7, 23, 59, 59))).toBe(today);
+    // just after and just before midnight in Canberra: 14:00 UTC the day before
+    expect(dayOf(Date.UTC(2026, 9, 6, 14, 0, 1))).toBe(today);
+    expect(dayOf(Date.UTC(2026, 9, 7, 13, 59, 59))).toBe(today);
+    expect(dayOf(Date.UTC(2026, 9, 7, 14, 0, 1))).toBe(today + 1);
     expect(dayOf(noon + DAY)).toBe(today + 1);
     const list: readonly string[] = QUESTIONS;
     expect(questionOn(today + 1)).toBe(list[(list.indexOf(questionOn(today)) + 1) % list.length]);

@@ -168,7 +168,8 @@ describe("operators", () => {
     controller.abort();
     expect(text).toMatch(/^event: hello/);
     expect(text).not.toContain(id);
-    expect(text).not.toMatch(/"owner"|"operator":\s*\d/);
+    // as keys: a beacon (or a fragment's words) can say "owner" (the review)
+    expect(text).not.toMatch(/"owner"\s*:|"operator":\s*\d/);
   });
 
   it("never shows a passphrase or anyone's person id", async () => {

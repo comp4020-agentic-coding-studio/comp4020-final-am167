@@ -53,9 +53,11 @@ says what it's for on the launchpad, on a page of its own, and after a
 first launch.**
 
 - **The question.** A fixed list (`src/lib/questions.ts`), one a day, the
-  day turning at midnight UTC (10 or 11 in the morning in Canberra). The
-  launchpad shows today's above the beacon, with "My beacon answers it"
-  ticked; untick it to say anything else. The form carries which day's
+  day turning at midnight in Canberra (standard time, so 1 am in summer).
+  The launchpad shows today's above the beacon, with "My beacon answers
+  it" to tick if it does. Not ticked by default: a default tick tagged
+  every line as an answer, which manufactured the "both were answering"
+  connection (the review, 2026-10-07). The form carries which day's
   question it showed, so a launch just after midnight still answers the
   one it was written to (today's or yesterday's; anything older is taken
   as answering nothing). A satellite keeps the question it answered
@@ -91,13 +93,14 @@ first launch.**
   tomorrow (a new question). The catalogue becomes, over time, an archive
   of strangers' answers.
 - Some will ignore the question; that's allowed, and nothing ranks
-  answers over other lines.
+  answers over other lines. Fewer lines will be marked as answers than if
+  the box were ticked for you, but the ones that are, are.
 - A question in the code is a deploy to change; fine for a fixed list
   Advay curates. If the list is edited, the record keeps what was asked.
 - The why is said in three places, which can drift; the Why page is the
   long version, and the other two point to it.
 - Testable over HTTP: the launchpad shows today's question with the box
-  ticked; a launch answering it keeps the question (its history says so),
+  to tick; a launch answering it keeps the question (its history says so),
   one with the box unticked doesn't, and one carrying a week-old day
   answers nothing; the Why page is linked from the launchpad. On the
   server: a collision of two answers to the same question says so.

@@ -36,10 +36,11 @@ const descent = Math.round(MANOEUVRE.descentMs / 60_000);
       <p>
         You get {BEACON_MAX} characters and a satellite. Each time it passes over
         one of the three ground stations ({stations.join(", ").replace(/, ([^,]*)$/, " and $1")}),
-        its line is heard by everyone who has the sky open at that moment, all at
-        once. The stations keep a log of what they heard, and each line says how
-        many different people have heard it. That count is people, not clicks:
-        nobody can raise their own.
+        its line is read out to everyone who has the sky open at that moment,
+        all at once (when several are overhead, they take turns). The stations
+        keep a log of what they heard, and each line says how many different
+        people have heard it: people, not tabs, and your own listening never
+        counts towards yours.
       </p>
 
       <h3>Listen</h3>
@@ -63,9 +64,11 @@ const descent = Math.round(MANOEUVRE.descentMs / 60_000);
         comes round the stations most often, so it's heard by the most people,
         and it's where everyone crowds. When two satellites meet, both break
         apart, and their fragments carry pieces of both lines, broadcast at the
-        stations as static. Static takes its turn like any beacon, so a
-        collision doesn't only end two satellites: it puts noise made of two
-        people's words over everyone else's, until the fragments burn up. You
+        stations as static. Static takes a turn at the stations between the
+        beacons, so a collision doesn't only end two satellites: it puts noise
+        made of two people's words in everyone else's way, until the fragments
+        burn up. Even the dead satellites the sky keeps carry an echo: the last
+        words of one long gone. You
         can launch as often as every five minutes, and you can bring one of
         yours down in {descent} minutes to leave the sky clearer.
       </p>
@@ -93,13 +96,14 @@ const descent = Math.round(MANOEUVRE.descentMs / 60_000);
         debris faster than the sky can clear it.
       </p>
       <p>
-        Kessler puts the two together and makes the cost something you can see
-        and hear. Words take up room. Crowding makes collisions. Collisions
-        turn words into noise, and the noise is made of real people's words,
-        torn out of what they meant and mixed with a stranger's.
+        Kessler puts the two together, so the cost is something you can see
+        and hear: words take up room, crowding makes collisions, and
+        collisions turn words into noise made of real people's words, mixed
+        with a stranger's.
       </p>
       <p>
-        Nothing is moderated and nothing is voted on. Elinor Ostrom (1990) found
+        Nobody moderates (beyond a small filter on words) and nothing is voted
+        on. Elinor Ostrom (1990) found
         that commons last when the people using them can see the state of the
         resource and what each of them takes. Here everyone can see the sky, who
         launched what, who has been heard, and what each launch went on to cost:
@@ -120,7 +124,7 @@ const descent = Math.round(MANOEUVRE.descentMs / 60_000);
         <div><dt>A collision</dt><dd>two people's words, broken into each other</dd></div>
         <div><dt>Static</dt><dd>the noise everyone has to hear around</dd></div>
         <div><dt>Decay</dt><dd>time: everything falls in the end, and the sky heals slowly</dd></div>
-        <div><dt>Bringing yours down</dt><dd>taking your words back, so others can be heard</dd></div>
+        <div><dt>Bringing yours down</dt><dd>making room so others can be heard (what it said stays on the record)</dd></div>
       </dl>
       <p class="go">
         <a class="primary" href="/">Launch a satellite</a>

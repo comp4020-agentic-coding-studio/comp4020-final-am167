@@ -14,7 +14,9 @@ const viewer = { person, operator: operator?.id ?? null };
 const wantsJson = Astro.request.headers.get("accept")?.includes("application/json");
 
 let errors: LaunchErrors = {};
-let values: LaunchValues = { band: "low", callsign: "", beacon: "", answering: "1" };
+// answering the question is a choice, not the default (the review: a
+// default tick tagged every line as an answer)
+let values: LaunchValues = { band: "low", callsign: "", beacon: "", answering: "" };
 
 let form: FormData | undefined;
 if (Astro.request.method === "POST") {
@@ -208,7 +210,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
             >{values.beacon}</textarea>
             <label class="answering">
               <input type="checkbox" name="answering" value="1" checked={values.answering === "1"} />
-              <span>It answers today's question</span>
+              <span>My beacon answers it</span>
             </label>
             <input type="hidden" name="asked" value={today} />
             <p class="help" id="beacon-help">

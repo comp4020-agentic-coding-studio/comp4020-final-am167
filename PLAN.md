@@ -154,7 +154,7 @@ everyone a little?** See "What Kessler is for" below.
 | Beacon length (2026-10-07, ADR 0016, proposed) | **140 characters**: a thought, not a slogan, readable in the dozen seconds a low satellite is over a station. Several overhead take turns sized to the line (4 to 10 s). |
 | Heard by people (2026-10-07, ADR 0016, proposed) | **A pass over a station while people have the sky open is heard**: logged, and each listener who isn't the owner counted once ("heard by", people not tabs; cookies hashed). A **Heard** feed beside the sky; who's listening now. A beacon is public in the feed once heard (ADR 0012's withholding until it's gone is relaxed). |
 | The wreck keeps the words (2026-10-07, ADR 0017, proposed) | **Each fragment carries a run of words from each colliding line**, heard over the stations as static; "the wreck says" fades as fragments burn up; each owner gets the encounter in Yours. Replaces "fragments carrying words can come later". |
-| Question of the day (2026-10-07, ADR 0018, proposed) | **The stations ask one question a day** (fixed list, `src/lib/questions.ts`, turning at midnight UTC); a beacon can answer it (ticked by default). Two answers that collide say so. |
+| Question of the day (2026-10-07, ADR 0018, proposed) | **The stations ask one question a day** (fixed list, `src/lib/questions.ts`, turning at midnight in Canberra); a beacon can answer it (a box to tick, not ticked by default). Two answers that collide say so. |
 | Managing yours (2026-10-07, ADR 0015, proposed) | **Boost and bring down from Yours (`/catalogue/?show=mine`) and from each satellite's pop-up card**, never the station panel. Every object's history pops up as a card. |
 | Launch limits (2026-10-04) | ~~One live satellite per person, plus a cooldown~~ (starting at 10 minutes) after your satellite dies or is deorbited, so relaunching costs something. Replaced 2026-10-06, below. |
 | Launch limits (2026-10-06) | **Any number up, five minutes apart** (first a minute; Advay set five the same day, after one person launching nonstop took the sky from 2 collisions an hour to 60, and three filled it to its cap). Advay: "someone can send more satellites to send more messages but increase the risk of ruining it for all". Each launch is another beacon heard and another object everyone shares the sky with; the gap is between your launches, not after one dies. The sky cap (200 satellites) stays as the machine's backstop. Replaces "one each keeps it fair" (ADR 0002, superseded): the commons is now tested by how much each person takes, not rationed. |
@@ -487,7 +487,7 @@ Settled from the old list of things to ponder:
   words; a cascade fills the stations with static until it burns up (hours
   in the low band). Watch whether that's too much once real people use it.
 - **Questions** are a fixed list in the code for Advay to edit; beacons
-  may ignore them (ticked by default).
+  may ignore them (a box to tick, not ticked for you).
 - Left out still: a shared sky-health number on every screen.
 
 ## Open questions

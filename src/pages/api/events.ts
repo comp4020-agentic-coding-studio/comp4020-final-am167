@@ -2,7 +2,8 @@ import type { APIRoute } from "astro";
 import { audience, subscribe } from "../../lib/events.ts";
 import type { SkyEvent } from "../../lib/events.ts";
 import { HEARD_FEED, heardCounts, listenerFor, recentlyHeard, startListening } from "../../lib/heard.ts";
-import { conjunctions, isOwnedBy, liveSky, recentCollisions, toPublic, watcherArrived } from "../../lib/sky.ts";
+import { conjunctions, liveSky, recentCollisions, toPublic, watcherArrived } from "../../lib/sky.ts";
+import { forViewer } from "../../lib/stream.ts";
 
 // One stream per open page (ADR 0004). It opens with the server's time, a
 // snapshot of the live sky and the collisions coming (ADR 0008), what the
@@ -12,27 +13,7 @@ import { conjunctions, isOwnedBy, liveSky, recentCollisions, toPublic, watcherAr
 export const GET: APIRoute = ({ request, locals }) => {
   const viewer = { person: locals.person, operator: locals.operator?.id ?? null };
   // what this viewer may see of an event: objects lose their owner
-  const visible = (event: SkyEvent) => {
-    switch (event.type) {
-      case "launch":
-      case "decay":
-        return toPublic(event.object, viewer);
-      case "manoeuvre":
-        return { ...event, object: toPublic(event.object, viewer) };
-      case "conjunction":
-        return event.conjunction;
-      case "collision":
-        return {
-          ...event.collision,
-          objects: event.collision.objects.map((object) => toPublic(object, viewer)),
-          fragments: event.collision.fragments.map((object) => toPublic(object, viewer)),
-        };
-      case "heard":
-        return { ...event.heard, mine: isOwnedBy(event, viewer) };
-      case "audience":
-        return { listening: event.listening };
-    }
-  };
+  const visible = (event: SkyEvent) => forViewer(event, viewer);
   const encoder = new TextEncoder();
   let cleanup = () => {};
   const stream = new ReadableStream({

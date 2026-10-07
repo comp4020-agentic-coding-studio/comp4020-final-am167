@@ -87,7 +87,11 @@ const moreLosses = f.destroyed.length - shownLosses.length;
       )}
       {live && (
         <p>
-          {h.mine && h.beacon !== null ? "Everyone else hears it " : "Heard "}only as it passes over a ground station.{" "}
+          {h.withheld
+            ? "Not heard yet: its line is read out when it's on air over a ground station, and shown here once it has been."
+            : h.mine && h.heard.passes === 0
+              ? "Nobody else has heard it yet: it's read out each time it's on air over a ground station."
+              : "It's read out each time it's on air over a ground station."}{" "}
           <span data-pass>
             {overhead
               ? `It's over ${overhead.name} now.`

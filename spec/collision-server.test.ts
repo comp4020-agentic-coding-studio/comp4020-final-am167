@@ -112,11 +112,19 @@ describe("a cascade while the server was stopped", () => {
   const crowd = Array.from({ length: 40 }, () =>
     orbit(1.3 + (random() - 0.5) * 0.06, random() * 2 * Math.PI, random() < 0.5 ? 1 : -1),
   );
+  // and people's satellites among them, with lines to break (ADR 0017)
+  const people = Array.from({ length: 12 }, (_, i) => ({
+    beacon: `line ${i} from someone who wanted to be heard for once`,
+    ...orbit(1.3 + (random() - 0.5) * 0.06, random() * 2 * Math.PI, random() < 0.5 ? 1 : -1),
+  }));
   const end = T + 2 * HOUR;
 
   async function run(step: number | null) {
-    const { sky } = await freshServer();
+    const { sky, db, schema } = await freshServer();
     for (const o of crowd) sky.addDerelict(o, T);
+    for (const [i, p] of people.entries()) {
+      db.insert(schema.objects).values({ kind: "satellite", owner: `p${i}`, callsign: `P${i}`, band: "low", launchedAt: T, ...p }).run();
+    }
     if (step === null) sky.settle(end);
     else for (let t = T; t <= end; t += step) sky.settle(t);
     sky.settle(end);
@@ -132,7 +140,9 @@ describe("a cascade while the server was stopped", () => {
         phase,
         direction,
       }));
-    return { record, collisions: sky.collisionLog() };
+    // the words each fragment carries
+    const words = db.select({ id: schema.objects.id, words: schema.objects.words }).from(schema.objects).all();
+    return { record, collisions: sky.collisionLog(), words };
   }
 
   it("ends with the same sky as a server that ran through it", async () => {
@@ -143,6 +153,9 @@ describe("a cascade while the server was stopped", () => {
     expect(stopped.collisions.some((c) => debris.has(c.a) || debris.has(c.b))).toBe(true);
     expect(running.collisions).toEqual(stopped.collisions);
     expect(running.record).toEqual(stopped.record);
+    // and the wreckage says the same (ADR 0017): words broke, the same ones
+    expect(stopped.words.some((o) => o.words)).toBe(true);
+    expect(running.words).toEqual(stopped.words);
     // two hours of sky stepped through 1,440 times: about three seconds
     // alone, more with the whole suite running beside it
   }, 20_000);

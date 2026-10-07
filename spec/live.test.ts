@@ -55,6 +55,7 @@ describe("the event stream", () => {
     // stream included (ADR 0016)
     const { heard, heardBy, listening } = helloA.data as { heard: unknown[]; heardBy: Record<string, number>; listening: number };
     expect(Array.isArray(heard)).toBe(true);
+    expect(heardBy).not.toBeNull();
     expect(typeof heardBy).toBe("object");
     expect(listening).toBeGreaterThanOrEqual(1);
 

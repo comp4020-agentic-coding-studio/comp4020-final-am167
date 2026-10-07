@@ -36,7 +36,7 @@ describe("an object's history", () => {
     expect(history.textContent).toMatch(/launched without a handle/i);
     expect(history.textContent).toMatch(/Low/);
     expect(history.textContent).not.toContain(beacon);
-    expect(history.textContent).toMatch(/heard only as it passes over a ground station/i);
+    expect(history.textContent).toMatch(/not heard yet/i);
   });
 
   it("is the same in the sky's panel, beacon withheld from a stranger and shown to its owner", async () => {

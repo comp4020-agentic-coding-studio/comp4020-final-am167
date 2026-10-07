@@ -191,6 +191,26 @@ describe("a beacon passing over a station", () => {
   });
 });
 
+describe("a heard event, on each stream", () => {
+  it("says whether it's the viewer's, and never whose it is", async () => {
+    const { heard, told, put, ears } = await freshServer();
+    const { forViewer } = await import("../src/lib/stream.ts");
+    put("alice");
+    heard.listen(T, T + 10_000, ears("bob"));
+    const event = told.find((e) => e.type === "heard")!;
+    const forAlice = forViewer(event, { person: "alice", operator: null }) as Record<string, unknown>;
+    const forBob = forViewer(event, { person: "bob", operator: null }) as Record<string, unknown>;
+    expect(forAlice.mine).toBe(true);
+    expect(forBob.mine).toBe(false);
+    for (const seen of [forAlice, forBob]) {
+      expect(seen).not.toHaveProperty("owner");
+      expect(seen).not.toHaveProperty("operator");
+      expect(JSON.stringify(seen)).not.toContain('"alice"');
+      expect(seen).toMatchObject({ station: "Canberra", heardBy: 1, passes: 1, beacon: "alice says hello" });
+    }
+  });
+});
+
 describe("what was heard", () => {
   it("is each beacon once, the latest pass first, with who launched it and its line", async () => {
     const { heard, put, ears } = await freshServer();

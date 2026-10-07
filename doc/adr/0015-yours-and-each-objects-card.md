@@ -61,11 +61,12 @@ dialog everywhere.**
   clicking an object in the sky. For your own live satellite it carries the
   same two forms. It stays open while the sky changes, and is asked for
   again when a collision, a burn-up or a manoeuvre could change it. On the
-  sky it sits down the right, so the object stays in view; elsewhere it's
-  centred.
-- `/object/<id>/` stays, for a link opened on its own and for no
-  JavaScript, as the same card, centred, not a column of text down one side
-  of the screen.
+  sky it isn't modal: it sits beside the beacons, so the sky and the
+  stations stay usable and clicking another object switches the card to
+  it. Elsewhere it's modal and centred.
+- `/object/<id>/` is the catalogue with that object's card open over it
+  (the address stays the same), for a link opened on its own and for no
+  JavaScript: the same pop-up as everywhere else, not a page of its own.
 - **The station panel offers no controls.** It still says what yours is
   doing (next over which station, when it burns up), with a link to Yours.
 - **The forms work without JavaScript**: each carries where it came from
@@ -83,8 +84,8 @@ dialog everywhere.**
 - ADR 0011's rules are untouched: only the owner, a boost once, nothing
   while coming down or burning up, the database write checking it.
 - Managing several satellites is one page, not a wait for each to pass.
-- A dialog over the sky dims it less than a centred one would; on a phone
-  it's a sheet from the bottom, since the scene is only half the screen.
+- On a phone the sky's card is a sheet from the bottom, since the scene is
+  only half the screen.
 - The history panel's own code (focus going back to what opened it, a
   refresh not stealing focus, a slow answer to an old click dropped) moves
   into the dialog, shared by every page that has one.

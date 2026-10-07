@@ -21,13 +21,14 @@ async function launched(s: Session, fields: Record<string, string>) {
 }
 
 describe("the launchpad", () => {
-  it("shows today's question, with the beacon answering it unless you say otherwise", async () => {
+  it("shows today's question, and lets you say your beacon answers it", async () => {
     const pad = await page(new Session(baseUrl), "/");
     const form = pad.querySelector("form[data-launch]")!;
     expect(near()).toContain(form.querySelector("#question")?.textContent?.trim());
     const answering = form.querySelector<HTMLInputElement>("input[name=answering]")!;
     expect(answering.type).toBe("checkbox");
-    expect(answering.hasAttribute("checked")).toBe(true);
+    // a choice, not the default
+    expect(answering.hasAttribute("checked")).toBe(false);
     // which day's question this form showed
     expect(Number(form.querySelector<HTMLInputElement>("input[name=asked]")?.value)).toBeGreaterThan(dayOf(Date.now()) - 2);
   });

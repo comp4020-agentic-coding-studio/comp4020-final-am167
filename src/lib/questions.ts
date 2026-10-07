@@ -1,7 +1,8 @@
 // The stations' question (ADR 0018): one a day, which a beacon can answer.
-// A fixed list, for Advay to edit; the day turns at midnight UTC. A
-// satellite keeps the text of what it answered, so editing this list never
-// rewrites the record. Shared by the server and the browser.
+// A fixed list, for Advay to edit; the day turns at midnight in Canberra
+// (Australian Eastern Standard Time; 1 am in summer). A satellite keeps the
+// text of what it answered, so editing this list never rewrites the record.
+// Shared by the server and the browser.
 
 export const QUESTIONS = [
   "What do you want to outlast you?",
@@ -29,8 +30,11 @@ export const QUESTIONS = [
 
 export const DAY = 86_400_000;
 
-// which day it is, counted from 1970 in UTC
-export const dayOf = (time: number): number => Math.floor(time / DAY);
+// Canberra's standard time, ahead of UTC
+const CANBERRA = 10 * 3_600_000;
+
+// which day it is in Canberra, counted from 1970
+export const dayOf = (time: number): number => Math.floor((time + CANBERRA) / DAY);
 
 export const questionOn = (day: number): string => QUESTIONS[((day % QUESTIONS.length) + QUESTIONS.length) % QUESTIONS.length];
 

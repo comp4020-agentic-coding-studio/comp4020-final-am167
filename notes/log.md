@@ -2170,3 +2170,38 @@ from the feed; on an iPhone 14, a 468 px sheet.
 ![An object's address: the catalogue, with the object's card popped up over it](screenshots/2026-10-07-object-address-card-over-catalogue.png)
 
 Commit `fe908a4`.
+
+## 2026-10-07 — Review fix 5: the question opt-in, copy that matches, tests that would catch it
+
+Acting on the review's findings 2 and 8, and two of its opinions:
+
+- **Answering the question is opt-in.** "My beacon answers it" (the ADR's
+  wording, now the box's too) is no longer ticked for you: a default tick
+  tagged lines like "Second launch, mid band." as answers and manufactured
+  "both were answering" connections.
+- **The day turns at midnight in Canberra** (standard time, so 1 am in
+  summer), not at 10 or 11 in the morning there.
+- **Copy that the code contradicted**, fixed: the Why page no longer says
+  bringing yours down is "taking your words back" (the record keeps them),
+  says "nobody moderates (beyond a small filter on words)", says several
+  overhead take turns, says your own listening never counts towards yours
+  (not "nobody can raise their own"), and mentions derelicts' echoes; its
+  "what it's about" is a little shorter. A live beacon's history says "not
+  heard yet" until it has been, then "it's read out each time it's on air
+  over a ground station" (it said "heard only…", beside a line anyone could
+  already read). The catalogue no longer says beacons are only heard at the
+  stations: what's been heard is beside the sky. ADRs 0015 and 0018 (still
+  proposed) and `PLAN.md` say what the code now does.
+- **Tests that would have passed with things broken**: the stream's
+  per-viewer filter moved into `src/lib/stream.ts` and is tested (a heard
+  event says `mine` to its owner and not to others, with no owner or
+  operator); words through a cascade replay (the cascade test now has
+  twelve people's satellites among the forty derelicts, and the stopped
+  and running servers' fragments carry the same words; before, the crowd
+  was all derelicts, so silent); the hello's `heardBy` can't be null; the
+  operator test's check for leaked owners matches keys, not a fragment
+  that happens to say "owner" (it failed on a dirty database); the
+  400-orbit stations test gets 20 s, as the cascade test did, since it
+  passed 5 s under a loaded suite.
+
+`pnpm check` green twice in a row on a fresh database (284 tests).
