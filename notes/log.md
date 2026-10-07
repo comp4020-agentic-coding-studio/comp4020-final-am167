@@ -2129,4 +2129,4 @@ burned up; MOTH hitting it leaves fragments with every word of both, the
 collision names the echo, MOTH's owner meets it, and `newsSince` counts it
 before and not after; a story test for the echo in a couplet; an HTTP test
 that Yours sets the last-looked cookie (httpOnly). `pnpm check` green (283
-tests).
+tests). Commit `72a17dd`.
