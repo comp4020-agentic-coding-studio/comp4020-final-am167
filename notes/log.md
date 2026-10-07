@@ -1775,3 +1775,9 @@ into `main`, which he hadn't asked for.
 
 
 Commit `43c965c`.
+
+## 2026-10-07 — AGENTS.md removed
+
+`AGENTS.md` was a copy of `CLAUDE.md` for Codex sessions, which every rule
+change had to be made twice in. Advay had it removed; `CLAUDE.md` is the one
+set of instructions.
