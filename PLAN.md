@@ -105,6 +105,9 @@ _Last updated 2026-10-07, overnight (Advay's feedback round on branch `claude/ni
     dismissed; on a laptop the sky's card covers the beacons column, not
     the globe; the question's day follows Canberra's clock, summer time
     included.
+  - All of it is in
+    [PR #7](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/7),
+    from `claude/nifty-thompson-s7cine`, for Advay to review.
   - For Advay: accept (or change) ADRs 0015–0018; edit the question list
     (`src/lib/questions.ts`) and the Why page's wording into his own; the
     README is now further out of date (it says 60 characters and "one live
