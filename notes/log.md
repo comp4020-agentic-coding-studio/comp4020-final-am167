@@ -1646,3 +1646,63 @@ matches a running server, the cap holds, `RESIDENTS=0` launches none). The four
 server tests that need an exact sky set `RESIDENTS=0`.
 
 Commit `ab0b9c2`.
+
+## 2026-10-07 — Adversarial review of the resident operators, and the fixes
+
+A fresh Sonnet reviewer, told to be adversarial, read the resident
+operators change (`ab0b9c2`, PR #5) against the code, the ADRs and the
+spec. Advay asked for all of it fixed. What it found and what changed:
+
+1. **A fresh deploy could have no derelicts** (would fail
+   `spec/catalogue.test.ts`'s "filters by kind" in CI): residents
+   backfilled first and the derelict floor counts them, and a six-hour
+   window often has 20 due. Confirmed by hand: a fresh database had one
+   derelict. The sky now keeps at least five derelicts whatever the
+   residents (`DERELICT_MIN`).
+2. **The "sky half full" check counted the sky as it was at catch-up, not
+   when each launch was due**, so a stopped and a running server could
+   disagree. It now counts what was up at the due time, as the cap does.
+3. **A failed write dropped the rest of a catch-up's launches** until a
+   restart. A failed launch is now logged and tried again (with the ones
+   after it) on the next settle.
+4. **A redeploy that changed the schedule would relaunch six hours of
+   them** (the check was on the exact time). A resident now launches at
+   most once in any hour, so a changed schedule can't double up. Tested by
+   reopening the same database, then reopening it with twice the rate.
+5. **A catch-up announced every launch it made** to the page that woke the
+   server, including ones already gone. Only launches under a minute old
+   are announced; a page opening then gets the rest in its snapshot.
+6. **"Never take a person's room" was wrong**: theirs count towards the
+   200. Comment and ADR now say people have at least 180 in a crowded sky.
+
+Content: fixed callsigns repeated (TOMASZ-SAT ten times in three days)
+and numbered ones followed the hour, not the launch. Callsigns now count
+up launch by launch per resident (LARKSPUR-411, LARKSPUR-412, …), counted
+from the schedule since 1 October, so none comes round again; a test
+checks they're unique and in order. Each resident has four to eight lines
+now, not two to five. Companies launch more often than hobbyists
+(weights). Personas: the memorial no longer mourns an invented "Margaret",
+the school's lines are the class's, not a child's ("Hi Mum…" gone), the
+hobbyists' handles (`kitchen_table_sat`, `garage_orbital`,
+`nightowl_launches`) don't read as a real person's name, generic company
+names became invented ones (Isobar, Driftmark, Southlight, Glintcast), and
+VK-OSCAR (a real amateur-radio designation) is gone. The env var is
+`RESIDENTS_PER_HOUR` now (it clashed with the `RESIDENTS` cast), and a
+non-number falls back to the default.
+
+Re-measured, since the derelict minimum and the low-heavy, weighted cast
+moved the numbers: six four-day runs each, no people launching. Three an
+hour averaged 4.4 collisions an hour (one run 5.6, over Advay's 1 to 5),
+and a cap of 15 didn't help (4.9). Residents crowd the low band, where
+derelicts spread over all three. **Two an hour averages 3.7 (2.9 to 4.5)
+against 1.8 without**, so the default is two. The first single run (1.1
+without residents) was at the low end; runs without residents range 1.3
+to 2.8.
+
+New server tests: catch-up not announced, launches announced as they come
+due, restart on the same database and with a changed rate, a resident's
+handle claimed first, the half-full rule (each resident launch went up
+while under half), the derelict minimum. Not tested: the retry after a
+failed write (needs a failing disk). Not acted on: disclosure on the
+catalogue and blame lines (Advay's call: no disclosure for now), and the
+README (to be rewritten later, noted in `PLAN.md`).

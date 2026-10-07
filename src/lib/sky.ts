@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, inArray, isNull, lt, max, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, isNull, lt, lte, max, ne, or, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { fatalMeeting, fragmentsOf, impactOf, nextMeeting, seeded } from "./collide.ts";
 import { listening, publish } from "./events.ts";
@@ -48,18 +48,28 @@ export const LIVE_CAP = Number(process.env.LIVE_CAP ?? 600);
 // testing.
 export const DERELICT_BASELINE = Number(process.env.DERELICTS ?? 20);
 export const DERELICT_GAP = 10 * 60_000;
+// However many residents' satellites are up (they count towards the
+// baseline), the sky keeps at least this many derelicts.
+export const DERELICT_MIN = Math.min(5, DERELICT_BASELINE);
 
 // The resident operators (ADR 0015, src/lib/residents.ts): about this many
 // launches an hour, so the sky is never quiet for long, but no more than
 // RESIDENT_CAP of theirs up at once (as many as the derelict floor, which
-// counts them: in a quiet sky they take the derelicts' place, so collisions
-// come about as often as ADR 0008 tuned them), and only while the sky is
-// less than half full, so they never take a person's room. A server that was
-// stopped launches what it missed, up to RESIDENT_BACKFILL back. RESIDENTS
-// and RESIDENT_CAP override them for testing; RESIDENTS=0 turns them off.
-export const RESIDENT_RATE = Number(process.env.RESIDENTS ?? 3);
+// counts them: in a quiet sky they take most of the derelicts' place, so
+// collisions come about as often as ADR 0008 tuned them). They count towards
+// SKY_CAP like anyone's, so they launch only while the sky is less than half
+// full: a crowded sky leaves people at least SKY_CAP - RESIDENT_CAP. A server
+// that was stopped launches what it missed, up to RESIDENT_BACKFILL back.
+// RESIDENTS_PER_HOUR and RESIDENT_CAP override them for testing;
+// RESIDENTS_PER_HOUR=0 turns them off.
+const perHour = Number(process.env.RESIDENTS_PER_HOUR ?? 2);
+export const RESIDENT_RATE = Number.isFinite(perHour) ? perHour : 2;
 export const RESIDENT_CAP = Number(process.env.RESIDENT_CAP ?? 20);
 export const RESIDENT_BACKFILL = 6 * HOUR;
+// A launch older than this when it's made (a stopped server catching up)
+// isn't announced: the page that opened the catch-up gets it in its snapshot
+// if it's still up, and shouldn't be told of one already gone.
+const RESIDENT_NEWS = 60_000;
 
 export type Kind = "satellite" | "derelict" | "debris";
 
@@ -459,39 +469,53 @@ function residentOperators(now: number): Map<string, number> {
 // each in turn, between the collisions that come before and after it, so
 // every object gets its id in the order things happened, as on a server that
 // was running all along (a collision's outcome is drawn from its objects'
-// ids, collide.ts).
+// ids, collide.ts). settle moves residentsThrough on past the ones it has
+// dealt with.
 let residentsThrough = -Infinity;
 function residentsDue(now: number): Slot[] {
   if (RESIDENT_RATE <= 0) return [];
   const from = Math.max(residentsThrough, now - RESIDENT_BACKFILL);
-  if (now <= from) return [];
-  residentsThrough = now;
-  return slotsBetween(from, now, RESIDENT_RATE);
+  return now <= from ? [] : slotsBetween(from, now, RESIDENT_RATE);
 }
 
-// A resident's launch, when it was due, unless it has been made already, it
-// would put more than RESIDENT_CAP of theirs up at that time, or the sky is
-// half full.
-function launchResident(slot: Slot): SkyObject | null {
-  const operator = residentOperators(slot.at).get(slot.handle);
+// Up at `t`, going by the record as it stands mid-catch-up: anything still
+// marked live is up until it burns up (burn-ups are marked after the
+// catch-up), anything gone until it went.
+type Recorded = SkyObject & { fate: Fate; fateAt: number | null };
+const upAt = (o: Recorded, t: number) =>
+  o.launchedAt <= t && (o.fate === "live" ? reentryAt(o) > t : (o.fateAt ?? Infinity) > t);
+
+// A resident's launch, when it was due, unless that resident has launched
+// in that hour already (one a schedule changed by a redeploy included), it
+// would put more than RESIDENT_CAP of theirs up at that time, or the sky was
+// half full then.
+function launchResident(slot: Slot, now: number): SkyObject | null {
+  const residents = residentOperators(slot.at);
+  const operator = residents.get(slot.handle);
   if (operator === undefined) return null;
-  const theirs = db
+  const hour = Math.floor(slot.at / HOUR) * HOUR;
+  const already = db
+    .select({ id: objects.id })
+    .from(objects)
+    .where(and(eq(objects.operator, operator), gte(objects.launchedAt, hour), lt(objects.launchedAt, hour + HOUR)))
+    .get();
+  if (already) return null;
+  const satellites = db
     .select({ ...columns, fate: objects.fate, fateAt: objects.fateAt })
     .from(objects)
     .where(
       and(
-        inArray(objects.operator, [...residentOperators(slot.at).values()]),
-        lt(objects.launchedAt, slot.at + 1),
+        eq(objects.kind, "satellite"),
+        lte(objects.launchedAt, slot.at),
         or(eq(objects.fate, "live"), gt(objects.fateAt, slot.at)),
       ),
     )
     .all()
-    .map(toObject);
-  if (theirs.some((o) => o.operator === operator && o.launchedAt === slot.at)) return null;
-  const up = theirs.filter((o) => o.fate !== "live" || reentryAt(o) > slot.at).length;
-  if (up >= RESIDENT_CAP) return null;
-  const satellites = db.select({ n: count() }).from(objects).where(liveSatellites).get()?.n ?? 0;
-  if (satellites >= SKY_CAP / 2) return null;
+    .map(toObject)
+    .filter((o) => upAt(o, slot.at));
+  if (satellites.length >= SKY_CAP / 2) return null;
+  const ids = new Set(residents.values());
+  if (satellites.filter((o) => o.operator !== null && ids.has(o.operator)).length >= RESIDENT_CAP) return null;
   const object = toObject(
     db
       .insert(objects)
@@ -507,7 +531,7 @@ function launchResident(slot: Slot): SkyObject | null {
       .returning(columns)
       .get(),
   );
-  publish({ type: "launch", object });
+  if (now - slot.at <= RESIDENT_NEWS) publish({ type: "launch", object });
   return object;
 }
 
@@ -553,15 +577,22 @@ export function stageCollision(now = Date.now()): Conjunction | null {
 }
 
 // Tops the sky up with derelicts, each in a random band, towards `baseline`
-// satellites and derelicts: one for every DERELICT_GAP since the last one
-// went up, so an empty sky (or one the server slept through) fills at once
-// and a busy one only slowly.
-export function keepDerelicts(now = Date.now(), baseline = DERELICT_BASELINE): void {
-  const up = db.select({ n: count() }).from(objects).where(and(eq(objects.fate, "live"), ne(objects.kind, "debris"))).get();
+// satellites and derelicts, and to at least `least` derelicts however many
+// satellites are up (the residents' fill most of the baseline, ADR 0015):
+// one for every DERELICT_GAP since the last one went up, so an empty sky (or
+// one the server slept through) fills at once and a busy one only slowly.
+export function keepDerelicts(
+  now = Date.now(),
+  baseline = DERELICT_BASELINE,
+  least = Math.min(DERELICT_MIN, baseline),
+): void {
+  const live = eq(objects.fate, "live");
+  const up = db.select({ n: count() }).from(objects).where(and(live, ne(objects.kind, "debris"))).get()?.n ?? 0;
+  const derelicts = db.select({ n: count() }).from(objects).where(and(live, eq(objects.kind, "derelict"))).get()?.n ?? 0;
   const last = db.select({ at: max(objects.launchedAt) }).from(objects).where(eq(objects.kind, "derelict")).get();
   const due = last?.at == null ? Infinity : Math.floor((now - last.at) / DERELICT_GAP);
   const bands = Object.keys(BANDS) as Band[];
-  for (let n = 0; n < Math.min(baseline - (up?.n ?? 0), due); n++) {
+  for (let n = 0; n < Math.min(Math.max(baseline - up, least - derelicts), due); n++) {
     addDerelict(placeInBand(bands[Math.floor(Math.random() * bands.length)], now), now);
   }
 }
@@ -634,6 +665,9 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
   if (now >= quietFrom && now < quietUntil) return { decayed: [], collisions: [] };
   const applied: CollisionReport[] = [];
   const due = residentsDue(now);
+  // how far the residents' launches have been dealt with: all of them,
+  // unless one fails
+  let through = now;
   let sky = live();
   refreshMeetings(sky);
   for (;;) {
@@ -641,10 +675,19 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
     // a launch at the same moment as a collision goes first, as it would
     // have on a server that was running
     if (due.length > 0 && (!next || due[0].at <= next.at)) {
-      const object = launchResident(due.shift()!);
-      if (object) {
-        sky = sky.concat(object);
-        refreshMeetings(sky);
+      const slot = due.shift()!;
+      try {
+        const object = launchResident(slot, now);
+        if (object) {
+          sky = sky.concat(object);
+          refreshMeetings(sky);
+        }
+      } catch (error) {
+        // a launch that can't be written (a busy or full disk) is tried
+        // again on the next settle, with the ones after it
+        console.error(`${slot.handle}'s launch due at ${slot.at} failed:`, error);
+        through = slot.at - 1;
+        due.length = 0;
       }
       continue;
     }
@@ -662,6 +705,7 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
     }
     refreshMeetings(sky);
   }
+  residentsThrough = Math.max(residentsThrough, through);
   const decayed = markDecayed(now);
   keepDerelicts(now);
   // only for someone watching: a collision staged for nobody is just debris

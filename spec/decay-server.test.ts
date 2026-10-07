@@ -15,7 +15,7 @@ import { reentryAt } from "../src/lib/orbit.ts";
 // collides (collisions have their own tests)
 process.env.DERELICTS = "0";
 // nor the resident operators' launches (ADR 0015), which have their own tests
-process.env.RESIDENTS = "0";
+process.env.RESIDENTS_PER_HOUR = "0";
 let seed = 7;
 const random = () => {
   seed = (seed * 1664525 + 1013904223) % 4294967296;

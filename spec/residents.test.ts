@@ -33,17 +33,19 @@ describe("the resident operators", () => {
     expect(new Set(all.map((s) => s.handle)).size).toBe(RESIDENTS.length);
     expect(new Set(all.map((s) => s.band))).toEqual(new Set(["low", "mid", "high"]));
     expect(new Set(all.map((s) => s.beacon)).size).toBeGreaterThan(100);
-    expect(new Set(all.map((s) => s.callsign)).size).toBeGreaterThan(100);
   });
 
-  it("don't reuse a numbered callsign within half a day", () => {
-    const numbered = all.filter((s) => /\d/.test(s.callsign));
-    for (const [i, slot] of numbered.entries()) {
-      const again = numbered
-        .slice(i + 1)
-        .find((later) => later.at - slot.at < 12 * HOUR && later.callsign === slot.callsign);
-      expect(again, slot.callsign).toBeUndefined();
+  it("number their satellites in order, so no callsign ever comes round again", () => {
+    expect(new Set(all.map((s) => s.callsign)).size).toBe(all.length);
+    for (const { handle } of RESIDENTS) {
+      const numbers = all.filter((s) => s.handle === handle).map((s) => Number(s.callsign.match(/\d+$/)![0]));
+      expect(numbers, handle).toEqual([...numbers].sort((a, b) => a - b));
     }
+  });
+
+  it("launch more often for a company than for a hobbyist", () => {
+    const launches = (handle: string) => all.filter((s) => s.handle === handle).length;
+    expect(launches("Wattlebird-Comms")).toBeGreaterThan(3 * launches("garage_orbital"));
   });
 
   it("mostly fly low, where they're heard most", () => {

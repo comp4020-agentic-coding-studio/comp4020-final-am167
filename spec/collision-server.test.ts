@@ -18,7 +18,7 @@ import type { SkyEvent } from "../src/lib/events.ts";
 // no derelicts unless a test asks for them: they're placed at random
 process.env.DERELICTS = "0";
 // nor the resident operators' launches (ADR 0015), which have their own tests
-process.env.RESIDENTS = "0";
+process.env.RESIDENTS_PER_HOUR = "0";
 
 const dirs: string[] = [];
 afterAll(() => {
