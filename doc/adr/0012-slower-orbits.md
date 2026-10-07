@@ -1,6 +1,6 @@
 # 0012. Slower orbits, so a beacon can be read
 
-**Status:** proposed (2026-10-07). Supersedes the period law in 0007 and
+**Status:** accepted (2026-10-07; proposed 2026-10-07). Supersedes the period law in 0007 and
 the head-on chance in 0008; the rest of both stands.
 
 ## Context

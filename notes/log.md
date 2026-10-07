@@ -1333,3 +1333,15 @@ list, a button from your satellite's line to its next station's view,
 fewer live-region announcements when several take turns, and pulling the
 panel's logic out of the page script for unit tests. `pnpm check` green
 (206 tests).
+
+I reviewed it on the dev server and accepted ADRs 0012 and 0013. One
+problem I found: on my laptop (about 1512×757) "Sky now" ran off the
+bottom of the first screen and needed a scroll. The Beacons panel is
+taller than the old station panel, so the breakpoints that drop parts of
+the summary on shorter screens no longer fit. Measured the overflow at
+heights from 544 to 1080 px with a three-line news item (the worst case):
+it was 47 px over at 757. The beacons' note is one line now, the
+summary drops its latest launches below 800 px and its counts below 720,
+the beacons drop their note below 656, and below 608 the beacon type is a
+step smaller and the count line goes. The beacons themselves always
+stay. Fits at every height measured.

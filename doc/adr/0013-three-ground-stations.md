@@ -1,6 +1,6 @@
 # 0013. Three ground stations, and the whole sky first
 
-**Status:** proposed (2026-10-07). Supersedes `PLAN.md`'s "one shared
+**Status:** accepted (2026-10-07; proposed 2026-10-07). Supersedes `PLAN.md`'s "one shared
 ground station" (2026-10-04); of 0005, the horizon over the station as the
 view the sky opens on; and every "the station" in 0007 (what a satellite
 reaches before it burns up) and 0008 (the staged collision meets over

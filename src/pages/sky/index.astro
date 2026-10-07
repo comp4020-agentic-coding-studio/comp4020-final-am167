@@ -100,7 +100,7 @@ const view = launched ? "canberra" : null;
       <div class="panels">
         <section class="station" aria-labelledby="station-title">
           <h2 id="station-title">Beacons</h2>
-          <p class="station-note">Heard by everyone, as satellites pass the three ground stations.</p>
+          <p class="station-note">Heard by everyone, at three ground stations.</p>
           <!-- a row for each station (ADR 0013), each a fixed height: what it
                hears now, taking turns when more than one is overhead, or
                what's next -->
@@ -718,22 +718,43 @@ const view = launched ? "canberra" : null;
   }
 
   /* On a shorter screen the summary gives up its latest launches, then its
-     counts, so the panels always fit over the sky without scrolling. */
+     counts, then the beacons their note, so the panels always fit over the
+     sky without scrolling. The beacons stay. */
   @media (min-width: 52.01rem) and (max-height: 56rem) {
     .sky-page .recent li:nth-child(n + 4) {
       display: none;
     }
   }
 
-  @media (min-width: 52.01rem) and (max-height: 46rem) {
+  @media (min-width: 52.01rem) and (max-height: 50rem) {
     .sky-page .recent {
       display: none;
     }
   }
 
-  @media (min-width: 52.01rem) and (max-height: 40rem) {
+  @media (min-width: 52.01rem) and (max-height: 45rem) {
     .sky-page .band-counts {
       display: none;
+    }
+  }
+
+  @media (min-width: 52.01rem) and (max-height: 41rem) {
+    .sky-page .station-note {
+      display: none;
+    }
+  }
+
+  @media (min-width: 52.01rem) and (max-height: 38rem) {
+    .sky-page .post {
+      --beacon-size: var(--step-0);
+    }
+
+    .sky-page .count {
+      display: none;
+    }
+
+    .sky-page .panels {
+      gap: 0.5rem;
     }
   }
 
