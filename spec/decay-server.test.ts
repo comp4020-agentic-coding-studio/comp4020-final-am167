@@ -40,7 +40,7 @@ beforeAll(async () => {
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 const DAY = 86_400_000;
-const input = { band: "low" as const, callsign: "FALLER", beacon: "going down" };
+const input = { band: "low" as const, callsign: "FALLER", beacon: "going down", question: null };
 const launch = (who: Parameters<Sky["launch"]>[0], values: typeof input, now: number) => sky.launch(who, values, now, random);
 
 describe("burning up, on the server", () => {

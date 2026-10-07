@@ -55,6 +55,17 @@ describe("telling a collision", () => {
     );
   });
 
+  it("counts a lineage's derelicts together, after the people", () => {
+    const dead = { ...derelict, id: 51 };
+    expect(headline([debrisOf(derelict, dead, alpha), charlie])).toBe(
+      "Debris from ALPHA and 2 derelicts' collision destroyed CHARLIE",
+    );
+    const many = ["A1", "B2", "C3", "D4", "E5"].map((c) => satellite(c, "x"));
+    expect(headline([debrisOf(derelict, ...many, dead), charlie])).toBe(
+      "Debris from A1, B2, C3, 2 others and 2 derelicts' collision destroyed CHARLIE",
+    );
+  });
+
   it("names who launched what, or says nobody claimed it", () => {
     expect(blame([alpha, bravo])).toBe("ALPHA: launched without a handle. BRAVO: skywriter.");
     expect(blame([debrisOf(alpha, bravo), charlie])).toBe(
@@ -79,6 +90,14 @@ describe("telling a collision", () => {
       { callsign: "BRAVO", beacon: "bravo here" },
     ]);
     expect(couplet([alpha, derelict])).toEqual([{ callsign: "ALPHA", beacon: "hello from alpha" }]);
+  });
+
+  it("hears a derelict's echo of a gone satellite's last words", () => {
+    const echoing: StoryParty = { ...derelict, words: "I was here for a while", echoOf: "LANTERN" };
+    expect(couplet([alpha, echoing])).toEqual([
+      { callsign: "ALPHA", beacon: "hello from alpha" },
+      { callsign: "a derelict, echoing LANTERN", beacon: "I was here for a while" },
+    ]);
   });
 });
 

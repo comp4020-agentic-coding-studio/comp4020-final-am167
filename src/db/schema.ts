@@ -1,4 +1,4 @@
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // The app's tables. `pnpm db:generate` turns changes here into a migration
 // under drizzle/, which runs when the server boots.
@@ -30,6 +30,14 @@ export const objects = sqliteTable(
     direction: integer("direction").notNull().default(1),
     // for debris, the collision it came from: its lineage (ADR 0003)
     sourceCollision: integer("source_collision"),
+    // for debris, the shard of both lines it carries (ADR 0017): heard as
+    // static over the stations; null if what met said nothing
+    words: text("words"),
+    // the stations' question its beacon answered, as it was asked (ADR 0018)
+    question: text("question"),
+    // for a derelict, the gone satellite whose last words it carries as an
+    // echo (in `words`), so a collision with it breaks real words too
+    echo: integer("echo"),
     // the operator it belongs to, once its person has claimed or signed in
     // to one (ADR 0009); until then it's the owner cookie's
     operator: integer("operator"),
@@ -109,3 +117,45 @@ export const manoeuvres = sqliteTable(
   },
   (t) => [index("manoeuvres_object").on(t.object)],
 );
+
+// Every time a beacon was heard (ADR 0016): it passed over a ground station
+// while someone had the sky open. How many were listening (its owner not
+// counted), and where and when. A pass with nobody listening isn't heard,
+// and isn't kept.
+export const transmissions = sqliteTable(
+  "transmissions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    object: integer("object").notNull(),
+    // a station's id (src/lib/stations.ts)
+    station: text("station").notNull(),
+    at: integer("at").notNull(),
+    listeners: integer("listeners").notNull(),
+  },
+  (t) => [index("transmissions_at").on(t.at), index("transmissions_object").on(t.object)],
+);
+
+// Who has heard each beacon, once each (ADR 0016): "heard by" is how many
+// rows an object has. A listener is an operator ("o:12"), or a one-way hash
+// of a person's cookie ("p:…"), never the cookie itself.
+export const listens = sqliteTable(
+  "listens",
+  {
+    object: integer("object").notNull(),
+    listener: text("listener").notNull(),
+    // when they first heard it
+    at: integer("at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.object, t.listener] }), index("listens_listener").on(t.listener)],
+);
+
+// Every browser that has asked for anything here but the event stream
+// (ADR 0016): an open stream counts as someone listening only if its
+// cookie is one of these, so a cookie made up for a stream alone doesn't.
+// Kept, so a stream that reconnects after a restart still counts. Hashed
+// as a listener is ("p:…"), never the cookie itself.
+export const visitors = sqliteTable("visitors", {
+  listener: text("listener").primaryKey(),
+  // when it was first seen
+  at: integer("at").notNull(),
+});

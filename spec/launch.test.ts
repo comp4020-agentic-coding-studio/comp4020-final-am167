@@ -30,7 +30,8 @@ describe("the launchpad", () => {
     );
     expect(bands.flat().sort()).toEqual(["high", "low", "mid"]);
     expect(form!.querySelector("[name=callsign]")).not.toBeNull();
-    expect(form!.querySelector("[name=beacon]")?.getAttribute("maxlength")).toBe("60");
+    // a thought, not a slogan (ADR 0016)
+    expect(form!.querySelector("[name=beacon]")?.getAttribute("maxlength")).toBe("140");
     // every field has a label a screen reader can announce
     for (const el of form!.querySelectorAll("input:not([type=hidden]), select, textarea")) {
       const labelled =
@@ -102,16 +103,24 @@ describe("the launchpad", () => {
     const res = await new Session(baseUrl).launch({
       band: "low",
       callsign: "KEEPME",
-      beacon: "x".repeat(61),
+      beacon: "x".repeat(141),
     });
     expect(res.status).toBe(422);
     const page = doc(await res.text());
     expect(page.querySelector<HTMLInputElement>("[name=callsign]")?.value).toBe("KEEPME");
-    expect(page.body.textContent).toMatch(/60/);
+    expect(page.querySelector("[name=beacon]")?.textContent).toBe("x".repeat(141));
+    expect(page.body.textContent).toMatch(/140/);
+  });
+
+  it("takes a beacon of 140 characters", async () => {
+    const beacon = "a line long enough to say a little more than a slogan would, ".repeat(3).slice(0, 140);
+    expect(beacon).toHaveLength(140);
+    const res = await new Session(baseUrl).launch({ band: "low", callsign: callsign(), beacon });
+    expect(res.status).toBe(303);
   });
 
   it.each([
-    ["a beacon over 60 characters", { beacon: "x".repeat(61) }],
+    ["a beacon over 140 characters", { beacon: "x".repeat(141) }],
     ["an empty beacon", { beacon: "   " }],
     ["a link in the beacon", { beacon: "visit https://example.com" }],
     ["a bare domain in the beacon", { beacon: "go to example.com now" }],

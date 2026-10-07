@@ -16,6 +16,12 @@ export interface StoryRoot {
 // one of the two objects that met (sky.ts's Party)
 export interface StoryParty extends StoryRoot {
   beacon: string | null;
+  // the stations' question it was answering, if any (ADR 0018)
+  question?: string | null;
+  // a derelict's echo (in `words`): whose last words they were
+  echoOf?: string | null;
+  // for debris, what it was carrying (ADR 0017)
+  words?: string | null;
   // for debris, the satellites and derelicts at the root of its collision
   from: StoryRoot[] | null;
 }
@@ -29,12 +35,20 @@ const listed = (names: string[]) =>
   names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 
 // "ALPHA and BRAVO's collision": where debris came from. A cascade can trace
-// back to many: three are named, then "and 5 others'".
+// back to many: three people are named, then "2 others", and the derelicts
+// counted together at the end ("and 2 derelicts'"), never one by one.
 export function collisionOf(roots: readonly StoryRoot[]): string {
-  const names = roots.map(nameOf);
-  if (names.length <= 3) return `${listed(names)}'s collision`;
-  const rest = names.length - 3;
-  return `${names.slice(0, 3).join(", ")} and ${rest} ${rest === 1 ? "other's" : "others'"} collision`;
+  const people = roots.filter((root) => root.kind !== "derelict" && root.callsign).map((root) => root.callsign!);
+  const dead = roots.length - people.length;
+  const rest = people.length - 3;
+  const parts = [
+    ...people.slice(0, 3),
+    ...(rest > 0 ? [`${rest} ${rest === 1 ? "other" : "others"}`] : []),
+    ...(dead > 0 ? [dead === 1 ? "a derelict" : `${dead} derelicts`] : []),
+  ];
+  // "2 others'", "2 derelicts'", but "ATLAS's"
+  const plural = (rest > 1 && dead === 0) || dead > 1;
+  return `${listed(parts)}${plural ? "'" : "'s"} collision`;
 }
 
 // "debris from ALPHA and BRAVO's collision"
@@ -81,9 +95,15 @@ export function blame(parties: readonly [StoryParty, StoryParty]): string {
 export const titleOf = (o: { id: number; kind: Kind; callsign: string | null }) =>
   o.kind === "satellite" && o.callsign ? o.callsign : `${o.kind === "debris" ? "Fragment" : "Derelict"} no. ${o.id}`;
 
-// The two beacons that met, side by side (debris and derelicts are silent).
+// The two lines that met, side by side: a satellite's beacon, or the echo
+// a derelict was carrying, an old line from the record (debris says its
+// piece elsewhere).
 export function couplet(parties: readonly [StoryParty, StoryParty]): { callsign: string; beacon: string }[] {
-  return parties.flatMap((p) => (p.kind === "satellite" && p.callsign && p.beacon ? [{ callsign: p.callsign, beacon: p.beacon }] : []));
+  return parties.flatMap((p) => {
+    if (p.kind === "satellite" && p.callsign && p.beacon) return [{ callsign: p.callsign, beacon: p.beacon }];
+    if (p.kind === "derelict" && p.words) return [{ callsign: `a derelict, echoing ${p.echoOf ?? "an old line"}`, beacon: p.words }];
+    return [];
+  });
 }
 
 // "2 satellites, 1 derelict and 1 fragment in orbit"
@@ -99,4 +119,33 @@ export function skyCount(sky: readonly { kind: Kind }[]): string {
     .filter(([count]) => count > 0)
     .map(([count, word]) => `${count} ${word}${count === 1 ? "" : "s"}`);
   return parts.length === 0 ? "Nothing in orbit" : `${listed(parts)} in orbit`;
+}
+
+// "Heard by 7 people", "Heard by nobody else yet": a beacon's audience (ADR
+// 0016). Its owner isn't counted, so their own says "else".
+export function heardBy(n: number, mine: boolean): string {
+  if (n === 0) return mine ? "Heard by nobody else yet" : "Heard by nobody yet";
+  return `Heard by ${n} ${n === 1 ? "person" : "people"}`;
+}
+
+// "1 pass", "12 passes": how often the stations have heard it.
+export const passes = (n: number) => `${n} ${n === 1 ? "pass" : "passes"}`;
+
+// "You and 2 others listening": who has the sky open now, the viewer
+// among them.
+export function listeningNow(n: number): string {
+  if (n <= 1) return "Just you, listening";
+  return `You and ${n - 1} ${n === 2 ? "other" : "others"} listening`;
+}
+
+// "from ALPHA and BRAVO's collision": where a fragment's static comes from
+// (ADR 0017), or plain "from a collision" when its roots aren't known.
+export const staticFrom = (from: readonly StoryRoot[] | null) =>
+  from && from.length > 0 ? `from ${collisionOf(from)}` : "from a collision";
+
+// The question both were answering, if they were answering the same one
+// (ADR 0018): two answers that collide.
+export function sharedQuestion(parties: readonly [StoryParty, StoryParty]): string | null {
+  const [a, b] = parties;
+  return a.question && a.question === b.question ? a.question : null;
 }

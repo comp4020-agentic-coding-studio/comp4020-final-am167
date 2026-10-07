@@ -113,5 +113,7 @@ describe("the ground stations", () => {
         }
       }
     }
-  });
+    // 400 orbits brute-forced against three stations: about two seconds
+    // alone, more beside the rest of the suite
+  }, 20_000);
 });

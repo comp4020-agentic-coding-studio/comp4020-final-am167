@@ -1,19 +1,22 @@
 ---
+import ManoeuvreControls from "./ManoeuvreControls.astro";
+import Wreck from "./Wreck.astro";
 import { ago, falling, km, until } from "../lib/format.ts";
-import { BANDS, climbing, fallRate, heightKm, radiusAt } from "../lib/orbit.ts";
+import { BANDS, fallRate, heightKm, radiusAt } from "../lib/orbit.ts";
 import { stationOver } from "../lib/stations.ts";
 import type { History } from "../lib/sky.ts";
-import { blame, collisionOf, couplet, describe, headline, titleOf, type StoryParty } from "../lib/story.ts";
+import { blame, collisionOf, couplet, describe, headline, heardBy, passes, sharedQuestion, titleOf, type StoryParty } from "../lib/story.ts";
 import { countdown } from "../scripts/countdown.ts";
 
-// One object's history (ADR 0012), for its own page and for the panel the
-// sky opens when you click it: where it came from, what it said, how it
-// ended and what followed. The wording is the collision story's (ADR 0010):
-// two objects collide, debris destroys.
+// One object's history (ADR 0012), for its own page and for the card that
+// pops up when you click it (ADR 0015): where it came from, what it said,
+// how it ended and what followed. The wording is the collision story's (ADR
+// 0010): two objects collide, debris destroys. Your own satellite, while
+// it's up, carries its controls (ADR 0011).
 interface Props {
   history: History;
   now: number;
-  // the level of its section headings: 2 on its own page, 3 in the panel
+  // the level of its section headings: 2 on its own page, 3 in the card
   level: 2 | 3;
 }
 const { history: h, now, level } = Astro.props;
@@ -26,6 +29,7 @@ const self: StoryParty = {
   kind: h.kind,
   callsign: h.callsign,
   beacon: h.beacon,
+  question: h.question,
   operator: h.handle,
   from: h.origin?.roots ?? null,
 };
@@ -33,6 +37,11 @@ const self: StoryParty = {
 const met = h.end && ([self, h.end.with] as [StoryParty, StoryParty]);
 const theirLine = met ? couplet(met).find((line) => line.callsign !== h.callsign) : undefined;
 const live = h.orbit !== null;
+// yours, and up: boost it or bring it down from here
+const controls =
+  h.mine && h.kind === "satellite" && h.orbit
+    ? { id: h.id, callsign: h.callsign, ...h.orbit, deorbitedAt: h.deorbitedAt, boosts: h.boosts }
+    : null;
 const radius = h.orbit ? radiusAt(h.orbit, now) : null;
 const overhead = h.orbit ? stationOver(h.orbit, now) : null;
 const f = h.followed;
@@ -72,9 +81,17 @@ const moreLosses = f.destroyed.length - shownLosses.length;
     <section class="history-part">
       <Heading>{live ? "Its beacon" : "What it said"}</Heading>
       {h.beacon !== null && <blockquote class="history-beacon"><q>{h.beacon}</q></blockquote>}
+      {h.question && <p class="history-question">Answering the stations' question <q>{h.question}</q></p>}
+      {h.heard.passes > 0 && (
+        <p class="history-heard">{heardBy(h.heard.by, h.mine)}, over {passes(h.heard.passes)} of a station.</p>
+      )}
       {live && (
         <p>
-          {h.mine && h.beacon !== null ? "Everyone else hears it " : "Heard "}only as it passes over a ground station.{" "}
+          {h.withheld
+            ? "Not heard yet: its line is read out when it's on air over a ground station, and shown here once it has been."
+            : h.mine && h.heard.passes === 0
+              ? "Nobody else has heard it yet: it's read out each time it's on air over a ground station."
+              : "It's read out each time it's on air over a ground station."}{" "}
           <span data-pass>
             {overhead
               ? `It's over ${overhead.name} now.`
@@ -83,6 +100,42 @@ const moreLosses = f.destroyed.length - shownLosses.length;
                 : `Next over ${h.nextPass.station} in ${countdown(h.nextPass.at - now)}.`}
           </span>
         </p>
+      )}
+    </section>
+  )}
+
+  {h.kind === "derelict" && (
+    <section class="history-part">
+      <Heading>What it carries</Heading>
+      {h.words && h.echoOf ? (
+        <>
+          <blockquote class="history-beacon"><q>{h.words}</q></blockquote>
+          <p>
+            An echo: the last words of{" "}
+            {h.echoOf.callsign ? <a href={`/object/${h.echoOf.id}/`}>{h.echoOf.callsign}</a> : "a satellite"}, gone
+            from the sky. It doesn't broadcast them; if anything hits it, they break into the
+            other side's.
+          </p>
+        </>
+      ) : (
+        <p>Nothing: no satellite had gone yet to leave it any words.</p>
+      )}
+    </section>
+  )}
+
+  {h.kind === "debris" && (
+    <section class="history-part">
+      <Heading>What it says</Heading>
+      {h.words ? (
+        <>
+          <p class="history-static"><span class="static-words">{h.words}</span></p>
+          <p>
+            Pieces of the lines that broke it, {live ? "heard as static each time it passes over a station" : "heard as static while it flew"}.
+            {h.heard.passes > 0 && <> {heardBy(h.heard.by, false)}, over {passes(h.heard.passes)}.</>}
+          </p>
+        </>
+      ) : (
+        <p>Nothing: what broke it had nothing to say.</p>
       )}
     </section>
   )}
@@ -112,10 +165,15 @@ const moreLosses = f.destroyed.length - shownLosses.length;
     )}
     {h.orbit && radius !== null && h.reentryAt !== null && (
       <p>
-        In orbit at {km(heightKm(radius))}, {climbing(h.orbit, now) ? "climbing" : "falling"}{" "}
-        {falling(fallRate(h.orbit, now))}. It burns up in{" "}
+        In orbit at <span data-height>{km(heightKm(radius))}, {falling(fallRate(h.orbit, now))}</span>. It
+        burns up in{" "}
         <span data-reentry={h.reentryAt}>about {until(h.reentryAt - now)}</span>.
       </p>
+    )}
+    {controls && (
+      <div class="history-controls">
+        <ManoeuvreControls object={controls} back="object" now={now} />
+      </div>
     )}
     {h.fate === "decayed" && h.fateAt !== null && (
       <p>Burned up on re-entry <time datetime={new Date(h.fateAt).toISOString()}>{ago(now - h.fateAt)}</time>.</p>
@@ -133,6 +191,11 @@ const moreLosses = f.destroyed.length - shownLosses.length;
           {h.end.with.kind !== "debris" && <> <a href={`/object/${h.end.with.id}/`}>See {describe(h.end.with)}</a>.</>}
         </p>
         {theirLine && <p class="history-couplet"><q>{theirLine.beacon}</q> {theirLine.callsign}</p>}
+        {sharedQuestion(met) && <p class="history-question">Both were answering <q>{sharedQuestion(met)}</q></p>}
+        {h.end.with.kind === "debris" && h.end.with.words && (
+          <p class="history-couplet">The debris was carrying <span class="static-words">{h.end.with.words}</span></p>
+        )}
+        <Wreck pieces={h.end.wreck} />
         <p class="history-blame">{blame(met)}</p>
       </>
     )}

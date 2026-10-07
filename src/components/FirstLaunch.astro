@@ -24,7 +24,8 @@ const climbs = FUEL === 1 ? "one climb" : `${FUEL} climbs`;
     <!-- focus starts here, so a screen reader reads on from the top -->
     <h2 id="first-launch-title" tabindex="-1" autofocus><span class="callsign">{callsign}</span> is in orbit</h2>
     <p class="first-launch-lede">
-      Everyone here shares this one sky. Here's what happens to what you put in it.
+      Everyone here shares this one sky, and everyone's words are in it. Here's
+      what happens to yours.
     </p>
 
     <dl class="first-launch-points">
@@ -32,7 +33,8 @@ const climbs = FUEL === 1 ? "one climb" : `${FUEL} climbs`;
         <dt>It's heard</dt>
         <dd>
           Each time it passes over Canberra, Goldstone or Madrid, its beacon is
-          broadcast to everyone watching.
+          heard by everyone listening at that moment. Beside the sky, the
+          stations keep what they heard, and how many people heard it.
         </dd>
       </div>
       <div>
@@ -45,9 +47,9 @@ const climbs = FUEL === 1 ? "one climb" : `${FUEL} climbs`;
       <div>
         <dt>It can collide</dt>
         <dd>
-          Two objects that meet break into debris, and debris hits more. That's
-          Kessler syndrome: a cascade nobody can stop. Every screen shows who
-          launched what collided.
+          Two that meet break into debris carrying pieces of both beacons, heard
+          as static over everyone else's, and debris hits more: Kessler syndrome.
+          If yours collides, Yours shows who it met.
         </dd>
       </div>
       <div>
@@ -75,8 +77,9 @@ const climbs = FUEL === 1 ? "one climb" : `${FUEL} climbs`;
     </dl>
 
     <p class="first-launch-where">
-      Both are under <strong>Beacons</strong>, next to your satellite. What you
-      launch is your mark on the sky: its beacon, and whatever it hits.
+      Both are on its card (click it in the sky) and in
+      <a href="/catalogue/?show=mine">Yours</a>. What you launch is your mark on
+      the sky: its beacon, who heard it, and whatever it hits.
       {!signedIn && <> <a href="/operator/?back=sky">Claim a handle</a> to put your name to it.</>}
     </p>
 

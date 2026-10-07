@@ -1,11 +1,13 @@
+import { onAir } from "../lib/airtime.ts";
 import { ago, until } from "../lib/format.ts";
-import { REFUSALS, canManoeuvre } from "../lib/manoeuvre.ts";
 import { BANDS, bandAt, climbing, plungeAt, radiusAt, reentryAt, type Band } from "../lib/orbit.ts";
 import { STATIONS, nextStation, stationOver, untilStation, type StationId } from "../lib/stations.ts";
-import { blame, couplet, headline, skyCount, type StoryParty } from "../lib/story.ts";
+import { blame, couplet, headline, heardBy, listeningNow, passes, sharedQuestion, skyCount, staticFrom, type StoryParty } from "../lib/story.ts";
+import type { HeardItem } from "../lib/heard.ts";
+import type { WreckPiece } from "../lib/wreck.ts";
 import { countdown } from "./countdown.ts";
-import { keepCounting } from "./history.ts";
 import { wireManoeuvres } from "./manoeuvres.ts";
+import { objectCard } from "./object-card.ts";
 
 // Keeps the shared sky live, and starts the scene that draws it. Positions
 // come from each object's orbit and the server's clock, never from the
@@ -25,6 +27,8 @@ interface Satellite {
   epoch: number;
   direction: 1 | -1;
   sourceCollision: number | null;
+  // a fragment's piece of the lines that broke it, heard as static (ADR 0017)
+  words: string | null;
   // a manoeuvre (ADR 0011): part of the orbit, and what its owner did
   rate: number;
   until: number | null;
@@ -49,6 +53,8 @@ interface Story {
   angle: number;
   radius: number;
   parties: [StoryParty, StoryParty];
+  // what the wreck says (ADR 0017)
+  wreck: WreckPiece[];
 }
 
 const initial = JSON.parse(document.getElementById("sky-data")!.textContent!) as {
@@ -59,6 +65,11 @@ const initial = JSON.parse(document.getElementById("sky-data")!.textContent!) as
   view: StationId | null;
   conjunctions: Conjunction[];
   collisions: Story[];
+  // what the stations have heard, how many have heard each one up, and
+  // who's listening (ADR 0016)
+  heard: HeardItem[];
+  heardBy: Record<number, number>;
+  listening: number;
 };
 
 // Server time minus local time; refined when the stream says hello.
@@ -68,6 +79,8 @@ const sky = new Map(initial.sky.map((s) => [s.id, s]));
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const hue = (id: number) => (id * 137.508) % 360;
+// how many people have heard each beacon still up (ADR 0016)
+const heardCount = new Map(Object.entries(initial.heardBy).map(([id, n]) => [Number(id), n]));
 
 // Everything falls and burns up (ADR 0007). A burned-up object stays in the
 // scene this long after, while its wake fades, but leaves the stations and
@@ -116,6 +129,9 @@ interface BurnUp {
   mine: boolean;
   // its owner brought it down (ADR 0011)
   deorbited: boolean;
+  // or it didn't burn up: it was destroyed in a collision (only your own
+  // are kept, for your line under the stations)
+  destroyed?: boolean;
 }
 const burnUps = new Map<number, BurnUp>();
 // people's satellites only: wreckage burning up isn't news
@@ -123,7 +139,8 @@ const burned = (sat: Satellite) => {
   if (sat.kind === "satellite" && sat.callsign)
     burnUps.set(sat.id, { callsign: sat.callsign, at: reentryAt(sat), mine: sat.mine, deorbited: sat.deorbitedAt !== null });
 };
-const burnedUp = (b: BurnUp) => (b.deorbited ? "was brought down, and burned up" : "burned up on re-entry");
+const burnedUp = (b: BurnUp) =>
+  b.destroyed ? "was destroyed in a collision" : b.deorbited ? "was brought down, and burned up" : "burned up on re-entry";
 // the latest, and your own
 const latest = (mine = false) => {
   let found: BurnUp | null = null;
@@ -162,11 +179,12 @@ import("./scene.ts")
       obstacles: [
         document.querySelector<HTMLElement>(".sky-page .panels")!,
         document.getElementById("views")!,
-        ...(document.getElementById("launched-notice") ? [document.getElementById("launched-notice")!] : []),
+        ...[document.getElementById("launched-notice"), document.getElementById("met-notice")].filter((n) => n !== null),
         document.getElementById("collision-card")!,
-        historyPanel,
+        // an object's card, beside the beacons (it's not modal here)
+        document.getElementById("object-card")!,
       ],
-      selected: () => showing,
+      selected: () => historyCard?.showing() ?? null,
     });
     if (!started) return noScene();
     requestAnimationFrame(() => requestAnimationFrame(() => canvas.classList.add("drawn")));
@@ -187,7 +205,7 @@ import("./scene.ts")
     const reach = (event: MouseEvent) => ((event as PointerEvent).pointerType === "touch" ? 32 : 22);
     canvas.addEventListener("click", (event) => {
       const id = started.pick(event.clientX, event.clientY, reach(event));
-      if (id !== null) openHistory(id);
+      if (id !== null) historyCard?.open(id);
     });
     canvas.addEventListener("mousemove", (event) => {
       canvas.style.cursor = started.pick(event.clientX, event.clientY, reach(event)) === null ? "" : "pointer";
@@ -202,87 +220,12 @@ import("./scene.ts")
 
 // ── an object's history (ADR 0012) ───────────────────────────────────────
 
-// The panel over the scene (under it on a phone), filled with the history
-// the server tells; it works out nothing itself. A collision anywhere can
-// add to what followed an object, so the open one is asked for again.
-const historyPanel = document.getElementById("history-panel")!;
-const historyBody = historyPanel.querySelector<HTMLElement>(".history-body")!;
-const historyStatus = document.getElementById("history-status")!;
-// the object the panel is for: set on the click, so an event arriving
-// while it loads refreshes the new one, not the last
-let showing: number | null = null;
-let stopCounting = () => {};
-// where focus was when the panel opened, to go back to on close
-let opener: HTMLElement | null = null;
-// the latest ask: a slow answer to an earlier one is dropped
-let asked = 0;
-async function openHistory(id: number, refresh = false) {
-  const ask = ++asked;
-  const opening = historyPanel.hidden;
-  if (!refresh) {
-    showing = id;
-    if (opening) opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  }
-  let html: string | null = null;
-  try {
-    const res = await fetch(`/object/${id}/panel`);
-    if (res.ok) html = await res.text();
-  } catch {
-    // offline: said below, unless it was only a refresh
-  }
-  if (ask !== asked || showing !== id) return;
-  if (html === null && refresh) return;
-  // a refresh mustn't drop focus from a link in the panel
-  const hadFocus = historyPanel.contains(document.activeElement);
-  stopCounting();
-  if (html === null) {
-    historyBody.innerHTML = '<p class="history-error">Its history couldn\'t be loaded. Try again in a moment.</p>';
-    stopCounting = () => {};
-  } else {
-    historyBody.innerHTML = html;
-    const article = historyBody.querySelector<HTMLElement>(".history");
-    stopCounting = article ? keepCounting(article, serverNow) : () => {};
-  }
-  historyPanel.hidden = false;
-  if (hadFocus) historyPanel.focus({ preventScroll: true });
-  if (refresh) return;
-  historyStatus.textContent = `History of ${historyBody.querySelector("h2")?.textContent ?? "the object"} opened.`;
-  historyPanel.focus({ preventScroll: true });
-  // on a phone it's under the scene
-  if (opening && getComputedStyle(historyPanel).position === "static") {
-    historyPanel.scrollIntoView({ block: "nearest", behavior: reduced ? "auto" : "smooth" });
-  }
-}
-function closeHistory() {
-  asked++;
-  stopCounting();
-  showing = null;
-  historyPanel.hidden = true;
-  historyStatus.textContent = "";
-  // the latest launches are rebuilt as the sky changes: the same link, then
-  const href = opener?.getAttribute("href");
-  const back = opener?.isConnected ? opener : href ? document.querySelector<HTMLElement>(`#recent a[href="${href}"]`) : null;
-  back?.focus({ preventScroll: true });
-  opener = null;
-}
-const refreshHistory = (id?: number) => {
-  if (showing !== null && (id === undefined || id === showing)) openHistory(showing, true);
-};
-historyPanel.querySelector(".history-close")!.addEventListener("click", closeHistory);
-document.addEventListener("keydown", (event) => {
-  // a manoeuvre's dialog closes first
-  if (event.key === "Escape" && !historyPanel.hidden && !document.querySelector("dialog[open]")) closeHistory();
-});
-// a name in the latest launches, or another object named in a history,
-// opens in the panel; "Its own page" and modified clicks go to the page
-document.addEventListener("click", (event) => {
-  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  const link = (event.target as Element).closest<HTMLAnchorElement>("#recent a, .history-body .history a");
-  const id = link?.getAttribute("href")?.match(/^\/object\/(\d+)\/$/)?.[1];
-  if (!id) return;
-  event.preventDefault();
-  openHistory(Number(id));
-});
+// Its card pops up down the right (ADR 0015), filled with the history the
+// server tells, for a click in the scene or on any name. A collision
+// anywhere can add to what followed an object, so the open one is asked
+// for again.
+const historyCard = objectCard(serverNow);
+const refreshHistory = (id?: number) => historyCard?.refresh(id);
 
 // ── what the stations hear (ADR 0014) ─────────────────────────────────────
 
@@ -300,12 +243,13 @@ const posts = STATIONS.map((station) => {
 });
 const yourPass = document.getElementById("your-pass");
 
-// More than one over a station at once take turns.
-const TURN_MS = 5000;
-
-// what the stations hear: satellites with a beacon (derelicts and debris
-// are silent)
-const speaking = () => flying().filter((sat) => sat.beacon);
+// what the stations hear: satellites with a beacon, and fragments carrying
+// words, as static (ADR 0017); derelicts and the rest of the debris are
+// silent
+const lineOf = (sat: Satellite) => (sat.kind === "debris" ? sat.words : sat.beacon) ?? "";
+const speaking = () => flying().filter((sat) => lineOf(sat) !== "");
+// people's satellites among them, for the news
+const satellites = () => speaking().filter((sat) => sat.kind === "satellite");
 
 function listen() {
   const time = serverNow();
@@ -313,26 +257,34 @@ function listen() {
   const over = new Map(talking.map((sat) => [sat.id, stationOver(sat, time)]));
   for (const post of posts) {
     const here = talking.filter((sat) => over.get(sat.id)?.id === post.station.id).sort((a, b) => a.id - b.id);
-    // by the server's clock, so every screen shows the same one at once
-    const turn = here.length > 1 ? Math.floor(time / TURN_MS) % here.length : 0;
-    const sat = here[turn];
+    // more than one overhead take turns, each beacon long enough to read and
+    // all the static sharing one, by the server's clock, so every screen
+    // shows the same one at once, and the server credits who was on air
+    // (airtime.ts)
+    const now = onAir(
+      here.map((s) => ({ id: s.id, text: lineOf(s), static: s.kind === "debris", sat: s })),
+      time,
+    );
+    const sat = now?.speaker.sat;
     const key = sat ? String(sat.id) : "";
     if (key !== post.key) {
       post.key = key;
       post.row.classList.toggle("live", Boolean(sat));
+      post.row.classList.toggle("static", sat?.kind === "debris");
       if (!sat) post.heard.replaceChildren();
       else {
         const name = document.createElement("span");
-        name.className = "callsign";
-        name.textContent = sat.callsign;
+        name.className = sat.kind === "debris" ? "callsign static-mark" : "callsign";
+        name.textContent = sat.kind === "debris" ? "Static" : sat.callsign;
         const beacon = document.createElement("span");
-        beacon.className = "beacon";
-        beacon.textContent = sat.beacon;
+        beacon.className = sat.kind === "debris" ? "beacon static-words" : "beacon";
+        beacon.textContent = lineOf(sat);
         post.heard.replaceChildren(name, beacon);
       }
     }
     let said: string;
-    if (sat) said = here.length > 1 ? `${turn + 1} of ${here.length} overhead` : "";
+    const more = here.length > 1 ? ` · ${here.length - 1} more overhead` : "";
+    if (sat) said = sat.kind === "debris" ? `${here.length} overhead` : `${heardBy(heardCount.get(sat.id) ?? 0, sat.mine)}${more}`;
     else {
       // the next to come into this station's window
       let soonest: { sat: Satellite; ms: number } | null = null;
@@ -341,7 +293,8 @@ function listen() {
         // one that burns up first never gets there
         if (ms !== null && (!soonest || ms < soonest.ms)) soonest = { sat: s, ms };
       }
-      said = soonest ? `Next: ${soonest.sat.callsign}, in ${countdown(soonest.ms)}` : talking.length > 0 ? "" : "Nothing in orbit";
+      const next = soonest?.sat.kind === "debris" ? "static" : soonest?.sat.callsign;
+      said = soonest ? `Next: ${next}, in ${countdown(soonest.ms)}` : talking.length > 0 ? "" : "Nothing in orbit";
     }
     if (said !== post.said) post.next.textContent = post.said = said;
   }
@@ -374,38 +327,7 @@ function listen() {
   } else if (yourPass && yours) {
     say(`${yours.callsign} ${burnedUp(yours)} ${ago(time - yours.at)}. `, true);
   }
-  control(mine ?? null, time);
   news(time);
-}
-
-// Boosting it, or bringing it down (ADR 0011): the controls under your line
-// are for the satellite it's about, and only what it can still do.
-const yourControls = document.getElementById("your-controls");
-let controlled = "";
-function control(sat: Satellite | null, time: number) {
-  if (!yourControls) return;
-  const can = sat ? canManoeuvre(sat, time) : null;
-  const key = sat && can ? `${sat.id}:${can.boost}:${can.deorbit}:${can.to}` : "";
-  if (key === controlled) return;
-  controlled = key;
-  for (const form of yourControls.querySelectorAll<HTMLFormElement>("form[data-manoeuvre]")) {
-    const button = form.querySelector<HTMLButtonElement>("button[name=action]")!;
-    const allowed = can !== null && (button.value === "boost" ? can.boost : can.deorbit) === null;
-    form.hidden = !allowed;
-    if (!sat || !can) continue;
-    form.querySelector<HTMLInputElement>("input[name=id]")!.value = String(sat.id);
-    button.dataset.callsign = sat.callsign ?? "";
-    const to = button.querySelector("[data-to]");
-    if (to && can.to) to.textContent = BANDS[can.to].label;
-  }
-  // why there's no boost, while there's still a way down
-  const spent = yourControls.querySelector<HTMLElement>("[data-spent]");
-  if (spent) {
-    const why = can && can.deorbit === null ? can.boost : null;
-    spent.hidden = why === null;
-    spent.textContent = why === "top-band" ? "Highest band" : "Boost used";
-    if (why) spent.title = REFUSALS[why];
-  }
 }
 
 // Your satellite's line, with a way back to the pad once it's gone.
@@ -436,9 +358,9 @@ function news(time: number) {
     if (sat.kind === "debris") return "debris";
     return sat.kind === "derelict" || !sat.callsign ? "a derelict" : named(sat);
   };
-  const falling = speaking().find((sat) => plungeAt(sat, time) !== null);
-  const down = speaking().find((sat) => sat.deorbitedAt !== null && plungeAt(sat, time) === null);
-  const rising = speaking().find((sat) => climbing(sat, time));
+  const falling = satellites().find((sat) => plungeAt(sat, time) !== null);
+  const down = satellites().find((sat) => sat.deorbitedAt !== null && plungeAt(sat, time) === null);
+  const rising = satellites().find((sat) => climbing(sat, time));
   const last = latest();
   const story = stories.reduce<Story | null>((a, b) => (a && a.at > b.at ? a : b), null);
   const next = [...coming.values()].filter((c) => c.at > time).sort((a, b) => a.at - b.at)[0];
@@ -455,7 +377,7 @@ function news(time: number) {
   else if (last && since(last.at) < 15 * 60_000) text = `${named(last)} ${burnedUp(last)} ${ago(since(last.at))}.`;
   else if (next) text = `Next collision: ${who(next.a)} and ${who(next.b)}, in ${until(next.at - time)}.`;
   else {
-    const soonest = speaking().sort((a, b) => reentryAt(a) - reentryAt(b))[0];
+    const soonest = satellites().sort((a, b) => reentryAt(a) - reentryAt(b))[0];
     if (soonest) text = `Next to burn up: ${named(soonest)}, in ${until(reentryAt(soonest) - time)}.`;
   }
   if (text === said) return;
@@ -465,6 +387,20 @@ function news(time: number) {
 }
 setInterval(listen, 250);
 listen();
+
+// "One of yours met something" stays until it's dismissed: it's news, and
+// the reason to go and look (ADR 0017). Dismissed, it stays dismissed: the
+// server tells it again only for a newer one.
+const metNotice = document.getElementById("met-notice");
+const dismiss = metNotice?.querySelector<HTMLButtonElement>(".notice-close");
+if (metNotice && dismiss) {
+  dismiss.hidden = false;
+  dismiss.addEventListener("click", () => {
+    metNotice.hidden = true;
+    const secure = location.protocol === "https:" ? "; secure" : "";
+    document.cookie = `${metNotice.dataset.cookie}=${metNotice.dataset.at}; path=/; max-age=31536000; samesite=lax${secure}`;
+  });
+}
 
 // The "in orbit" notice after a launch floats over the scene; it fades after
 // a few seconds (on a phone it sits in the page and stays). After a first
@@ -477,6 +413,126 @@ if (notice && getComputedStyle(notice).position === "absolute") {
   if (explainer) explainer.addEventListener("close", fade, { once: true });
   else fade();
   notice.addEventListener("transitionend", () => (notice.hidden = true));
+}
+
+// ── what was heard (ADR 0016) ─────────────────────────────────────────────
+
+// The feed beside the stations: each beacon heard while someone was
+// listening, once, the latest pass first. The server renders it; each pass
+// it hears after that comes over the stream.
+const feedList = document.getElementById("feed")!;
+const feedEmpty = document.getElementById("feed-empty")!;
+const FEED = Number(feedList.dataset.size);
+let feed: HeardItem[] = initial.heard;
+const GONE = { live: null, decayed: "Burned up", deorbited: "Brought down", destroyed: "Destroyed" } as const;
+
+// one card, as src/components/HeardCard.astro makes it
+function heardCard(item: HeardItem, fresh = false): HTMLLIElement {
+  const debris = item.kind === "debris";
+  const li = document.createElement("li");
+  li.className = "heard-item";
+  li.classList.toggle("mine", item.mine);
+  li.classList.toggle("gone", !debris && GONE[item.fate] !== null);
+  li.classList.toggle("fresh", fresh && !reduced);
+  li.dataset.key = item.key;
+  li.classList.toggle("static", debris);
+  const who = document.createElement("p");
+  who.className = "heard-who";
+  const link = document.createElement("a");
+  link.href = `/object/${item.id}/`;
+  const when = document.createElement("time");
+  when.className = "heard-when";
+  when.dateTime = new Date(item.at).toISOString();
+  when.textContent = ago(serverNow() - item.at);
+  const line = document.createElement("p");
+  line.className = "heard-line";
+  if (debris) {
+    // static: a fragment carrying pieces of the lines that broke it
+    const mark = document.createElement("span");
+    mark.className = "static-mark";
+    mark.textContent = "Static";
+    link.className = "heard-from";
+    link.textContent = staticFrom(item.from);
+    who.append(mark, link, when);
+    const words = document.createElement("span");
+    words.className = "static-words";
+    words.textContent = item.words;
+    line.append(words);
+  } else {
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.setProperty("--hue", String(hue(item.id)));
+    const name = document.createElement("strong");
+    name.textContent = item.callsign;
+    link.append(name);
+    who.append(swatch, link);
+    // a handle if it has one; nothing if not (no "no handle" on every card)
+    if (item.mine || item.handle) {
+      const handle = document.createElement("span");
+      handle.className = "heard-handle";
+      handle.textContent = item.mine ? "yours" : item.handle;
+      who.append(handle);
+    }
+    who.append(when);
+    line.textContent = item.beacon;
+  }
+  // the stations' question it answered (ADR 0018)
+  const asked = document.createElement("p");
+  if (item.question) {
+    asked.className = "heard-question";
+    const q = document.createElement("q");
+    q.textContent = item.question;
+    asked.append("Answering ", q);
+  }
+  const meta = document.createElement("p");
+  meta.className = "heard-meta";
+  const gone = GONE[item.fate];
+  meta.textContent = debris
+    ? `Over ${item.station} · ${passes(item.passes)} · ${item.up === 0 ? "all fallen silent" : `${item.up} of ${item.pieces} pieces still up`}`
+    : `Over ${item.station} · ${heardBy(item.heardBy, item.mine)} · ${passes(item.passes)}${gone ? ` · ${gone}` : ""}`;
+  li.append(who, line, ...(item.question ? [asked] : []), meta);
+  return li;
+}
+
+function renderFeed() {
+  feedList.replaceChildren(...feed.map((item) => heardCard(item)));
+  feedEmpty.hidden = feed.length > 0;
+}
+
+// A pass, heard. A card already in the feed is updated where it is: cards
+// never jump under the reader (the review, 2026-10-07); a new one goes on
+// top, lit for a moment.
+function heard(item: HeardItem) {
+  heardCount.set(item.id, item.heardBy);
+  const listed = feed.findIndex((f) => f.key === item.key);
+  if (listed >= 0) {
+    // someone new heard an earlier pass (of this, or of another piece of
+    // its wreck): the counts change, not where or when it was last heard
+    const was = feed[listed];
+    const kept = item.at >= was.at ? item : { ...was, heardBy: item.heardBy, passes: item.passes, pieces: item.pieces, up: item.up };
+    feed[listed] = kept;
+    feedList.querySelector(`[data-key="${CSS.escape(kept.key)}"]`)?.replaceWith(heardCard(kept));
+    return;
+  }
+  feed = [item, ...feed].slice(0, FEED);
+  feedList.prepend(heardCard(item, true));
+  while (feedList.children.length > FEED) feedList.lastElementChild!.remove();
+  feedEmpty.hidden = true;
+}
+
+// A beacon in the feed has come down or been destroyed: its card says so.
+function ended(id: number, fate: HeardItem["fate"]) {
+  const item = feed.find((f) => f.id === id && f.kind !== "debris");
+  if (!item || item.fate === fate) return;
+  item.fate = fate;
+  feedList.querySelector(`[data-key="${CSS.escape(item.key)}"]`)?.replaceWith(heardCard(item));
+}
+
+// How many people have the sky open now, this page included.
+const listeningLine = document.getElementById("listening")!;
+function listeners(n: number) {
+  listeningLine.dataset.listening = String(n);
+  listeningLine.textContent = listeningNow(n);
 }
 
 // ── the summary: counts per band and the latest launches ──────────────────
@@ -560,7 +616,16 @@ function tell(story: Story) {
   const who = document.createElement("p");
   who.className = "collision-blame";
   who.textContent = blame(story.parties);
-  card.replaceChildren(title, ...lines, who);
+  // two answers to the same question (ADR 0018)
+  const both = sharedQuestion(story.parties);
+  const asked = document.createElement("p");
+  asked.className = "collision-question";
+  if (both) {
+    const q = document.createElement("q");
+    q.textContent = both;
+    asked.append("Both were answering ", q);
+  }
+  card.replaceChildren(title, ...lines, ...(both ? [asked] : []), ...wreckOf(story.wreck), who);
   card.hidden = false;
   card.classList.remove("fading");
   clearTimeout(cardTimer);
@@ -569,13 +634,39 @@ function tell(story: Story) {
 card.addEventListener("transitionend", () => {
   if (card.classList.contains("fading")) card.hidden = true;
 });
+
+// What the wreck says, as src/components/Wreck.astro tells it (ADR 0017):
+// nothing, if what met said nothing.
+function wreckOf(pieces: WreckPiece[]): HTMLElement[] {
+  if (pieces.length === 0) return [];
+  const line = document.createElement("p");
+  line.className = "wreck";
+  const label = document.createElement("span");
+  label.className = "wreck-label";
+  label.textContent = "The wreck says";
+  line.append(label, " ");
+  pieces.forEach((piece, i) => {
+    if (i > 0) {
+      const between = document.createElement("span");
+      between.className = "wreck-between";
+      between.setAttribute("aria-hidden", "true");
+      between.textContent = " / ";
+      line.append(between);
+    }
+    const words = document.createElement("span");
+    words.className = piece.up ? "wreck-piece" : "wreck-piece silent";
+    words.textContent = piece.words;
+    line.append(words);
+  });
+  return [line];
+}
 // a collision that happened just before the page opened
 const fresh = stories.find((story) => serverNow() - story.at < CARD_MS);
 if (fresh) tell(fresh);
 
 // keep "5 min ago" honest
 setInterval(() => {
-  for (const time of recentList.querySelectorAll("time")) {
+  for (const time of [...recentList.querySelectorAll("time"), ...feedList.querySelectorAll("time")]) {
     time.textContent = ago(serverNow() - Date.parse(time.dateTime));
   }
 }, 30_000);
@@ -629,15 +720,13 @@ function manoeuvred(sat: Satellite) {
   rebuildHits();
   renderSummary();
 }
-const manoeuvreError = document.getElementById("manoeuvre-error");
+// from your satellite's card: its new orbit, here at once, and the card
+// asked for again
 wireManoeuvres<Satellite>({
   inPlace: (sat) => {
-    if (manoeuvreError) manoeuvreError.textContent = "";
     manoeuvred(sat);
     listen();
-  },
-  refused: (message) => {
-    if (manoeuvreError) manoeuvreError.textContent = message;
+    historyCard?.refresh(sat.id, true);
   },
 });
 
@@ -652,8 +741,10 @@ const setConnection = (state: "live" | "offline") => {
 // EventSource retries a dropped connection by itself, but gives up for good
 // if a reconnect gets an error response (Fly answers 502/503 while a machine
 // starts or deploys), so start a fresh one when that happens.
+let current: EventSource | null = null;
 function connect() {
   const stream = new EventSource("/api/events");
+  current = stream;
 
   stream.addEventListener("hello", (event) => {
     const hello = JSON.parse(event.data) as {
@@ -661,6 +752,9 @@ function connect() {
       sky: Satellite[];
       conjunctions: Conjunction[];
       collisions: Story[];
+      heard: HeardItem[];
+      heardBy: Record<number, number>;
+      listening: number;
     };
     offset = hello.serverTime - Date.now();
     // the snapshot is the live sky; keep what's burned up but still fading
@@ -675,8 +769,22 @@ function connect() {
     for (const story of hello.collisions) {
       if (remember(story) && time - story.at < CARD_MS) tell(story);
     }
+    // and what was heard while away, and who's here now
+    feed = hello.heard;
+    for (const [id, n] of Object.entries(hello.heardBy)) heardCount.set(Number(id), n);
+    renderFeed();
+    listeners(hello.listening);
     renderSummary();
     setConnection("live");
+  });
+
+  // a beacon came over a station while people were listening
+  stream.addEventListener("heard", (event) => {
+    heard(JSON.parse(event.data) as HeardItem);
+  });
+
+  stream.addEventListener("audience", (event) => {
+    listeners((JSON.parse(event.data) as { listening: number }).listening);
   });
 
   stream.addEventListener("launch", (event) => {
@@ -691,6 +799,7 @@ function connect() {
     burned(sat);
     if (sky.has(sat.id)) renderSummary();
     refreshHistory(sat.id);
+    ended(sat.id, sat.deorbitedAt === null ? "decayed" : "deorbited");
   });
 
   // an owner brought one down or boosted it: its new orbit
@@ -709,19 +818,46 @@ function connect() {
   // who was involved
   stream.addEventListener("collision", (event) => {
     const story = JSON.parse(event.data) as Story & { a: number; b: number; fragments: Satellite[] };
-    for (const id of [story.a, story.b]) destroyed.set(id, story.at);
+    for (const id of [story.a, story.b]) {
+      destroyed.set(id, story.at);
+      ended(id, "destroyed");
+      // yours: the line under the stations says so, once it's gone
+      const sat = sky.get(id);
+      if (sat?.mine && sat.callsign) burnUps.set(id, { callsign: sat.callsign, at: story.at, mine: true, deorbited: false, destroyed: true });
+    }
     // this one has happened, and anything else either was to meet won't
     for (const [key, c] of coming) if ([c.a, c.b].some((id) => id === story.a || id === story.b)) coming.delete(key);
     rebuildHits();
     for (const fragment of story.fragments) sky.set(fragment.id, fragment);
-    if (remember({ id: story.id, at: story.at, angle: story.angle, radius: story.radius, parties: story.parties })) tell(story);
+    if (remember({ id: story.id, at: story.at, angle: story.angle, radius: story.radius, parties: story.parties, wreck: story.wreck })) tell(story);
     renderSummary();
     refreshHistory();
   });
 
   stream.addEventListener("error", () => {
     setConnection("offline");
-    if (stream.readyState === EventSource.CLOSED) setTimeout(connect, 3000);
+    // not if the tab has paused since (below)
+    if (stream.readyState === EventSource.CLOSED && current === stream) setTimeout(() => current === stream && connect(), 3000);
   });
 }
 connect();
+
+// A tab hidden for a minute stops listening, and so does one opened hidden
+// (in the background, or restored with the browser): it isn't anyone's
+// audience (ADR 0016). Coming back to it reconnects, and the stream's hello
+// catches the page up.
+let hiddenFor: ReturnType<typeof setTimeout> | undefined;
+function whenHidden() {
+  clearTimeout(hiddenFor);
+  if (document.hidden) {
+    hiddenFor = setTimeout(() => {
+      current?.close();
+      current = null;
+      connection.dataset.state = "offline";
+      connection.textContent = "Paused";
+      listeningLine.textContent = "Not listening while hidden";
+    }, 60_000);
+  } else if (!current) connect();
+}
+document.addEventListener("visibilitychange", whenHidden);
+whenHidden();

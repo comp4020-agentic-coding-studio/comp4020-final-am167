@@ -51,6 +51,14 @@ describe("the event stream", () => {
     }
     expect(Object.keys(mine!)).not.toContain("owner");
 
+    // and what the stations have heard, and how many are listening, this
+    // stream included (ADR 0016)
+    const { heard, heardBy, listening } = helloA.data as { heard: unknown[]; heardBy: Record<string, number>; listening: number };
+    expect(Array.isArray(heard)).toBe(true);
+    expect(heardBy).not.toBeNull();
+    expect(typeof heardBy).toBe("object");
+    expect(listening).toBeGreaterThanOrEqual(1);
+
     // another person sees the same orbit, not marked as theirs
     const streamB = await open(new Session(baseUrl));
     const helloB = (await streamB.next().finally(() => streamB.close())).data as Hello;

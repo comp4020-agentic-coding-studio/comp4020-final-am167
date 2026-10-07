@@ -77,15 +77,23 @@ describe("the catalogue as a table", () => {
     }
   });
 
-  it("shows only yours when asked", async () => {
+  // Yours is its own view (ADR 0015), so there's no "Only yours" box as
+  // well; an old link to it opens Yours (the user's review, 2026-10-08)
+  it("shows only yours in Yours, and an old 'only yours' link goes there", async () => {
     const a = new Session(baseUrl);
     const name = callsign("MINE");
     await a.launch({ band: "mid", callsign: name, beacon: "only mine" });
-    const page = await view("?mine=1", a);
-    const rows = [...page.querySelectorAll("tbody tr")];
-    expect(rows.length).toBeGreaterThan(0);
-    for (const row of rows) expect(row.textContent).toMatch(/yours/);
-    expect(rows.some((row) => row.textContent?.includes(name))).toBe(true);
+    for (const search of ["?show=mine", "?mine=1"]) {
+      const page = await view(search, a);
+      expect(page.querySelector("h1")?.textContent, search).toBe("Yours");
+      const rows = [...page.querySelectorAll("tbody tr")];
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) expect(row.textContent).toMatch(/yours/);
+      expect(rows.some((row) => row.textContent?.includes(name))).toBe(true);
+    }
+    for (const search of ["", "?show=all", "?show=mine"]) {
+      expect((await view(search, a)).querySelector("input[name=mine]"), search).toBeNull();
+    }
   });
 
   it("names each satellite's operator, and finds by handle", async () => {

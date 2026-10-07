@@ -28,11 +28,15 @@ describe("an object's history", () => {
     const page = doc(await res.text());
     const history = page.querySelector(".history")!;
     expect(history, "no history").not.toBeNull();
-    expect(page.querySelector("h1")?.textContent).toContain(name);
+    // the catalogue, with its card open over it (ADR 0015)
+    const card = page.querySelector("dialog#object-card")!;
+    expect(card.hasAttribute("open")).toBe(true);
+    expect(card.querySelector("h2")?.textContent).toContain(name);
+    expect(page.querySelector("main table")).not.toBeNull();
     expect(history.textContent).toMatch(/launched without a handle/i);
     expect(history.textContent).toMatch(/Low/);
     expect(history.textContent).not.toContain(beacon);
-    expect(history.textContent).toMatch(/heard only as it passes over a ground station/i);
+    expect(history.textContent).toMatch(/not heard yet/i);
   });
 
   it("is the same in the sky's panel, beacon withheld from a stranger and shown to its owner", async () => {

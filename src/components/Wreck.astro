@@ -1,0 +1,22 @@
+---
+import type { WreckPiece } from "../lib/wreck.ts";
+
+// What a collision's wreck says (ADR 0017): every fragment's piece of both
+// lines, in order; the pieces whose fragment has burned up are faded, so
+// the wreck falls silent as the sky heals. Nothing, if what met said
+// nothing. The sky's script builds the same for a collision as it happens.
+interface Props {
+  pieces: WreckPiece[];
+}
+const { pieces } = Astro.props;
+const silent = pieces.filter((p) => !p.up).length;
+---
+{pieces.length > 0 && (
+  <p class="wreck">
+    <span class="wreck-label">The wreck says</span>{" "}
+    {pieces.map((piece, i) => (
+      <>{i > 0 && <span class="wreck-between" aria-hidden="true"> / </span>}<span class:list={["wreck-piece", { silent: !piece.up }]}>{piece.words}</span></>
+    ))}
+    {silent > 0 && <span class="wreck-note"> ({silent === pieces.length ? "all of it fallen silent now" : `${silent} of ${pieces.length} pieces fallen silent`})</span>}
+  </p>
+)}

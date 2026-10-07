@@ -1,8 +1,9 @@
 import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { blocked } from "./launch.ts";
+import { listenerKey, signedInAs } from "./listener.ts";
 
 const { objects, operators, people } = schema;
 
@@ -64,15 +65,25 @@ async function hashOf(passphrase: string, salt: string): Promise<Buffer | null> 
   }
 }
 
-// Everything this person launched while anonymous becomes the operator's.
+// Everything this person launched while anonymous becomes the operator's,
+// and so does everything they heard (ADR 0016), so they're one listener,
+// not two, signed out and in; less anything of the operator's own it heard
+// (a second device, signed out, hearing theirs), since nobody hears their
+// own.
 export function link(person: string, operator: number): void {
+  const was = listenerKey({ person, operator: null });
+  const now = listenerKey({ person: undefined, operator });
   db.transaction((tx) => {
     tx.insert(people).values({ person, operator }).onConflictDoUpdate({ target: people.person, set: { operator } }).run();
     tx.update(objects)
       .set({ operator })
       .where(and(eq(objects.owner, person), isNull(objects.operator)))
       .run();
+    tx.run(sql`INSERT OR IGNORE INTO listens (object, listener, at) SELECT object, ${now}, at FROM listens WHERE listener = ${was}`);
+    tx.run(sql`DELETE FROM listens WHERE listener = ${was}`);
+    tx.run(sql`DELETE FROM listens WHERE listener = ${now} AND object IN (SELECT id FROM objects WHERE operator = ${operator})`);
   });
+  signedInAs(was, now);
 }
 
 type Result = { ok: true; operator: Operator } | { ok: false; errors: OperatorErrors };

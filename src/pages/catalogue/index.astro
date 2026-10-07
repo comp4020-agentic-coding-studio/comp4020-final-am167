@@ -1,6 +1,13 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ManoeuvreDialogs from "../../components/ManoeuvreDialogs.astro";
+import ObjectCard from "../../components/ObjectCard.astro";
+import YourSatellite from "../../components/YourSatellite.astro";
+import Wreck from "../../components/Wreck.astro";
 import { ago, falling, km } from "../../lib/format.ts";
+import { REFUSALS, isRefusal } from "../../lib/manoeuvre.ts";
+import { heardTotals } from "../../lib/heard.ts";
+import { lastLooked, looked } from "../../lib/seen.ts";
 import { BANDS, climbing, fallRate, heightKm, radiusAt, type Band } from "../../lib/orbit.ts";
 import {
   FIRST_DIR,
@@ -8,11 +15,15 @@ import {
   browse,
   catalogueCounts,
   readCatalogueQuery,
+  encountersOf,
+  historyOf,
+  newsSince,
   recentCollisions,
+  satellitesOf,
   type CatalogueQuery,
   type Sort,
 } from "../../lib/sky.ts";
-import { blame, collisionOf, couplet, describe, headline } from "../../lib/story.ts";
+import { blame, collisionOf, couplet, describe, headline, sharedQuestion, staticFrom, titleOf } from "../../lib/story.ts";
 
 // The record of everything launched (ADR 0003), as a table: filtered,
 // searched, sorted and paged by a plain GET form and links, so it works
@@ -21,12 +32,43 @@ import { blame, collisionOf, couplet, describe, headline } from "../../lib/story
 // orbit (ADR 0007), and a script keeps them falling. Every fragment traces
 // back to the collision that made it, and every collision is told with who
 // it names (ADR 0010).
+//
+// "Yours" (ADR 0015) is a view of its own: each of your satellites in
+// orbit as a card with its controls (ADR 0011), then your whole record as
+// the table. A boost or a deorbit without JavaScript comes back here.
 const { person, operator } = Astro.locals;
+const viewer = { person, operator: operator?.id ?? null };
 const query = readCatalogueQuery(Astro.url.searchParams);
 const now = Date.now();
-const result = browse(query, { person, operator: operator?.id ?? null }, now);
+const result = browse(query, viewer, now);
 const rows = result.rows;
 const counts = catalogueCounts();
+const yours = query.show === "mine";
+const yoursUp = satellitesOf(viewer).filter((o) => o.launchedAt <= now);
+// (only Yours shows them)
+const yoursHeard = heardTotals(yours ? yoursUp.map((o) => o.id) : []);
+// every collision one of yours was in (ADR 0017): the only way you meet a
+// stranger here
+const ENCOUNTERS = 20;
+const everyEncounter = yours ? encountersOf(viewer, now) : [];
+const encounters = everyEncounter.slice(0, ENCOUNTERS);
+// what's new since they last looked here, and now they have
+const since = lastLooked(Astro.cookies);
+const news = yours ? newsSince(viewer, since, now, everyEncounter) : null;
+if (yours) looked(Astro.cookies, now, Astro.url, Astro.request.headers);
+const fresh = new Set(news?.encounters.map((e) => e.id) ?? []);
+// back from bringing one down or boosting it without JavaScript
+const yoursById = (name: string) => yoursUp.find((o) => o.id === Number(Astro.url.searchParams.get(name))) ?? null;
+// (in Yours, or on one's own address, which is this page with its card open)
+const card = /^[1-9]\d{0,15}$/.test(Astro.url.searchParams.get("object") ?? "")
+  ? historyOf(Number(Astro.url.searchParams.get("object")), viewer, now)
+  : null;
+// its own title, and again once a card opened over it is closed
+const pageTitle = yours ? "Kessler: yours" : "Kessler: the catalogue";
+const told = yours || (card?.mine ?? false);
+const deorbited = told ? yoursById("deorbited") : null;
+const boosted = told ? yoursById("boosted") : null;
+const refused = told ? Astro.url.searchParams.get("refused") : null;
 // the latest collisions, told the way the sky page tells them
 const COLLISIONS = 50;
 const collided = recentCollisions(COLLISIONS);
@@ -49,8 +91,7 @@ function href(changes: Partial<CatalogueQuery>): string {
   if (q.q) params.set("q", q.q);
   if (q.kind) params.set("kind", q.kind);
   if (q.band) params.set("band", q.band);
-  if (q.show === "all" && q.fate) params.set("fate", q.fate);
-  if (q.mine) params.set("mine", "1");
+  if (q.show !== "live" && q.fate) params.set("fate", q.fate);
   if (q.sort !== "launched" || q.dir !== FIRST_DIR.launched) {
     params.set("sort", q.sort);
     params.set("dir", q.dir);
@@ -60,8 +101,8 @@ function href(changes: Partial<CatalogueQuery>): string {
   const text = params.toString();
   return `/catalogue/${text ? `?${text}` : ""}`;
 }
-const filtered = Boolean(query.q || query.kind || query.band || query.fate || query.mine);
-const clear = href({ q: "", kind: null, band: null, fate: null, mine: false });
+const filtered = Boolean(query.q || query.kind || query.band || query.fate);
+const clear = href({ q: "", kind: null, band: null, fate: null });
 // a column's header: a link that sorts by it, or turns the sort round
 const sortBy = (sort: Sort) =>
   href({ sort, dir: query.sort === sort ? (query.dir === "asc" ? "desc" : "asc") : FIRST_DIR[sort] });
@@ -78,27 +119,119 @@ const columns: { sort: Sort; label: string; class?: string }[] = [
 const views = [
   { show: "live", label: `In orbit (${counts.live})` },
   { show: "all", label: `Everything ever launched (${counts.all})` },
+  { show: "mine", label: `Yours (${yoursUp.length} up)` },
 ] as const;
 const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 const number = (n: number) => n.toLocaleString("en");
 ---
-<Base title="Kessler: the catalogue" current="catalogue">
-  <main class="catalogue-page">
-    <h1>The catalogue</h1>
-    <p class="lede">
-      Everything that has been in the shared sky, kept for good: people's
-      satellites, the derelicts that drift in, and every fragment, traced
-      back to the collision that made it. Beacons aren't listed: they're only
-      heard as a satellite passes over a ground station (and in the collisions
-      below). Every orbit slowly falls and burns up in the end; its record
-      stays here.
-    </p>
+<Base title={card ? `Kessler: ${titleOf(card)}` : pageTitle} current="catalogue">
+  <main class="catalogue-page" data-server-time={now}>
+    <h1>{yours ? "Yours" : "The catalogue"}</h1>
+    {yours ? (
+      <p class="lede">
+        {operator ? (
+          <>Everything you've launched as <strong>{operator.handle}</strong>, on any device.</>
+        ) : (
+          <>
+            Everything launched from this browser, without a handle.{" "}
+            <a href="/operator/">Claim one</a> to keep them on any device, and your name on
+            what they do.
+          </>
+        )}{" "}
+        Boost one up a band to keep it up longer, or bring it down to keep the
+        sky clear for everyone else.
+      </p>
+    ) : (
+      <p class="lede">
+        Everything that has been in the shared sky, kept for good: people's
+        satellites, the derelicts that drift in, and every fragment, traced
+        back to the collision that made it. Beacons aren't listed here: they're
+        heard over the ground stations, and what's been heard is beside the
+        <a href="/sky/">sky</a> (and in the collisions below). Every orbit
+        slowly falls and burns up in the end; its record stays here.
+      </p>
+    )}
 
     <nav class="views" aria-label="Show">
       {views.map((v) => (
         <a href={href({ show: v.show, fate: null })} aria-current={v.show === query.show ? "page" : undefined}>{v.label}</a>
       ))}
     </nav>
+
+    <!-- back from boosting one of yours from its own address, or refused -->
+    {!yours && boosted && <p class="yours-notice" role="status"><strong>{boosted.callsign}</strong> is climbing a band. It stays up far longer.</p>}
+    {!yours && !boosted && isRefusal(refused) && <p class="yours-notice" role="alert">{REFUSALS[refused]}</p>}
+
+    {yours && (
+      <section class="yours-up" aria-labelledby="yours-up-title">
+        {news && since > 0 && (news.encounters.length > 0 || news.heardBy > 0) && (
+          <p class="yours-notice yours-news">
+            Since you last looked:{" "}
+            {news.heardBy > 0 && <>{news.heardBy === 1 ? "one person heard yours" : `${news.heardBy} people heard yours`}</>}
+            {news.heardBy > 0 && news.encounters.length > 0 && ", and "}
+            {news.encounters.length > 0 && <>{news.encounters.length === 1 ? "one of yours" : `${news.encounters.length} of yours`} met something (below)</>}.
+          </p>
+        )}
+        {boosted && <p class="yours-notice" role="status"><strong>{boosted.callsign}</strong> is climbing a band. It stays up far longer.</p>}
+        {!boosted && isRefusal(refused) && <p class="yours-notice" role="alert">{REFUSALS[refused]}</p>}
+        <h2 id="yours-up-title">In orbit now</h2>
+        <div id="yours-list">
+          {yoursUp.length === 0 ? (
+            <p class="empty">Nothing of yours in orbit. <a href="/">Launch a satellite</a>.</p>
+          ) : (
+            <ol class="your-sats">
+              {yoursUp.map((o) => <YourSatellite object={o} heard={yoursHeard.get(o.id)!} now={now} />)}
+            </ol>
+          )}
+        </div>
+        <h2 id="encounters-title">Encounters</h2>
+        {encounters.length === 0 ? (
+          <p class="empty">
+            None of yours has collided with anything. When one does, you'll find
+            here who it met, what they had said, and what the wreck says.
+          </p>
+        ) : (
+          <ol class="encounters" aria-labelledby="encounters-title">
+            {encounters.map((e) => (
+              <li class:list={["encounter", { fresh: fresh.has(e.id) }]}>
+                <p class="collision-title">
+                  {fresh.has(e.id) && <span class="new">New</span>}
+                  {headline(e.parties)}{" "}
+                  <time datetime={new Date(e.at).toISOString()}>{ago(now - e.at)}</time>
+                </p>
+                {e.other.kind === "satellite" && e.other.beacon && (
+                  <p class="encounter-line">
+                    <a href={`/object/${e.other.id}/`}>{e.other.callsign}</a>
+                    <span class="encounter-who"> ({e.other.operator ?? "no handle"})</span> said <q>{e.other.beacon}</q>
+                  </p>
+                )}
+                {e.other.kind === "debris" && (
+                  <p class="encounter-line">
+                    The <a href={`/object/${e.other.id}/`}>fragment</a> {staticFrom(e.other.from).replace(/^from/, "came from")}
+                    {e.other.words ? <>, carrying <span class="static-words">{e.other.words}</span></> : ", and was silent"}.
+                  </p>
+                )}
+                {e.other.kind === "derelict" && (
+                  <p class="encounter-line">
+                    A dead satellite, nobody's,
+                    {e.other.words ? <> still carrying {e.other.echoOf ?? "a gone satellite"}'s last words <q>{e.other.words}</q></> : " with nothing to say"}.
+                  </p>
+                )}
+                {sharedQuestion(e.parties) && <p class="encounter-line">Both were answering <q>{sharedQuestion(e.parties)}</q></p>}
+                {e.yours.beacon && (
+                  <p class="encounter-line encounter-yours">
+                    <a href={`/object/${e.yours.id}/`}>{e.yours.callsign}</a> said <q>{e.yours.beacon}</q>
+                  </p>
+                )}
+                <Wreck pieces={e.wreck} />
+              </li>
+            ))}
+          </ol>
+        )}
+
+        <h2 class="yours-record-title">Your record</h2>
+      </section>
+    )}
 
     <form class="filters" method="get" action="/catalogue/" aria-label="Filter the catalogue">
       {query.show !== "live" && <input type="hidden" name="show" value={query.show} />}
@@ -125,7 +258,7 @@ const number = (n: number) => n.toLocaleString("en");
           {bands.map(([band, b]) => <option value={band} selected={query.band === band}>{b.label}</option>)}
         </select>
       </label>
-      {query.show === "all" && (
+      {query.show !== "live" && (
         <label>
           <span>Status</span>
           <select name="fate">
@@ -136,10 +269,6 @@ const number = (n: number) => n.toLocaleString("en");
           </select>
         </label>
       )}
-      <label class="check">
-        <input type="checkbox" name="mine" value="1" checked={query.mine} />
-        <span>Only yours</span>
-      </label>
       <button type="submit">Apply</button>
       {filtered && <a class="clear" href={clear}>Clear filters</a>}
     </form>
@@ -149,10 +278,14 @@ const number = (n: number) => n.toLocaleString("en");
         {filtered ? (
           <>Nothing matches these filters. <a href={clear}>Clear the filters</a>.</>
         ) : (
-          <>
-            {query.show === "live" ? "Nothing in orbit." : "Nothing has been launched yet."}{" "}
-            <a href="/">Launch the first satellite</a>.
-          </>
+          yours ? (
+            <>You haven't launched anything yet.</>
+          ) : (
+            <>
+              {query.show === "live" ? "Nothing in orbit." : "Nothing has been launched yet."}{" "}
+              <a href="/">Launch the first satellite</a>.
+            </>
+          )
         )}
       </p>
     ) : (
@@ -230,6 +363,7 @@ const number = (n: number) => n.toLocaleString("en");
       </>
     )}
 
+    {!yours && (
     <section class="collisions" id="collisions" aria-labelledby="collisions-title">
       <h2 id="collisions-title">Collisions</h2>
       {collided.length === 0 ? (
@@ -238,7 +372,9 @@ const number = (n: number) => n.toLocaleString("en");
         <>
           <p class="lede">
             {collided.length < COLLISIONS ? "Every collision so far" : `The latest ${COLLISIONS} collisions`}, newest
-            first: what met, the beacons that met, and who launched what.
+            first: what met, the beacons that met, what the wreck says (each
+            fragment carries a piece of both, until it burns up), and who
+            launched what.
           </p>
           <ol class="collision-list">
             {collided.map((c) => (
@@ -250,6 +386,8 @@ const number = (n: number) => n.toLocaleString("en");
                 {couplet(c.parties).map(({ callsign, beacon }) => (
                   <p class="collision-beacon"><q>{beacon}</q> {callsign}</p>
                 ))}
+                {sharedQuestion(c.parties) && <p class="collision-beacon">Both were answering <q>{sharedQuestion(c.parties)}</q></p>}
+                <Wreck pieces={c.wreck} />
                 <p class="collision-blame">{blame(c.parties)}</p>
               </li>
             ))}
@@ -257,6 +395,9 @@ const number = (n: number) => n.toLocaleString("en");
         </>
       )}
     </section>
+    )}
+    <ObjectCard history={card} now={now} pageTitle={pageTitle} />
+    <ManoeuvreDialogs thanks={deorbited ? (deorbited.callsign ?? "Your satellite") : null} />
   </main>
 
   <script>
@@ -264,7 +405,46 @@ const number = (n: number) => n.toLocaleString("en");
     // and for the search box (Enter works too).
     const filters = document.querySelector<HTMLFormElement>("form.filters");
     filters?.addEventListener("change", (event) => {
-      if ((event.target as HTMLElement).matches("select, input[type=checkbox]")) filters.requestSubmit();
+      if ((event.target as HTMLElement).matches("select")) filters.requestSubmit();
+    });
+  </script>
+
+  <script>
+    import { keepCounting } from "../../scripts/history.ts";
+    import { wireManoeuvres } from "../../scripts/manoeuvres.ts";
+    import { objectCard } from "../../scripts/object-card.ts";
+
+    // Each name opens its card (ADR 0015). In Yours, each satellite keeps
+    // counting, and a boost or a deorbit happens in place: the list (and
+    // the card, if it's open) is asked for again, as the server now tells it.
+    const serverTime = Number(document.querySelector<HTMLElement>("[data-server-time]")?.dataset.serverTime ?? Date.now());
+    const offset = serverTime - Date.now();
+    const now = () => Date.now() + offset;
+    const objects = objectCard(now);
+    const list = document.getElementById("yours-list");
+    let stops: (() => void)[] = [];
+    const count = () => {
+      for (const stop of stops) stop();
+      stops = [...(list?.querySelectorAll<HTMLElement>("[data-yours]") ?? [])].map((sat) => keepCounting(sat, now));
+    };
+    count();
+    wireManoeuvres({
+      inPlace: async (object) => {
+        objects?.refresh(object.id, true);
+        if (!list) return;
+        try {
+          const res = await fetch(location.pathname + location.search);
+          const fresh = new DOMParser().parseFromString(await res.text(), "text/html").getElementById("yours-list");
+          if (!res.ok || !fresh) return;
+          // focus stays on the satellite it was on
+          const focused = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>("[data-yours]")?.dataset.yours;
+          list.replaceChildren(...fresh.childNodes);
+          count();
+          if (focused) list.querySelector<HTMLElement>(`[data-yours="${focused}"] a`)?.focus({ preventScroll: true });
+        } catch {
+          // offline: the list says what it said, and a reload catches up
+        }
+      },
     });
   </script>
 
@@ -339,6 +519,142 @@ const number = (n: number) => n.toLocaleString("en");
   .views a[aria-current="page"] {
     color: var(--ink);
     box-shadow: inset 0 -2px 0 var(--amber);
+  }
+
+  /* Yours (ADR 0015): a card for each of yours in orbit, then the record */
+  .yours-up h2 {
+    margin: 1.5rem 0 0.75rem;
+    font-size: var(--step-1);
+    font-weight: 700;
+    font-variation-settings: "wdth" 112;
+  }
+
+  .yours-notice {
+    margin: 0 0 1rem;
+    padding: 0.6rem 0.85rem;
+    border-left: 3px solid var(--amber);
+    background: rgb(242 165 65 / 0.08);
+  }
+
+  .your-sats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .your-sats :global(.your-sat) {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+    padding: 0.9rem 1rem 1rem;
+    border: 1px solid var(--grid-strong);
+    border-left: 3px solid var(--amber);
+    border-radius: 4px;
+    background: rgb(6 11 24 / 0.6);
+  }
+
+  .your-sats :global(.your-sat p),
+  .your-sats :global(.your-sat blockquote) {
+    margin: 0;
+  }
+
+  .your-sats :global(.your-sat-head) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.5rem;
+  }
+
+  .your-sats :global(.your-sat-head a) {
+    font-size: var(--step-1);
+    text-decoration-color: var(--grid-strong);
+  }
+
+  .your-sats :global(.swatch) {
+    display: inline-block;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    background: oklch(0.8 0.13 var(--hue));
+  }
+
+  .your-sats :global(.your-sat-doing) {
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+  }
+
+  .your-sats :global(.your-sat-beacon) {
+    padding-left: 0.75rem;
+    border-left: 2px solid var(--grid-strong);
+    font-style: italic;
+    overflow-wrap: anywhere;
+  }
+
+  .your-sats :global(.your-sat-question) {
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+  }
+
+  .your-sats :global(.your-sat-question q) {
+    color: var(--ink);
+  }
+
+  .your-sats :global(.your-sat-heard) {
+    font-size: var(--step--1);
+  }
+
+  .your-sats :global(.your-sat-now) {
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .yours-record-title {
+    margin-top: 2rem;
+  }
+
+  .encounters {
+    display: grid;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .encounter {
+    padding: 0.6rem 0 0.6rem 0.85rem;
+    border-left: 3px solid #ff7a45;
+  }
+
+  .encounter p {
+    margin: 0;
+  }
+
+  .encounter .new {
+    margin-right: 0.45rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 3px;
+    background: var(--amber);
+    color: var(--night-deep);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    vertical-align: 0.1em;
+  }
+
+  .encounter-line {
+    margin-top: 0.3rem;
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+  }
+
+  .encounter-line q {
+    color: var(--ink);
+    font-style: italic;
   }
 
   table {
@@ -472,19 +788,14 @@ const number = (n: number) => n.toLocaleString("en");
     border-radius: 3px;
   }
 
-  .filters .check {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    min-height: 2.25rem;
-    color: var(--ink);
-  }
-
-  .filters .check input {
-    accent-color: var(--amber);
-    width: 1rem;
-    height: 1rem;
-    margin: 0;
+  /* its own chevron, clear of the edge (the browser's sat against it) */
+  .filters select {
+    appearance: none;
+    padding-right: 2rem;
+    background: var(--night-deep)
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2393a6bf' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      no-repeat right 0.7rem center / 0.7rem auto;
+    cursor: pointer;
   }
 
   .filters button {

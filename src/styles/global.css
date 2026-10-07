@@ -113,11 +113,29 @@ a:hover {
   }
 }
 
-/* An object's history (ADR 0012): on its own page, and in the panel the sky
-   opens when an object is clicked. Global, since the panel's markup is
-   fetched into the sky page. */
+/* An object's history (ADR 0012): on its own page, and in the card that
+   pops up when an object is clicked (ADR 0015). Global, since the card's
+   markup is fetched into the page. Wide enough, its parts sit side by
+   side. */
+.history-body {
+  container-type: inline-size;
+}
+
 .history {
   --history-gap: 1.25rem;
+}
+
+@container (min-width: 36rem) {
+  .history {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 2rem;
+    align-items: start;
+  }
+
+  .history > :not(.history-part) {
+    grid-column: 1 / -1;
+  }
 }
 
 .history p {
@@ -179,4 +197,164 @@ a:hover {
 
 .history time {
   color: var(--ink-dim);
+}
+
+.history-controls {
+  margin-top: 0.75rem;
+}
+
+/* Boosting and bringing down (ADR 0011), on a satellite's card and in Yours
+   (ADR 0015). Global, since the card is fetched into the sky and the
+   catalogue. */
+.manoeuvres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.manoeuvres form {
+  margin: 0;
+}
+
+.manoeuvres[hidden],
+.manoeuvres form[hidden],
+.manoeuvres .spent[hidden] {
+  display: none;
+}
+
+.manoeuvres .spent {
+  align-self: center;
+  font-size: var(--step--1);
+  color: var(--ink-dim);
+}
+
+.manoeuvres button {
+  padding: 0.3rem 0.65rem;
+  font: inherit;
+  font-size: var(--step--1);
+  font-weight: 700;
+  color: var(--ink);
+  background: rgb(219 228 239 / 0.06);
+  border: 1px solid var(--grid-strong);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.manoeuvres button:hover,
+.manoeuvres button:focus-visible {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.manoeuvres button[value="deorbit"] {
+  border-color: rgb(242 165 65 / 0.55);
+}
+
+.manoeuvres button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.manoeuvres .manoeuvre-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--danger);
+}
+
+.manoeuvres .manoeuvre-error:empty {
+  display: none;
+}
+
+/* What a collision's wreck says (ADR 0017): pieces of both lines, the
+   burned-up ones faded. Global: it's in fetched cards and built by scripts. */
+.wreck {
+  margin: 0.4rem 0 0;
+  color: var(--ink);
+  font-size: var(--step--1);
+  overflow-wrap: anywhere;
+}
+
+.wreck-label {
+  color: var(--ink-dim);
+}
+
+.wreck-piece {
+  font-style: italic;
+}
+
+.wreck-piece.silent {
+  color: var(--ink-dim);
+  opacity: 0.5;
+  text-decoration: line-through;
+  text-decoration-color: rgb(147 166 191 / 0.4);
+}
+
+.wreck-between,
+.wreck-note {
+  color: var(--ink-dim);
+}
+
+/* Static: a fragment heard over a station, carrying broken pieces of two
+   strangers' lines (ADR 0017) */
+.static-words {
+  color: #c9d3e0;
+  font-style: italic;
+  letter-spacing: 0.01em;
+  text-shadow: 1px 0 rgb(255 122 69 / 0.35), -1px 0 rgb(80 160 255 / 0.35);
+  animation: static-flicker 3.2s steps(1) infinite;
+}
+
+.static-words::before,
+.static-words::after {
+  color: var(--ink-dim);
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.static-words::before {
+  content: "░ ";
+}
+
+.static-words::after {
+  content: " ░";
+}
+
+.static-mark {
+  color: #ff9a6a;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes static-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  47% {
+    opacity: 0.55;
+  }
+  49% {
+    opacity: 0.9;
+  }
+  83% {
+    opacity: 0.7;
+  }
+}
+
+.history-static {
+  font-size: var(--step-1);
+}
+
+/* the stations' question a beacon answered (ADR 0018) */
+.history-question {
+  color: var(--ink-dim);
+  font-size: var(--step--1);
+}
+
+.history-question q {
+  color: var(--ink);
+  font-style: italic;
 }

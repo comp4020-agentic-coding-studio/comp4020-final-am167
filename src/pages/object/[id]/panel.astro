@@ -1,10 +1,10 @@
 ---
-import ObjectHistory from "../../../components/ObjectHistory.astro";
+import ObjectCardBody from "../../../components/ObjectCardBody.astro";
 import { historyOf } from "../../../lib/sky.ts";
-import { titleOf } from "../../../lib/story.ts";
 
-// The same history as /object/<id>/, as a fragment for the panel the sky
-// opens when an object is clicked (src/scripts/sky.ts).
+// The same history as /object/<id>/, as a fragment for the card that pops
+// up when an object is clicked, on the sky or the catalogue (ADR 0015,
+// src/scripts/object-card.ts).
 export const partial = true;
 const { person, operator } = Astro.locals;
 // one address per object: digits, no leading zero
@@ -13,6 +13,4 @@ const now = Date.now();
 const history = id === null ? null : historyOf(id, { person, operator: operator?.id ?? null }, now);
 if (!history) return new Response("Nothing by that number has been in this sky.", { status: 404 });
 ---
-<h2 id="history-title">{titleOf(history)}</h2>
-<ObjectHistory history={history} now={now} level={3} />
-<p class="history-links"><a href={`/object/${history.id}/`}>Its own page</a></p>
+<ObjectCardBody history={history} now={now} />
