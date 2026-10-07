@@ -1,5 +1,6 @@
 ---
 import ManoeuvreControls from "./ManoeuvreControls.astro";
+import Wreck from "./Wreck.astro";
 import { ago, falling, km, until } from "../lib/format.ts";
 import { BANDS, fallRate, heightKm, radiusAt } from "../lib/orbit.ts";
 import { stationOver } from "../lib/stations.ts";
@@ -97,6 +98,23 @@ const moreLosses = f.destroyed.length - shownLosses.length;
     </section>
   )}
 
+  {h.kind === "debris" && (
+    <section class="history-part">
+      <Heading>What it says</Heading>
+      {h.words ? (
+        <>
+          <p class="history-static"><span class="static-words">{h.words}</span></p>
+          <p>
+            Pieces of the lines that broke it, {live ? "heard as static each time it passes over a station" : "heard as static while it flew"}.
+            {h.heard.passes > 0 && <> {heardBy(h.heard.by, false)}, over {passes(h.heard.passes)}.</>}
+          </p>
+        </>
+      ) : (
+        <p>Nothing: what broke it had nothing to say.</p>
+      )}
+    </section>
+  )}
+
   {h.origin && (
     <section class="history-part">
       <Heading>Where it came from</Heading>
@@ -148,6 +166,10 @@ const moreLosses = f.destroyed.length - shownLosses.length;
           {h.end.with.kind !== "debris" && <> <a href={`/object/${h.end.with.id}/`}>See {describe(h.end.with)}</a>.</>}
         </p>
         {theirLine && <p class="history-couplet"><q>{theirLine.beacon}</q> {theirLine.callsign}</p>}
+        {h.end.with.kind === "debris" && h.end.with.words && (
+          <p class="history-couplet">The debris was carrying <span class="static-words">{h.end.with.words}</span></p>
+        )}
+        <Wreck pieces={h.end.wreck} />
         <p class="history-blame">{blame(met)}</p>
       </>
     )}

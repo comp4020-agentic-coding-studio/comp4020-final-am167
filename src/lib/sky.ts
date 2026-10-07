@@ -6,6 +6,7 @@ import { FUEL, REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
 import { STATIONS, nextStation } from "./stations.ts";
+import { lineOf, shardsOf, type WreckPiece } from "./wreck.ts";
 import {
   BANDS,
   DECAY,
@@ -62,8 +63,10 @@ export interface SkyObject extends Orbit {
   band: Band;
   launchedAt: number;
   direction: 1 | -1;
-  // for debris, the collision it came from
+  // for debris, the collision it came from, and the words it carries (ADR
+  // 0017)
   sourceCollision: number | null;
+  words: string | null;
   // a manoeuvre's rate and the end of a climb (ADR 0011), part of the orbit
   rate: number;
   until: number | null;
@@ -119,6 +122,7 @@ const columns = {
   epoch: objects.epoch,
   direction: objects.direction,
   sourceCollision: objects.sourceCollision,
+  words: objects.words,
   rate: objects.rate,
   until: objects.until,
   deorbitedAt: objects.deorbitedAt,
@@ -164,15 +168,19 @@ export interface Party {
   kind: Kind;
   callsign: string | null;
   beacon: string | null;
+  // for debris, what it was carrying (ADR 0017)
+  words: string | null;
   operator: string | null;
   from: Root[] | null;
 }
 
-// A collision that has happened: what met, who it names, and what it left.
+// A collision that has happened: what met, who it names, what it left, and
+// what the wreck says (ADR 0017).
 export interface CollisionReport extends CollisionRow {
   objects: [SkyObject, SkyObject];
   parties: [Party, Party];
   fragments: SkyObject[];
+  wreck: WreckPiece[];
 }
 
 interface Hit {
@@ -272,7 +280,10 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
   // what's still up at that moment (anything burned up by then has left,
   // whether or not it has been marked yet), less the two that met
   const up = sky.filter((object) => object.launchedAt <= at && reentryAt(object) > at).length - 2;
-  const pieces = fragmentsOf(a, b, at).slice(0, Math.max(0, LIVE_CAP - up));
+  const all = fragmentsOf(a, b, at);
+  // each fragment carries a piece of both lines (ADR 0017)
+  const shards = shardsOf({ id: a.id, text: lineOf(a) }, { id: b.id, text: lineOf(b) }, all.length);
+  const pieces = all.slice(0, Math.max(0, LIVE_CAP - up));
   const report = db.transaction((tx) => {
     const row = tx
       .insert(collisions)
@@ -283,7 +294,7 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
       .set({ fate: "destroyed", fateAt: at })
       .where(inArray(objects.id, [a.id, b.id]))
       .run();
-    const fragments = pieces.map((orbit) =>
+    const fragments = pieces.map((orbit, i) =>
       toObject(
         tx
           .insert(objects)
@@ -292,6 +303,7 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
             band: bandAt(orbit.radius),
             launchedAt: at,
             sourceCollision: row.id,
+            words: shards[i],
             ...orbit,
           })
           .returning(columns)
@@ -306,7 +318,8 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
     toObject(db.select(columns).from(objects).where(eq(objects.id, object.id)).get() ?? object);
   const both: [SkyObject, SkyObject] = [fresh(a), fresh(b)];
   const parties: [Party, Party] = [partyOf(both[0]), partyOf(both[1])];
-  const named = { ...report, objects: both, parties };
+  const wreck = report.fragments.flatMap((f) => (f.words ? [{ words: f.words, up: true }] : []));
+  const named = { ...report, objects: both, parties, wreck };
   publish({ type: "collision", collision: named });
   return named;
 }
@@ -352,24 +365,79 @@ const partyOf = (object: SkyObject): Party => ({
   kind: object.kind,
   callsign: object.callsign,
   beacon: object.beacon,
+  words: object.words,
   operator: object.operator === null ? null : (handles([object.operator]).get(object.operator) ?? null),
   from: object.kind === "debris" && object.sourceCollision !== null ? rootsOf(object.sourceCollision) : null,
 });
 
-// A collision as the page tells it: when, where, and who it names.
+// A collision as the page tells it: when, where, who it names, and what
+// its wreck says now (ADR 0017).
 export interface CollisionStory extends CollisionRow {
   parties: [Party, Party];
+  wreck: WreckPiece[];
 }
 
-// The latest collisions, newest first.
-export function recentCollisions(n: number): CollisionStory[] {
-  settle();
-  const rows = db.select().from(collisions).orderBy(desc(collisions.at), desc(collisions.id)).limit(n).all();
+// What each of these collisions' wrecks says: every fragment's words, in
+// order, and whether that fragment is still up to say them.
+function wrecksOf(ids: number[]): Map<number, WreckPiece[]> {
+  const wrecks = new Map(ids.map((id) => [id, [] as WreckPiece[]]));
+  if (ids.length === 0) return wrecks;
+  const pieces = db
+    .select({ source: objects.sourceCollision, words: objects.words, fate: objects.fate })
+    .from(objects)
+    .where(inArray(objects.sourceCollision, ids))
+    .orderBy(objects.id)
+    .all();
+  for (const piece of pieces) {
+    if (piece.words && piece.source !== null) wrecks.get(piece.source)?.push({ words: piece.words, up: piece.fate === "live" });
+  }
+  return wrecks;
+}
+
+const storiesOf = (rows: CollisionRow[]): CollisionStory[] => {
+  const wrecks = wrecksOf(rows.map((row) => row.id));
   return rows.map((row) => {
     const [a, b] = [row.a, row.b].map((id) =>
       toObject(db.select(columns).from(objects).where(eq(objects.id, id)).get()!),
     );
-    return { ...row, parties: [partyOf(a), partyOf(b)] };
+    return { ...row, parties: [partyOf(a), partyOf(b)], wreck: wrecks.get(row.id) ?? [] };
+  });
+};
+
+// The latest collisions, newest first.
+export function recentCollisions(n: number): CollisionStory[] {
+  settle();
+  return storiesOf(db.select().from(collisions).orderBy(desc(collisions.at), desc(collisions.id)).limit(n).all());
+}
+
+// An encounter (ADR 0017): a collision one of the viewer's satellites was
+// in, told from their side: which of theirs, what it met, and the wreck.
+export interface Encounter extends CollisionStory {
+  yours: Party;
+  other: Party;
+}
+
+// Every collision a satellite of the viewer's was in, newest first.
+export function encountersOf(who: Who, now = Date.now()): Encounter[] {
+  if (!viewerOf(who).person && viewerOf(who).operator === null) return [];
+  settle(now);
+  const ids = db
+    .select({ id: objects.id })
+    .from(objects)
+    .where(and(ownerIs(who), eq(objects.kind, "satellite"), eq(objects.fate, "destroyed")))
+    .all()
+    .map((row) => row.id);
+  if (ids.length === 0) return [];
+  const rows = db
+    .select()
+    .from(collisions)
+    .where(sql`${collisions.a} IN ${ids} OR ${collisions.b} IN ${ids}`)
+    .orderBy(desc(collisions.at), desc(collisions.id))
+    .all();
+  const mine = new Set(ids);
+  return storiesOf(rows).map((story) => {
+    const [a, b] = story.parties;
+    return mine.has(a.id) ? { ...story, yours: a, other: b } : { ...story, yours: b, other: a };
   });
 }
 
@@ -858,10 +926,13 @@ export interface History {
   boosts: number;
   // boosts and deorbits (ADR 0011), oldest first, with the band each aimed for
   manoeuvres: { kind: ManoeuvreKind; at: number; to: Band }[];
+  // for debris: the words it carries (ADR 0017)
+  words: string | null;
   // for debris: the collision it came from, what met, and who that traces to
   origin: { collision: number; at: number; parties: [Party, Party]; roots: Root[] } | null;
-  // for anything destroyed: its collision, and what it met
-  end: { collision: number; at: number; with: Party } | null;
+  // for anything destroyed: its collision, what it met, and what the wreck
+  // says now (ADR 0017)
+  end: { collision: number; at: number; with: Party; wreck: WreckPiece[] } | null;
   // everything downstream of it: the fragments its own collision left;
   // everything those (and theirs) went on to: the collisions, what they
   // destroyed, every fragment in all, and how many of those are still up.
@@ -979,9 +1050,15 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
       : null,
     deorbitedAt: object.deorbitedAt,
     boosts: object.boosts,
+    words: object.words,
     manoeuvres: manoeuvresOf(id).map((m) => ({ kind: m.kind, at: m.at, to: bandAt(m.toRadius) })),
     origin: source && { collision: source.c.id, at: source.c.at, parties: source.parties, roots: rootsOf(source.c.id) },
-    end: own && { collision: own.c.id, at: own.c.at, with: own.parties[own.c.a === id ? 1 : 0] },
+    end: own && {
+      collision: own.c.id,
+      at: own.c.at,
+      with: own.parties[own.c.a === id ? 1 : 0],
+      wreck: wrecksOf([own.c.id]).get(own.c.id) ?? [],
+    },
     followed: {
       left: own ? (leftBy.get(own.c.id)?.length ?? 0) : 0,
       collisions: walked.size - (own ? 1 : 0),

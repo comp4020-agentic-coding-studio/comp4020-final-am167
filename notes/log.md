@@ -1785,3 +1785,94 @@ three stations and "Just you, listening".
 ![The sky with the beacons column: the three stations live, how many are listening, and the Heard feed of cards](screenshots/2026-10-07-beacons-column-and-heard-feed.png)
 
 Commit `e0db217`.
+
+## 2026-10-07 — Collisions that mean something: the wreck keeps the words (ADR 0017)
+
+My ask (and the marker's): make colliding messages meaningful, give them a
+connection; the couplet hasn't done it. The agent laid out what it found
+wanting in the couplet: it frames a random pairing and then nothing
+changes; both lines die with their satellites, the fragments are
+anonymous, and the two people never learn anything of each other. It's
+the one moment two strangers' words touch, and it leaves no mark on
+either.
+
+Options weighed (all in ADR 0017, proposed): the couplet as built; aiming
+a "reply" launch at a satellite (rejected again: it makes collisions
+chosen, which breaks the argument, and drifts towards Constellation);
+colliding by meaning (the server judging text, opaquely: a trick); and four
+that work together, which are what's built:
+
+- **The wreck keeps the words.** Each fragment carries a shard: a run of
+  words from one side's line and a run from the other's, joined by " … ".
+  Each line is cut into as many runs as there are fragments, in order, so
+  every word survives once; one side's runs are dealt in order, the
+  other's shuffled, seeded by the two ids, so a replay after a restart
+  makes the same shards (`src/lib/wreck.ts`). Read in order, the wreck is a
+  cut-up neither person wrote. A derelict says nothing, so a satellite
+  hit by one is scattered alone, still in order. Cascades carry it on:
+  debris's own shard is re-cut when it destroys a third satellite, so
+  words travel down the lineage as text. Every shard goes through the
+  word filter (dropped if it fails).
+- **The wreck keeps talking.** A fragment with words is heard over the
+  stations as **static** (marked STATIC, flickering, ░ either side), taking
+  turns with the beacons, logged and in the Heard feed ("Static · from MOTH
+  and LANTERN's collision"). So a crash puts noise made of two people's
+  words into the stations, and a cascade fills them with it: crowding
+  costs everyone airtime as well as satellites.
+- **The wreck falls silent as the sky heals.** "The wreck says …" lists
+  every fragment's piece in order; the ones whose fragment has burned up
+  are faded and struck through, so a collision's words go quiet one by
+  one as decay clears the orbit. On the sky's collision card, the
+  catalogue's collisions, the histories of the two that met, and a
+  fragment's own card ("What it says").
+- **An encounter.** Yours has an Encounters list: each collision a
+  satellite of yours was in, what it met, what that person had said (or
+  what the debris that destroyed it was carrying, and from whose
+  collision), what yours had said, and what the wreck says now. A
+  collision is the only way you meet a stranger here.
+
+Stored as one nullable column, `objects.words` (migration `0006_words`).
+Nothing reads meaning into the text; the connection is causal, as the plan
+said it had to be.
+
+Tests first: `spec/wreck.test.ts` (every word of both lines once, in order
+on each side; a piece of each side per fragment; the same whichever way
+round; a silent side; both silent; short lines; a cascade re-cuts a shard;
+nothing the filter refuses, across combinations of spaced letters), and in
+`spec/collision-server.test.ts` (ALPHA and BRAVO's fragments carry both
+lines, the collision is told with its wreck; CHARLIE's fragments carry
+CHARLIE's line and the debris's words; ALPHA's history has the wreck; a
+fragment's history says what it carries; alice, bob and carol each have
+an encounter naming the other side, carol's with the debris and its
+roots) and `spec/heard-server.test.ts` (a fragment with words is heard,
+one without isn't, and the feed calls it debris with its words). Six
+failed first for the expected reasons; one test's assumption was wrong
+(two short lines over six fragments leave some silent, and the one that
+hit CHARLIE could be silent), so it now checks the encounter against
+what that fragment carries.
+
+The cascade-replay test (two hours of sky stepped 1,440 times) takes about
+three seconds alone, on the previous commit as on this one, and crossed
+vitest's five-second default once with the whole, now larger, suite
+running beside it; it has a 20-second timeout now. `pnpm check` green
+(256 tests), twice in a row.
+
+Checked in Chromium at 1920x1080 by staging a head-on collision between
+two people's satellites (MOTH and LANTERN, with real-sounding lines) on a
+fresh scratch database. Two tries went wrong first, both informative: on
+the busy test sky LANTERN was hit by silent debris before MOTH reached it
+(its three fragments carried its line alone, in order: "To whoever reads
+this: the / bakery on the corner closes on / Sundays now, so go on
+Saturday"), and then by the derelicts the server stages for a watcher,
+which fly at the same height my script used. At another height they met:
+the card read "MOTH and LANTERN collided", both lines, and "The wreck says
+To whoever … I keep a / list of every bird … go on Saturday / …", and a
+minute later Goldstone's row was playing "STATIC ░ bakery on the … I've
+seen from ░". Yours showed the encounter. Fixed on the way: the line under
+the stations still said "MOTH is over Goldstone now" after MOTH was
+destroyed (it only knew burn-ups); it now says it was destroyed in a
+collision.
+
+![A collision as it happens: both lines, what the wreck says, and Goldstone already playing static made of their words](screenshots/2026-10-07-the-wreck-says-and-static.png)
+
+![An encounter in Yours: who MOTH met, what LANTERN had said, and what the wreck says](screenshots/2026-10-07-an-encounter-in-yours.png)

@@ -3,7 +3,7 @@ import { count, desc, eq, inArray, max, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { audience, publish } from "./events.ts";
 import type { Band } from "./orbit.ts";
-import { isOwnedBy, liveSky, type Fate, type Kind, type SkyObject, type Viewer } from "./sky.ts";
+import { isOwnedBy, liveSky, rootsOf, type Fate, type Kind, type Root, type SkyObject, type Viewer } from "./sky.ts";
 import { STATIONS, untilStation, type StationId } from "./stations.ts";
 
 // Being heard (ADR 0016). A beacon is heard when its satellite comes over a
@@ -36,9 +36,11 @@ function ownerKeys(object: Pick<SkyObject, "owner" | "operator">): Set<string> {
   return keys;
 }
 
-// What a station hears: people's satellites with a beacon. Derelicts are
-// dead; debris is silent.
-const speaks = (object: SkyObject) => object.kind === "satellite" && Boolean(object.beacon);
+// What a station hears: people's satellites with a beacon, and fragments
+// carrying the words of what broke them, as static (ADR 0017). Derelicts
+// are dead, and so is debris that carries nothing.
+const speaks = (object: SkyObject) =>
+  (object.kind === "satellite" && Boolean(object.beacon)) || (object.kind === "debris" && Boolean(object.words));
 
 export interface Transmission {
   object: number;
@@ -55,6 +57,10 @@ export interface HeardItem {
   kind: Kind;
   callsign: string | null;
   beacon: string | null;
+  // for a fragment: the words it carries, and the satellites (and
+  // derelicts) at the root of the collision it came from (ADR 0017)
+  words: string | null;
+  from: Root[] | null;
   handle: string | null;
   band: Band;
   fate: Fate;
@@ -146,6 +152,8 @@ function feedOf(ids: number[], who?: Viewer | string): HeardItem[] {
         kind: objects.kind,
         callsign: objects.callsign,
         beacon: objects.beacon,
+        words: objects.words,
+        source: objects.sourceCollision,
         band: objects.band,
         fate: objects.fate,
         owner: objects.owner,
@@ -158,6 +166,9 @@ function feedOf(ids: number[], who?: Viewer | string): HeardItem[] {
       .all()
       .map((row) => [row.id, row]),
   );
+  // each collision's roots once, however many of its fragments were heard
+  const roots = new Map<number, Root[]>();
+  const rootsFor = (collision: number) => roots.get(collision) ?? roots.set(collision, rootsOf(collision)).get(collision)!;
   return latest.flatMap(({ object, id, passes }) => {
     const row = rows.get(object);
     const pass = last.get(id ?? 0);
@@ -168,6 +179,8 @@ function feedOf(ids: number[], who?: Viewer | string): HeardItem[] {
         kind: row.kind,
         callsign: row.callsign,
         beacon: row.beacon,
+        words: row.kind === "debris" ? row.words : null,
+        from: row.kind === "debris" && row.source !== null ? rootsFor(row.source) : null,
         handle: row.handle,
         band: row.band,
         fate: row.fate,

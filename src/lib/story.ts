@@ -16,6 +16,8 @@ export interface StoryRoot {
 // one of the two objects that met (sky.ts's Party)
 export interface StoryParty extends StoryRoot {
   beacon: string | null;
+  // for debris, what it was carrying (ADR 0017)
+  words?: string | null;
   // for debris, the satellites and derelicts at the root of its collision
   from: StoryRoot[] | null;
 }
@@ -117,3 +119,8 @@ export function listeningNow(n: number): string {
   if (n <= 1) return "Just you, listening";
   return `You and ${n - 1} ${n === 2 ? "other" : "others"} listening`;
 }
+
+// "from ALPHA and BRAVO's collision": where a fragment's static comes from
+// (ADR 0017), or plain "from a collision" when its roots aren't known.
+export const staticFrom = (from: readonly StoryRoot[] | null) =>
+  from && from.length > 0 ? `from ${collisionOf(from)}` : "from a collision";

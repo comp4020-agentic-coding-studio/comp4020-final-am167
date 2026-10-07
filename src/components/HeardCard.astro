@@ -1,26 +1,37 @@
 ---
 import { ago } from "../lib/format.ts";
 import type { HeardItem } from "../lib/heard.ts";
-import { heardBy, passes } from "../lib/story.ts";
+import { heardBy, passes, staticFrom } from "../lib/story.ts";
 
 // One beacon in the sky's feed of what was heard (ADR 0016): who launched
-// it, the line, and where, when and by how many it was heard. The sky's
-// script builds the same card for each new pass (src/scripts/sky.ts).
+// it, the line, and where, when and by how many it was heard. A fragment
+// carrying words is heard as static, from whose collision (ADR 0017). The
+// sky's script builds the same card for each new pass (src/scripts/sky.ts).
 interface Props {
   item: HeardItem;
   now: number;
 }
 const { item: h, now } = Astro.props;
 const gone = { live: null, decayed: "Burned up", deorbited: "Brought down", destroyed: "Destroyed" }[h.fate];
+const debris = h.kind === "debris";
 ---
-<li class:list={["heard-item", { mine: h.mine, gone: gone !== null }]} data-id={h.id}>
+<li class:list={["heard-item", { mine: h.mine, gone: gone !== null, static: debris }]} data-id={h.id}>
   <p class="heard-who">
-    <span class="swatch" style={`--hue: ${(h.id * 137.508) % 360}`}></span>
-    <a href={`/object/${h.id}/`}><strong>{h.callsign}</strong></a>
-    <span class="heard-handle">{h.mine ? "yours" : (h.handle ?? "no handle")}</span>
+    {debris ? (
+      <>
+        <span class="static-mark">Static</span>
+        <a href={`/object/${h.id}/`} class="heard-from">{staticFrom(h.from)}</a>
+      </>
+    ) : (
+      <>
+        <span class="swatch" style={`--hue: ${(h.id * 137.508) % 360}`}></span>
+        <a href={`/object/${h.id}/`}><strong>{h.callsign}</strong></a>
+        <span class="heard-handle">{h.mine ? "yours" : (h.handle ?? "no handle")}</span>
+      </>
+    )}
     <time class="heard-when" datetime={new Date(h.at).toISOString()}>{ago(now - h.at)}</time>
   </p>
-  <p class="heard-line">{h.beacon}</p>
+  <p class="heard-line">{debris ? <span class="static-words">{h.words}</span> : h.beacon}</p>
   <p class="heard-meta">
     Over {h.station} · {heardBy(h.heardBy, h.mine)} · {passes(h.passes)}{gone && <> · {gone}</>}
   </p>

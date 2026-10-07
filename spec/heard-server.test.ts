@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { DECAY, bandAt, burnAt, periodAt } from "../src/lib/orbit.ts";
 import { OVERHEAD_HALF_WIDTH, STATIONS } from "../src/lib/stations.ts";
@@ -136,6 +137,18 @@ describe("a beacon passing over a station", () => {
     const { heard, put, ears } = await freshServer();
     put(null, { kind: "derelict" });
     expect(heard.listen(T, T + 10_000, ears("bob"))).toEqual([]);
+  });
+
+  // ADR 0017: a fragment carrying words is heard, as static
+  it("is static from a fragment that carries words, and silence from one that doesn't", async () => {
+    const { heard, db, schema, put, ears } = await freshServer();
+    const talking = put(null, { kind: "derelict" });
+    const silent = put(null, { kind: "derelict", phase: NEAR_CANBERRA + 0.01 });
+    db.update(schema.objects).set({ kind: "debris", words: "the sea … more than I" }).where(eq(schema.objects.id, talking.id)).run();
+    db.update(schema.objects).set({ kind: "debris" }).where(eq(schema.objects.id, silent.id)).run();
+    const passes = heard.listen(T, T + 10_000, ears("bob"));
+    expect(passes.map((p) => p.object)).toEqual([talking.id]);
+    expect(heard.recentlyHeard(10, undefined, T + 10_000)[0]).toMatchObject({ id: talking.id, kind: "debris", words: "the sea … more than I", beacon: null });
   });
 });
 

@@ -3,6 +3,7 @@ import Base from "../../layouts/Base.astro";
 import ManoeuvreDialogs from "../../components/ManoeuvreDialogs.astro";
 import ObjectCard from "../../components/ObjectCard.astro";
 import YourSatellite from "../../components/YourSatellite.astro";
+import Wreck from "../../components/Wreck.astro";
 import { ago, falling, km } from "../../lib/format.ts";
 import { REFUSALS, isRefusal } from "../../lib/manoeuvre.ts";
 import { heardTotals } from "../../lib/heard.ts";
@@ -13,12 +14,13 @@ import {
   browse,
   catalogueCounts,
   readCatalogueQuery,
+  encountersOf,
   recentCollisions,
   satellitesOf,
   type CatalogueQuery,
   type Sort,
 } from "../../lib/sky.ts";
-import { blame, collisionOf, couplet, describe, headline } from "../../lib/story.ts";
+import { blame, collisionOf, couplet, describe, headline, staticFrom } from "../../lib/story.ts";
 
 // The record of everything launched (ADR 0003), as a table: filtered,
 // searched, sorted and paged by a plain GET form and links, so it works
@@ -41,6 +43,10 @@ const counts = catalogueCounts();
 const yours = query.show === "mine";
 const yoursUp = satellitesOf(viewer).filter((o) => o.launchedAt <= now);
 const yoursHeard = heardTotals(yoursUp.map((o) => o.id));
+// every collision one of yours was in (ADR 0017): the only way you meet a
+// stranger here
+const ENCOUNTERS = 20;
+const encounters = yours ? encountersOf(viewer, now).slice(0, ENCOUNTERS) : [];
 // back from bringing one down or boosting it without JavaScript
 const yoursById = (name: string) => yoursUp.find((o) => o.id === Number(Astro.url.searchParams.get(name))) ?? null;
 const deorbited = yours ? yoursById("deorbited") : null;
@@ -150,6 +156,44 @@ const number = (n: number) => n.toLocaleString("en");
             </ol>
           )}
         </div>
+        <h2 id="encounters-title">Encounters</h2>
+        {encounters.length === 0 ? (
+          <p class="empty">
+            None of yours has collided with anything. When one does, you'll find
+            here who it met, what they had said, and what the wreck says.
+          </p>
+        ) : (
+          <ol class="encounters" aria-labelledby="encounters-title">
+            {encounters.map((e) => (
+              <li class="encounter">
+                <p class="collision-title">
+                  {headline(e.parties)}{" "}
+                  <time datetime={new Date(e.at).toISOString()}>{ago(now - e.at)}</time>
+                </p>
+                {e.other.kind === "satellite" && e.other.beacon && (
+                  <p class="encounter-line">
+                    <a href={`/object/${e.other.id}/`}>{e.other.callsign}</a>
+                    <span class="encounter-who"> ({e.other.operator ?? "no handle"})</span> said <q>{e.other.beacon}</q>
+                  </p>
+                )}
+                {e.other.kind === "debris" && (
+                  <p class="encounter-line">
+                    The <a href={`/object/${e.other.id}/`}>fragment</a> {staticFrom(e.other.from).replace(/^from/, "came from")}
+                    {e.other.words ? <>, carrying <span class="static-words">{e.other.words}</span></> : ", and was silent"}.
+                  </p>
+                )}
+                {e.other.kind === "derelict" && <p class="encounter-line">A dead satellite, nobody's. It had nothing to say.</p>}
+                {e.yours.beacon && (
+                  <p class="encounter-line encounter-yours">
+                    <a href={`/object/${e.yours.id}/`}>{e.yours.callsign}</a> said <q>{e.yours.beacon}</q>
+                  </p>
+                )}
+                <Wreck pieces={e.wreck} />
+              </li>
+            ))}
+          </ol>
+        )}
+
         <h2 class="yours-record-title">Your record</h2>
       </section>
     )}
@@ -299,7 +343,9 @@ const number = (n: number) => n.toLocaleString("en");
         <>
           <p class="lede">
             {collided.length < COLLISIONS ? "Every collision so far" : `The latest ${COLLISIONS} collisions`}, newest
-            first: what met, the beacons that met, and who launched what.
+            first: what met, the beacons that met, what the wreck says (each
+            fragment carries a piece of both, until it burns up), and who
+            launched what.
           </p>
           <ol class="collision-list">
             {collided.map((c) => (
@@ -311,6 +357,7 @@ const number = (n: number) => n.toLocaleString("en");
                 {couplet(c.parties).map(({ callsign, beacon }) => (
                   <p class="collision-beacon"><q>{beacon}</q> {callsign}</p>
                 ))}
+                <Wreck pieces={c.wreck} />
                 <p class="collision-blame">{blame(c.parties)}</p>
               </li>
             ))}
@@ -528,6 +575,34 @@ const number = (n: number) => n.toLocaleString("en");
 
   .yours-record-title {
     margin-top: 2rem;
+  }
+
+  .encounters {
+    display: grid;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .encounter {
+    padding: 0.6rem 0 0.6rem 0.85rem;
+    border-left: 3px solid #ff7a45;
+  }
+
+  .encounter p {
+    margin: 0;
+  }
+
+  .encounter-line {
+    margin-top: 0.3rem;
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+  }
+
+  .encounter-line q {
+    color: var(--ink);
+    font-style: italic;
   }
 
   table {

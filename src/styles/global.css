@@ -266,3 +266,84 @@ a:hover {
 .manoeuvres .manoeuvre-error:empty {
   display: none;
 }
+
+/* What a collision's wreck says (ADR 0017): pieces of both lines, the
+   burned-up ones faded. Global: it's in fetched cards and built by scripts. */
+.wreck {
+  margin: 0.4rem 0 0;
+  color: var(--ink);
+  font-size: var(--step--1);
+  overflow-wrap: anywhere;
+}
+
+.wreck-label {
+  color: var(--ink-dim);
+}
+
+.wreck-piece {
+  font-style: italic;
+}
+
+.wreck-piece.silent {
+  color: var(--ink-dim);
+  opacity: 0.5;
+  text-decoration: line-through;
+  text-decoration-color: rgb(147 166 191 / 0.4);
+}
+
+.wreck-between,
+.wreck-note {
+  color: var(--ink-dim);
+}
+
+/* Static: a fragment heard over a station, carrying broken pieces of two
+   strangers' lines (ADR 0017) */
+.static-words {
+  color: #c9d3e0;
+  font-style: italic;
+  letter-spacing: 0.01em;
+  text-shadow: 1px 0 rgb(255 122 69 / 0.35), -1px 0 rgb(80 160 255 / 0.35);
+  animation: static-flicker 3.2s steps(1) infinite;
+}
+
+.static-words::before,
+.static-words::after {
+  color: var(--ink-dim);
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.static-words::before {
+  content: "░ ";
+}
+
+.static-words::after {
+  content: " ░";
+}
+
+.static-mark {
+  color: #ff9a6a;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes static-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  47% {
+    opacity: 0.55;
+  }
+  49% {
+    opacity: 0.9;
+  }
+  83% {
+    opacity: 0.7;
+  }
+}
+
+.history-static {
+  font-size: var(--step-1);
+}

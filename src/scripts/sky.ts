@@ -2,8 +2,9 @@ import { turnAt, turnLength } from "../lib/airtime.ts";
 import { ago, until } from "../lib/format.ts";
 import { BANDS, bandAt, climbing, plungeAt, radiusAt, reentryAt, type Band } from "../lib/orbit.ts";
 import { STATIONS, nextStation, stationOver, untilStation, type StationId } from "../lib/stations.ts";
-import { blame, couplet, headline, heardBy, listeningNow, passes, skyCount, type StoryParty } from "../lib/story.ts";
+import { blame, couplet, headline, heardBy, listeningNow, passes, skyCount, staticFrom, type StoryParty } from "../lib/story.ts";
 import type { HeardItem } from "../lib/heard.ts";
+import type { WreckPiece } from "../lib/wreck.ts";
 import { countdown } from "./countdown.ts";
 import { wireManoeuvres } from "./manoeuvres.ts";
 import { objectCard } from "./object-card.ts";
@@ -26,6 +27,8 @@ interface Satellite {
   epoch: number;
   direction: 1 | -1;
   sourceCollision: number | null;
+  // a fragment's piece of the lines that broke it, heard as static (ADR 0017)
+  words: string | null;
   // a manoeuvre (ADR 0011): part of the orbit, and what its owner did
   rate: number;
   until: number | null;
@@ -50,6 +53,8 @@ interface Story {
   angle: number;
   radius: number;
   parties: [StoryParty, StoryParty];
+  // what the wreck says (ADR 0017)
+  wreck: WreckPiece[];
 }
 
 const initial = JSON.parse(document.getElementById("sky-data")!.textContent!) as {
@@ -124,6 +129,9 @@ interface BurnUp {
   mine: boolean;
   // its owner brought it down (ADR 0011)
   deorbited: boolean;
+  // or it didn't burn up: it was destroyed in a collision (only your own
+  // are kept, for your line under the stations)
+  destroyed?: boolean;
 }
 const burnUps = new Map<number, BurnUp>();
 // people's satellites only: wreckage burning up isn't news
@@ -131,7 +139,8 @@ const burned = (sat: Satellite) => {
   if (sat.kind === "satellite" && sat.callsign)
     burnUps.set(sat.id, { callsign: sat.callsign, at: reentryAt(sat), mine: sat.mine, deorbited: sat.deorbitedAt !== null });
 };
-const burnedUp = (b: BurnUp) => (b.deorbited ? "was brought down, and burned up" : "burned up on re-entry");
+const burnedUp = (b: BurnUp) =>
+  b.destroyed ? "was destroyed in a collision" : b.deorbited ? "was brought down, and burned up" : "burned up on re-entry";
 // the latest, and your own
 const latest = (mine = false) => {
   let found: BurnUp | null = null;
@@ -232,9 +241,13 @@ const posts = STATIONS.map((station) => {
 });
 const yourPass = document.getElementById("your-pass");
 
-// what the stations hear: satellites with a beacon (derelicts and debris
-// are silent)
-const speaking = () => flying().filter((sat) => sat.beacon);
+// what the stations hear: satellites with a beacon, and fragments carrying
+// words, as static (ADR 0017); derelicts and the rest of the debris are
+// silent
+const lineOf = (sat: Satellite) => (sat.kind === "debris" ? sat.words : sat.beacon) ?? "";
+const speaking = () => flying().filter((sat) => lineOf(sat) !== "");
+// people's satellites among them, for the news
+const satellites = () => speaking().filter((sat) => sat.kind === "satellite");
 
 function listen() {
   const time = serverNow();
@@ -244,20 +257,21 @@ function listen() {
     const here = talking.filter((sat) => over.get(sat.id)?.id === post.station.id).sort((a, b) => a.id - b.id);
     // more than one overhead take turns, each long enough to read (by the
     // server's clock, so every screen shows the same one at once)
-    const turn = turnAt(here.map((s) => turnLength(s.beacon ?? "")), time);
+    const turn = turnAt(here.map((s) => turnLength(lineOf(s))), time);
     const sat = here[turn];
     const key = sat ? String(sat.id) : "";
     if (key !== post.key) {
       post.key = key;
       post.row.classList.toggle("live", Boolean(sat));
+      post.row.classList.toggle("static", sat?.kind === "debris");
       if (!sat) post.heard.replaceChildren();
       else {
         const name = document.createElement("span");
-        name.className = "callsign";
-        name.textContent = sat.callsign;
+        name.className = sat.kind === "debris" ? "callsign static-mark" : "callsign";
+        name.textContent = sat.kind === "debris" ? "Static" : sat.callsign;
         const beacon = document.createElement("span");
-        beacon.className = "beacon";
-        beacon.textContent = sat.beacon;
+        beacon.className = sat.kind === "debris" ? "beacon static-words" : "beacon";
+        beacon.textContent = lineOf(sat);
         post.heard.replaceChildren(name, beacon);
       }
     }
@@ -271,7 +285,8 @@ function listen() {
         // one that burns up first never gets there
         if (ms !== null && (!soonest || ms < soonest.ms)) soonest = { sat: s, ms };
       }
-      said = soonest ? `Next: ${soonest.sat.callsign}, in ${countdown(soonest.ms)}` : talking.length > 0 ? "" : "Nothing in orbit";
+      const next = soonest?.sat.kind === "debris" ? "static" : soonest?.sat.callsign;
+      said = soonest ? `Next: ${next}, in ${countdown(soonest.ms)}` : talking.length > 0 ? "" : "Nothing in orbit";
     }
     if (said !== post.said) post.next.textContent = post.said = said;
   }
@@ -335,9 +350,9 @@ function news(time: number) {
     if (sat.kind === "debris") return "debris";
     return sat.kind === "derelict" || !sat.callsign ? "a derelict" : named(sat);
   };
-  const falling = speaking().find((sat) => plungeAt(sat, time) !== null);
-  const down = speaking().find((sat) => sat.deorbitedAt !== null && plungeAt(sat, time) === null);
-  const rising = speaking().find((sat) => climbing(sat, time));
+  const falling = satellites().find((sat) => plungeAt(sat, time) !== null);
+  const down = satellites().find((sat) => sat.deorbitedAt !== null && plungeAt(sat, time) === null);
+  const rising = satellites().find((sat) => climbing(sat, time));
   const last = latest();
   const story = stories.reduce<Story | null>((a, b) => (a && a.at > b.at ? a : b), null);
   const next = [...coming.values()].filter((c) => c.at > time).sort((a, b) => a.at - b.at)[0];
@@ -354,7 +369,7 @@ function news(time: number) {
   else if (last && since(last.at) < 15 * 60_000) text = `${named(last)} ${burnedUp(last)} ${ago(since(last.at))}.`;
   else if (next) text = `Next collision: ${who(next.a)} and ${who(next.b)}, in ${until(next.at - time)}.`;
   else {
-    const soonest = speaking().sort((a, b) => reentryAt(a) - reentryAt(b))[0];
+    const soonest = satellites().sort((a, b) => reentryAt(a) - reentryAt(b))[0];
     if (soonest) text = `Next to burn up: ${named(soonest)}, in ${until(reentryAt(soonest) - time)}.`;
   }
   if (text === said) return;
@@ -397,27 +412,43 @@ function heardCard(item: HeardItem, fresh = false): HTMLLIElement {
   li.classList.toggle("gone", GONE[item.fate] !== null);
   li.classList.toggle("fresh", fresh && !reduced);
   li.dataset.id = String(item.id);
+  const debris = item.kind === "debris";
+  li.classList.toggle("static", debris);
   const who = document.createElement("p");
   who.className = "heard-who";
-  const swatch = document.createElement("span");
-  swatch.className = "swatch";
-  swatch.style.setProperty("--hue", String(hue(item.id)));
   const link = document.createElement("a");
   link.href = `/object/${item.id}/`;
-  const name = document.createElement("strong");
-  name.textContent = item.callsign;
-  link.append(name);
-  const handle = document.createElement("span");
-  handle.className = "heard-handle";
-  handle.textContent = item.mine ? "yours" : (item.handle ?? "no handle");
   const when = document.createElement("time");
   when.className = "heard-when";
   when.dateTime = new Date(item.at).toISOString();
   when.textContent = ago(serverNow() - item.at);
-  who.append(swatch, link, handle, when);
   const line = document.createElement("p");
   line.className = "heard-line";
-  line.textContent = item.beacon;
+  if (debris) {
+    // static: a fragment carrying pieces of the lines that broke it
+    const mark = document.createElement("span");
+    mark.className = "static-mark";
+    mark.textContent = "Static";
+    link.className = "heard-from";
+    link.textContent = staticFrom(item.from);
+    who.append(mark, link, when);
+    const words = document.createElement("span");
+    words.className = "static-words";
+    words.textContent = item.words;
+    line.append(words);
+  } else {
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.setProperty("--hue", String(hue(item.id)));
+    const name = document.createElement("strong");
+    name.textContent = item.callsign;
+    link.append(name);
+    const handle = document.createElement("span");
+    handle.className = "heard-handle";
+    handle.textContent = item.mine ? "yours" : (item.handle ?? "no handle");
+    who.append(swatch, link, handle, when);
+    line.textContent = item.beacon;
+  }
   const meta = document.createElement("p");
   meta.className = "heard-meta";
   const gone = GONE[item.fate];
@@ -537,7 +568,7 @@ function tell(story: Story) {
   const who = document.createElement("p");
   who.className = "collision-blame";
   who.textContent = blame(story.parties);
-  card.replaceChildren(title, ...lines, who);
+  card.replaceChildren(title, ...lines, ...wreckOf(story.wreck), who);
   card.hidden = false;
   card.classList.remove("fading");
   clearTimeout(cardTimer);
@@ -546,6 +577,32 @@ function tell(story: Story) {
 card.addEventListener("transitionend", () => {
   if (card.classList.contains("fading")) card.hidden = true;
 });
+
+// What the wreck says, as src/components/Wreck.astro tells it (ADR 0017):
+// nothing, if what met said nothing.
+function wreckOf(pieces: WreckPiece[]): HTMLElement[] {
+  if (pieces.length === 0) return [];
+  const line = document.createElement("p");
+  line.className = "wreck";
+  const label = document.createElement("span");
+  label.className = "wreck-label";
+  label.textContent = "The wreck says";
+  line.append(label, " ");
+  pieces.forEach((piece, i) => {
+    if (i > 0) {
+      const between = document.createElement("span");
+      between.className = "wreck-between";
+      between.setAttribute("aria-hidden", "true");
+      between.textContent = " / ";
+      line.append(between);
+    }
+    const words = document.createElement("span");
+    words.className = piece.up ? "wreck-piece" : "wreck-piece silent";
+    words.textContent = piece.words;
+    line.append(words);
+  });
+  return [line];
+}
 // a collision that happened just before the page opened
 const fresh = stories.find((story) => serverNow() - story.at < CARD_MS);
 if (fresh) tell(fresh);
@@ -705,12 +762,15 @@ function connect() {
     for (const id of [story.a, story.b]) {
       destroyed.set(id, story.at);
       ended(id, "destroyed");
+      // yours: the line under the stations says so, once it's gone
+      const sat = sky.get(id);
+      if (sat?.mine && sat.callsign) burnUps.set(id, { callsign: sat.callsign, at: story.at, mine: true, deorbited: false, destroyed: true });
     }
     // this one has happened, and anything else either was to meet won't
     for (const [key, c] of coming) if ([c.a, c.b].some((id) => id === story.a || id === story.b)) coming.delete(key);
     rebuildHits();
     for (const fragment of story.fragments) sky.set(fragment.id, fragment);
-    if (remember({ id: story.id, at: story.at, angle: story.angle, radius: story.radius, parties: story.parties })) tell(story);
+    if (remember({ id: story.id, at: story.at, angle: story.angle, radius: story.radius, parties: story.parties, wreck: story.wreck })) tell(story);
     renderSummary();
     refreshHistory();
   });
