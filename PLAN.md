@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-07 (ADRs 0009 and 0010 accepted; C9 write-ups outstanding)._
+_Last updated 2026-10-07 (deorbiting and boosting built, in review; C9 write-ups outstanding)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -38,15 +38,26 @@ _Last updated 2026-10-07 (ADRs 0009 and 0010 accepted; C9 write-ups outstanding)
   - The catalogue as a filterable, sortable, paged table (`37f104c`); a
     bright collision the view turns to follow (`90dfab9`); the "in orbit"
     notice dropped once that satellite is gone (`811236f`); a nudge towards
-    claiming a handle at launch (`487f0a4`).
-  - Not built, though once listed for C9: deorbiting your own satellite
-    (the `/kessler/` page still says "Not built yet"), and conjunction
-    alerts and dodging (moved to C10).
+    claiming a handle at launch (`487f0a4`), then as a pop-up on arriving
+    at the launchpad (once a visit, closable, never a gate; PR #2).
+  - Not built, though once listed for C9: conjunction alerts and dodging
+    (moved to C10).
 - **Next, for C9:**
   1. `PROCESS.md`: the C9 part (it stops at the C8 slice), from
      `notes/log.md`.
   2. `reflections/crit-9.md` (Advay's).
-  3. Decide whether deorbiting is built for C9 or deferred, and record it.
+  3. **Deorbiting and boosting: built, in review** (Advay, 2026-10-07; ADR
+     0011, accepted): bring your own satellite down in a two-minute descent,
+     with a dialog thanking you for keeping the sky clear; or boost it up a
+     band (low to mid, mid to high, once) in a 90-second climb. Buttons in
+     the sky's station panel only (not the launchpad: too cluttered). On
+     branch `claude/c9-outstanding-work-17iuus` (with PR #2's handle
+     pop-up), as PR #3.
+  4. **Click a satellite or fragment to see its history** (Advay,
+     2026-10-07, for C9 but not yet): in the sky, clicking an object shows
+     its record: who launched it, when, its beacon, and for debris the
+     collision it came from and the satellites at its root (the lineage the
+     catalogue already keeps).
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or

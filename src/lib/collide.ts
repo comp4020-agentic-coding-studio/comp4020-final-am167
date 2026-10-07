@@ -5,7 +5,7 @@
 //
 // Distances are in planet radii, angles in radians, times in server ms.
 
-import { DECAY, angleAt, burnAt, periodAt, radiusAt, turnedAt, type Orbit } from "./orbit.ts";
+import { DECAY, angleAt, burnAt, periodAt, radiusAt, turnedAt, type Elements, type Orbit } from "./orbit.ts";
 
 const TAU = 2 * Math.PI;
 
@@ -86,33 +86,74 @@ function earliest(reached: (time: number) => boolean, from: number, to: number):
 // When two orbits next meet (or their nth meeting), from `from` or from
 // when both exist, or null if they never will.
 //
-// Both fall the same way (radius³ drops at one rate for everything), so the
-// gap in radius³ between them is fixed and the gap in height only grows as
-// they sink. So a pair already farther apart than the hit distance never
-// collides, and a pair inside it only until the gap reaches it. Meanwhile
-// the angle between them changes one way only (head-on, both sweep towards
-// each other; same way, the lower is always the faster), so they meet when
-// it next crosses a whole turn. Nothing collides once it's burning up.
+// Two objects meet when the angle between them crosses a whole turn while
+// they're within the hit distance in height. Nothing collides once it's
+// burning up. The search goes in pieces of time where both fall at one
+// steady rate (a climb ending starts a new piece, ADR 0011):
+//
+// - Falling at the same rate (everything but a manoeuvre: radius³ drops at
+//   one rate for all), the gap in radius³ between them is fixed, so the gap
+//   in height only grows as they sink. A pair farther apart than the hit
+//   distance never collides there, and a pair inside it only until the gap
+//   reaches it.
+// - At different rates (one brought down, or climbing), the gap in radius³
+//   changes steadily, so their heights cross at most once: they're close
+//   for a stretch either side of the crossing.
+//
+// (Within a piece the gap in height is taken to change one way on each side
+// of the crossing. Two objects manoeuvring at once could in principle bend
+// that; a brute-force scan of descents and climbs found no case.)
+//
+// While close, the angle between them changes one way only (head-on, both
+// sweep towards each other; same way, the lower is always the faster, so a
+// crossing of heights is a turning point and splits the stretch in two).
 export function nextMeeting(a: Sized, b: Sized, from: number, nth = 1): number | null {
   const start = Math.max(from, a.epoch, b.epoch);
   const end = Math.min(burnAt(a), burnAt(b));
   if (start >= end) return null;
 
   const hit = hitDistance(a, b);
-  const gap = (time: number) => Math.abs(radiusAt(a, time) - radiusAt(b, time));
-  if (gap(start) >= hit) return null;
-  const until = gap(end) < hit ? end : earliest((time) => gap(time) >= hit, start, end);
-
+  const gap = (time: number) => radiusAt(a, time) - radiusAt(b, time);
+  const near = (time: number) => Math.abs(gap(time)) < hit;
   const between = (time: number) => turnedAt(a, time) - turnedAt(b, time);
-  const first = between(start);
-  const last = between(until);
-  if (first === last) return null;
-  const closing = last > first;
-  const target = closing
-    ? TAU * (Math.floor(first / TAU) + nth)
-    : TAU * (Math.ceil(first / TAU) - nth);
-  if (closing ? last < target : last > target) return null;
-  return earliest((time) => (closing ? between(time) >= target : between(time) <= target), start, until);
+
+  // the stretches of time they're close, in order
+  const stretches: [number, number][] = [];
+  const climbEnds = [a.until, b.until].filter((t): t is number => t != null && t > start && t < end).sort((x, y) => x - y);
+  const edges = [start, ...climbEnds, end];
+  for (let i = 0; i + 1 < edges.length; i++) {
+    const [s, e] = [edges[i], edges[i + 1]];
+    const crossing = Math.sign(gap(s)) !== Math.sign(gap(e)) ? earliest((t) => Math.sign(gap(t)) === Math.sign(gap(e)), s, e) : null;
+    if (crossing === null) {
+      // moving apart, or closing in, without crossing
+      if (near(s)) stretches.push([s, near(e) ? e : earliest((t) => !near(t), s, e)]);
+      else if (near(e)) stretches.push([earliest(near, s, e), e]);
+      continue;
+    }
+    stretches.push([near(s) ? s : earliest(near, s, crossing), crossing]);
+    stretches.push([crossing, near(e) ? e : earliest((t) => !near(t), crossing, e)]);
+  }
+
+  // the nth whole turn crossed while close
+  let left = nth;
+  for (const [s, e] of stretches) {
+    const first = between(s);
+    const last = between(e);
+    if (first === last) continue;
+    const closing = last > first;
+    const crossed = closing
+      ? Math.floor(last / TAU) - Math.floor(first / TAU)
+      : Math.ceil(first / TAU) - Math.ceil(last / TAU);
+    if (crossed < left) {
+      left -= crossed;
+      continue;
+    }
+    const target = closing
+      ? TAU * (Math.floor(first / TAU) + left)
+      : TAU * (Math.ceil(first / TAU) - left);
+    return earliest((time) => (closing ? between(time) >= target : between(time) <= target), s, e);
+  }
+  return null;
 }
 
 // Where two orbits meeting at `at` collide: their shared angle, halfway
@@ -141,11 +182,11 @@ function normal(random: () => number): number {
 // The fragments two objects break into when they meet at `at`: orbits that
 // start there, seeded by the two objects so the same collision always makes
 // the same fragments, whichever way round it's asked. Debris makes none.
-export function fragmentsOf<T extends Sized & { id: number }>(a: T, b: T, at: number): Required<Orbit>[] {
+export function fragmentsOf<T extends Sized & { id: number }>(a: T, b: T, at: number): Elements[] {
   const [first, second] = a.id < b.id ? [a, b] : [b, a];
   const random = seeded(first.id * 100_003 + second.id);
   const impact = impactOf(first, second, at);
-  const fragments: Required<Orbit>[] = [];
+  const fragments: Elements[] = [];
   for (const parent of [first, second]) {
     if (parent.kind === "debris") continue;
     for (let i = 0; i < FRAGMENTS.perObject; i++) {

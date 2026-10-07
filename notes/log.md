@@ -1108,6 +1108,27 @@ the same offer on the notice straight after launching, which then stays up
 twice as long on desktop. Tests in `spec/operator.test.ts`. Committed as
 `487f0a4`.
 
+## 2026-10-07 — C9: the handle nudge becomes a pop-up on the launchpad
+
+Advay didn't think the line under the Launch button was enough, and wanted a
+pop-up on the launchpad. It opens on arrival (a modal `<dialog>`), before
+anything is launched, so it doesn't cut into the launch animation, the
+reason a pop-up was turned down last time. It says what's lost without a
+handle (your satellites are tied to this browser) and what one gives (they
+follow you, and collisions name you), with "Claim a handle", "I have one:
+sign in" and "Launch without a handle", which just closes it: still a nudge,
+never a gate (ADR 0009). Escape or a click on the backdrop closes it too.
+
+Once a visit (sessionStorage, marked when shown, so following a link to the
+operator page and coming back doesn't bring it up again), never for someone
+with a handle, and not when the form comes back with errors. Without
+JavaScript it stays closed and the line under the button still makes the
+offer. Test in `spec/operator.test.ts`, failing first against the old page.
+Checked in Chrome at 1920x1080 and iPhone 14: it opens, focus lands on
+"Claim a handle", closing works and a reload doesn't reopen it.
+
+![The launchpad on arrival without a handle: the pop-up over the pad, the old line still under the Launch button](screenshots/2026-10-07-launchpad-handle-popup.png)
+
 ## 2026-10-07 — C9: what's outstanding, and the last two decisions accepted
 
 Asked what was outstanding for C9, the agent went through `PLAN.md`, the
@@ -1123,3 +1144,118 @@ can claim) and ADR 0010 (every screen names who caused a collision, the C9
 decision about several people at once). The README rewrite is low priority:
 I'll write it near the end of the project. Next for C9: the C9 part of
 `PROCESS.md`, `reflections/crit-9.md`, and whether to build deorbiting.
+
+## 2026-10-07 — C9: bringing a satellite down, and boosting it up a band
+
+Asked for both (branch `claude/c9-outstanding-work-17iuus`, on top of the
+handle pop-up from PR #2, which GitHub wouldn't let my own account approve,
+so it's merged into the branch rather than into `main`). **Deorbiting**: a
+gradual descent, and a dialog thanking whoever does it for being
+responsible. **Boosting**: keep a satellite up longer by climbing a band
+(low to mid, mid to high), gradually. Buttons on your satellites on the
+launchpad and in the sky's station panel. I also want to be able to click a
+satellite or fragment to see its history, for C9 but not yet: noted in
+`PLAN.md`.
+
+The agent's design, in ADR 0011 (proposed, for me to accept): a manoeuvre
+is a new epoch for the orbit with its own rate of fall, so positions stay
+closed form (ADR 0007) and every screen draws the same descent. Brought
+down: from any height it reaches the top of the atmosphere in two minutes,
+then burns up as anything does, and ends `deorbited`. Boosted: it climbs to
+a random height in the next band in 90 seconds, then falls by drag alone;
+each satellite has fuel for one boost, so it buys a band, not immortality.
+Every manoeuvre is kept in a new `manoeuvres` table, for the history view.
+
+The snag was collisions: the server predicts meetings on the rule that two
+orbits falling at one rate never get closer in height. A manoeuvring orbit
+moves through other heights, so `nextMeeting` now works in pieces: where
+two objects fall at different rates their heights cross once, and the
+stretch either side where they're within the hit distance is found by
+bisection. Plain pairs go through exactly the same steps as before, so old
+skies replay the same. A manoeuvre throws away the object's predicted
+meetings and works them out again; everyone gets a `manoeuvre` event, so
+screens drop the collisions called off. A boost can take you out of a
+collision coming, which is a taste of C10's dodging.
+
+Tests first (`spec/manoeuvre.test.ts` for the maths,
+`spec/manoeuvre-server.test.ts` for the server, `spec/manoeuvre-http.test.ts`
+over HTTP), each failing for the right reason before the code. Found on the
+way:
+- **`pnpm check` was flaky before this work**: the first stream on a fresh
+  server could get a staged collision's `launch` events before `hello`
+  (the adversarial review's item 10). The stream now holds what the
+  snapshot sets off until after `hello`.
+- My own test had the wrong crossing time (the lower orbit decays too).
+- On the sky page the background post went nowhere: the buttons are named
+  `action`, so `form.action` was the button, not the URL.
+- Capturing the clock before `nextLaunchAt` (which reads it again) gave a
+  brand-new visitor "You can launch again in 1 s" and a disabled form
+  whenever the millisecond ticked over in between. Caught by an existing
+  test failing one run in three.
+- The launchpad's "Yours in orbit" line became a list (one row each:
+  callsign, where it stands, its buttons); the old launch test's exact
+  wording was updated to the list.
+
+Checked in Chrome at 1920x1080 and iPhone 14: boosting HERON from the pad
+("Climbing to the high band"), bringing QUIET-SKY down (asked first, then
+thanked), watching both on the sky (HERON's trail curving outward,
+QUIET-SKY spiralling in and burning up at the limb, ended `deorbited`
+150 s after the order), and bringing HERON down from the station panel
+without leaving the sky. On the phone, the list no longer scrolls inside
+itself. `pnpm check` green three runs in a row (185 tests).
+
+![The thank-you after bringing QUIET-SKY down from the launchpad: asked first, thanked after, and the list says it's coming down](screenshots/2026-10-07-deorbit-thank-you.png)
+
+![The whole sky a minute later: QUIET-SKY burning up at the limb (bottom right) and HERON, brought down from the station panel, on its way](screenshots/2026-10-07-deorbit-descent-and-burn-up.png)
+
+Committed as `948998e`. Then a fresh Sonnet reviewer, with no shared
+context, attacked it against the ask and the ADR. It checked the maths
+itself: 12,000 random plain pairs met exactly as before the change, and
+about 1,700 meetings checked against a brute-force scan of descents and
+climbs found no mismatch. It also confirmed cross-site posts are refused,
+`back` can't redirect off the site, and the stream leaks no owner.
+Fixed from its findings:
+1. **The sky panel could bring down a different satellite from the one
+   you confirmed**: the panel moves on to whichever of yours is next
+   overhead, and the form was read after the question. It's read at the
+   click now.
+2. **The catalogue's live height went wrong after a second** for anything
+   manoeuvring (its script rebuilt the orbit without the rate); it now
+   carries the rate and the climb's end, and a live row says "coming down"
+   or "climbing".
+3. The dialogs overpromised ("won't be up there for anyone to collide
+   with"): a satellite coming down can still be hit for two minutes, and
+   now they say so.
+4. A satellite that can't boost says why ("Boost used", "Highest band").
+5. The launchpad list keeps up (climbing, coming down, burning up, gone)
+   and the address loses `?deorbited=` once it's been said, so a reload
+   doesn't thank you twice.
+6. A boost gets a news line on the sky too, and a boost from the top of a
+   band can't land just over the edge of the next.
+Tests added: the catalogue's wording, the missing boost's reason,
+cross-site posts, `back`, and an operator manoeuvring from a second device.
+Not fixed: "next over the station" estimates from the period now, so it's
+rough mid-manoeuvre; with several satellites the sky's panel offers its
+controls for the one it's talking about, not a choice (the launchpad has
+them all). `pnpm check` green (190 tests).
+
+## 2026-10-07 — C9: manoeuvres off the launchpad; one boost, for sure
+
+After seeing the screenshots, I didn't want satellites managed on the
+launchpad: it was getting cluttered. It's back to the one line naming yours
+in orbit, and boosting and bringing down live in the sky's station panel
+only (which now says "Boost used" or "Highest band" when there's no boost).
+The manoeuvre form always goes back to the sky. ADR 0011 (still proposed,
+so editable) says so.
+
+I also wanted to be sure a satellite can only be boosted once. It already
+was (one tank of fuel per satellite, checked before the boost), and now the
+database write checks it too, so two requests at the same moment, or from
+two devices signed in as the same operator, still boost once. New HTTP
+tests for both, and for the launchpad offering no manoeuvres; the rest of
+the HTTP tests moved from the launchpad to the sky panel and the
+catalogue. `pnpm check` green (190 tests).
+
+I accepted ADR 0011 (bringing your satellite down, or boosting it up a
+band) as it stands after the launchpad change. The manoeuvre commits so
+far: `948998e`, `e010756`, `f35f752`.

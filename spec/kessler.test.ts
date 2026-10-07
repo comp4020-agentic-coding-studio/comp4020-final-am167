@@ -38,6 +38,7 @@ describe("the Kessler syndrome page", () => {
     ["decay", /drag/i],
     ["collisions", /collision makes fragments/i],
     ["lineage", /traced/i],
+    ["deorbiting", /bring a satellite down/i],
   ])("no longer calls %s unbuilt", async (name, heading) => {
     const rows = [...(await page("/kessler/")).querySelectorAll(".mapping tbody tr")];
     const row = rows.find((tr) => heading.test(tr.querySelector("th")?.textContent ?? ""));

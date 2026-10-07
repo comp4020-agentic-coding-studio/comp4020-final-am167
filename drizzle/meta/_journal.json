@@ -29,6 +29,13 @@
       "when": 1791282247241,
       "tag": "0003_operators",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791353506032,
+      "tag": "0004_manoeuvres",
+      "breakpoints": true
     }
   ]
 }

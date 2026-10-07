@@ -264,8 +264,7 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
         That's why this app is called Kessler: it's one small sky that everyone
         shares, built so the same dilemma plays out where you can watch it.
         Crowding the low band gets your beacon heard more often; the price is
-        a shorter life before it falls, and a crowd to collide with. The part
-        marked “not built yet” is still to come.
+        a shorter life before it falls, and a crowd to collide with.
       </p>
       <table class="mapping">
         <caption class="visually-hidden">Real orbit compared with this app's sky</caption>
@@ -310,7 +309,7 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
           </tr>
           <tr>
             <th scope="row">An operator can bring a satellite down at the end of its life. Debris can't be steered.</th>
-            <td><span class="later">Not built yet</span> You can bring your own satellite down, giving up your beacon to leave the sky cleaner. Nobody can clear debris.</td>
+            <td>You can bring your own satellite down: it leaves orbit in two minutes and burns up, giving up your beacon to leave the sky cleaner. You can also boost one up a band, once, to stay up longer. Nobody can clear debris.</td>
           </tr>
           <tr>
             <th scope="row">Every tracked object has a catalogue entry.</th>
@@ -571,19 +570,6 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
     width: 45%;
     color: var(--ink-dim);
     font-weight: 400;
-  }
-
-  .later {
-    display: inline-block;
-    margin-right: 0.35rem;
-    padding: 0 0.4rem;
-    border: 1px solid var(--amber-dim);
-    border-radius: 3px;
-    color: var(--amber);
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
   }
 
   .go {

@@ -3,6 +3,9 @@
 // agrees on the server's clock draws the same sky (ADR 0004). That includes
 // decay (ADR 0007): an orbit falls along a curve worked out in closed form,
 // so where a falling object is, and when it burns up, needs no messages.
+// And manoeuvres (ADR 0011): an owner bringing a satellite down, or boosting
+// it up a band, gives it a new epoch that falls (or climbs) at its own rate,
+// still in closed form.
 //
 // Distances are in planet radii. Angles are radians, anticlockwise from the
 // right, with y up; the shared ground station is at the top of the planet.
@@ -67,7 +70,18 @@ export interface Orbit {
   // (retrograde). Orbits going opposite ways meet head-on (ADR 0008).
   // Missing means prograde, as every orbit was before.
   direction?: 1 | -1;
+  // how fast radius^STEEPNESS falls, as a multiple of drag alone (ADR
+  // 0011): over 1 while it's being brought down, below 0 while it climbs.
+  // Missing means 1, as every orbit was before.
+  rate?: number;
+  // when a climb ends: from then on it falls by drag alone, from the height
+  // it reached. Missing or null: the rate holds until it burns up.
+  until?: number | null;
 }
+
+// An orbit as launched, or as a collision leaves a fragment: every element,
+// falling by drag alone.
+export type Elements = Required<Omit<Orbit, "rate" | "until">>;
 
 // ── decay ──────────────────────────────────────────────────────────────────
 
@@ -97,8 +111,30 @@ const { steepness: M, burnRadius, endRadius, plungeMs } = DECAY;
 // 400 to 800 km, where most real satellites fly.
 export const KM_PER_RADIUS = 120 / (burnRadius - 1);
 export const heightKm = (radius: number): number => (radius - 1) * KM_PER_RADIUS;
-// how fast radius^M falls, per ms
+// how fast radius^M falls, per ms, by drag alone
 const RATE = (LOW_MIDDLE ** M - burnRadius ** M) / (DECAY.lowLifetime - plungeMs);
+// and for an orbit, whatever it's doing
+const rateOf = (orbit: Orbit) => RATE * (orbit.rate ?? 1);
+
+// After a climb: the orbit it settles into, from the moment the climb ends,
+// falling by drag alone. Worked out once for each orbit.
+const settledOrbits = new WeakMap<Orbit, Orbit>();
+function settled(orbit: Orbit & { until: number }): Orbit {
+  const known = settledOrbits.get(orbit);
+  if (known) return known;
+  // where the climb leaves it (it never burns up on the way up)
+  const radius = (orbit.radius ** M - rateOf(orbit) * (orbit.until - orbit.epoch)) ** (1 / M);
+  const after: Orbit = {
+    radius,
+    phase: orbit.phase + (orbit.direction ?? 1) * sweptFalling(orbit, radius),
+    period: orbit.period * (radius / orbit.radius) ** PERIOD_POWER,
+    epoch: orbit.until,
+    direction: orbit.direction,
+  };
+  settledOrbits.set(orbit, after);
+  return after;
+}
+const climbs = (orbit: Orbit): orbit is Orbit & { until: number } => orbit.until != null;
 // the plunge's radius and angle, as its share s of the way through (0 to 1):
 // it dives fastest at first, levelling off as it slows
 const plungeDepth = (s: number) => 1 - (1 - s) ** 2;
@@ -113,8 +149,10 @@ const plungeStart = (orbit: Orbit) => Math.min(orbit.radius, burnRadius);
 
 // When an orbit reaches the top of the atmosphere.
 export function burnAt(orbit: Orbit): number {
+  // a climb never burns up: what it settles into does
+  if (climbs(orbit)) return burnAt(settled(orbit));
   const start = plungeStart(orbit);
-  return orbit.epoch + (orbit.radius ** M - start ** M) / RATE;
+  return orbit.epoch + (orbit.radius ** M - start ** M) / rateOf(orbit);
 }
 
 // When it has burned up: gone from the sky.
@@ -143,23 +181,26 @@ export function lifetimeRange(band: Band): { shortest: number; longest: number }
 }
 
 export function radiusAt(orbit: Orbit, time: number): number {
+  if (climbs(orbit) && time > orbit.until) return radiusAt(settled(orbit), time);
   const burn = burnAt(orbit);
-  if (time <= burn) return Math.max(orbit.radius ** M - RATE * (time - orbit.epoch), 0) ** (1 / M);
+  if (time <= burn) return Math.max(orbit.radius ** M - rateOf(orbit) * (time - orbit.epoch), 0) ** (1 / M);
   const s = Math.min(1, (time - burn) / plungeMs);
   const start = plungeStart(orbit);
   return start - (start - endRadius) * plungeDepth(s);
 }
 
 // The angle swept by an orbit falling from r0 to r, in closed form: the
-// angular speed is ω0·(r0/r)^P while radius^M falls at RATE.
+// angular speed is ω0·(r0/r)^P while radius^M falls at its rate (or rises,
+// in a climb: the same formula).
 function sweptFalling(orbit: Orbit, r: number): number {
   const omega = TAU / orbit.period;
   const power = M - PERIOD_POWER;
-  return ((omega * orbit.radius ** PERIOD_POWER) / (RATE * (power / M))) * (orbit.radius ** power - r ** power);
+  return ((omega * orbit.radius ** PERIOD_POWER) / (rateOf(orbit) * (power / M))) * (orbit.radius ** power - r ** power);
 }
 
 // The angle swept since the epoch, whichever way round: it only grows.
 export function sweptAt(orbit: Orbit, time: number): number {
+  if (climbs(orbit) && time > orbit.until) return sweptAt(orbit, orbit.until) + sweptAt(settled(orbit), time);
   const burn = burnAt(orbit);
   if (time <= burn) return sweptFalling(orbit, radiusAt(orbit, time));
   const start = plungeStart(orbit);
@@ -195,6 +236,51 @@ export function positionAt(orbit: Orbit, time: number): { x: number; y: number }
   return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
 }
 
+// ── manoeuvres (ADR 0011) ──────────────────────────────────────────────────
+
+// How long a satellite brought down takes to reach the top of the
+// atmosphere, from any height (then it burns up as anything does, in
+// DECAY.plungeMs), and how long a boost takes to climb a band.
+export const MANOEUVRE = {
+  descentMs: 120_000,
+  climbMs: 90_000,
+} as const;
+
+// The band a boost takes a satellite to, from the band it's in now.
+export const BAND_ABOVE: Record<Band, Band | null> = { low: "mid", mid: "high", high: null };
+
+// The orbit from `time` as it is then: where it is, which way it's going,
+// and its period there (a whole number of ms, as the database keeps it).
+function from(orbit: Orbit, time: number) {
+  const radius = radiusAt(orbit, time);
+  return {
+    radius,
+    phase: angleAt(orbit, time),
+    period: Math.round(periodNow(orbit, time)),
+    epoch: time,
+    direction: orbit.direction ?? 1,
+  };
+}
+
+// Brought down on purpose, from `time`: it falls to the top of the
+// atmosphere in MANOEUVRE.descentMs, however high it was.
+export function descend(orbit: Orbit, time: number): Required<Orbit> {
+  const start = from(orbit, time);
+  const drop = start.radius ** M - Math.min(start.radius, burnRadius) ** M;
+  return { ...start, rate: Math.max(1, drop / (RATE * MANOEUVRE.descentMs)), until: null };
+}
+
+// Boosted, from `time`: it climbs to `target` in MANOEUVRE.climbMs, then
+// falls by drag alone from there.
+export function climb(orbit: Orbit, time: number, target: number): Required<Orbit> {
+  const start = from(orbit, time);
+  const rise = target ** M - start.radius ** M;
+  return { ...start, rate: -rise / (RATE * MANOEUVRE.climbMs), until: time + MANOEUVRE.climbMs };
+}
+
+// Whether an orbit is still climbing at `time`.
+export const climbing = (orbit: Orbit, time: number): boolean => climbs(orbit) && time < orbit.until;
+
 export function isOverhead(orbit: Orbit, time: number): boolean {
   const off = Math.abs(angleAt(orbit, time) - STATION_ANGLE);
   return Math.min(off, TAU - off) <= OVERHEAD_HALF_WIDTH;
@@ -227,7 +313,7 @@ function normal(random: () => number): number {
 
 // A new orbit in the band: the radius, phase and direction are random so no
 // two orbits are the same, and the period is the one for that height.
-export function placeInBand(band: Band, epoch: number, random = Math.random): Orbit {
+export function placeInBand(band: Band, epoch: number, random = Math.random): Elements {
   const { minRadius, maxRadius } = BANDS[band];
   const middle = (minRadius + maxRadius) / 2;
   const half = (maxRadius - minRadius) / 2;

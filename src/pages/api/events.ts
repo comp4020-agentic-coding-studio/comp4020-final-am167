@@ -14,6 +14,8 @@ export const GET: APIRoute = ({ request, locals }) => {
       case "launch":
       case "decay":
         return toPublic(event.object, viewer);
+      case "manoeuvre":
+        return { ...event, object: toPublic(event.object, viewer) };
       case "conjunction":
         return event.conjunction;
       case "collision":
@@ -30,9 +32,11 @@ export const GET: APIRoute = ({ request, locals }) => {
     start(controller) {
       const send = (event: string, data: unknown) =>
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-      // subscribe before the snapshot so nothing falls between the two (so a
-      // burn-up the snapshot catches up on arrives as a decay event first)
-      const unsubscribe = subscribe((event) => send(event.type, visible(event)));
+      // subscribe before the snapshot so nothing falls between the two, but
+      // hold what the snapshot itself sets off (a burn-up it catches up on, a
+      // collision staged for this viewer) until after it: hello comes first
+      let held: SkyEvent[] | null = [];
+      const unsubscribe = subscribe((event) => (held ? held.push(event) : send(event.type, visible(event))));
       watcherArrived();
       send("hello", {
         serverTime: Date.now(),
@@ -41,6 +45,8 @@ export const GET: APIRoute = ({ request, locals }) => {
         // what a page that was away (asleep, offline) missed
         collisions: recentCollisions(5),
       });
+      for (const event of held) send(event.type, visible(event));
+      held = null;
       const ping = setInterval(() => controller.enqueue(encoder.encode(": ping\n\n")), 25_000);
       cleanup = () => {
         clearInterval(ping);
