@@ -1957,3 +1957,63 @@ only the latest 2,000 passes (by the time index), which is days of them at
 a busy hour. Typecheck and the affected tests green (47); the full HTTP
 suite waits for a rebuild after the adversarial review, which is using the
 running server. Commit `e0b2562`.
+
+## 2026-10-07 — Adversarial review of the overnight round (findings)
+
+A fresh Sonnet reviewer, with no shared context, attacked everything since
+`a52b08b` against my seven asks, the ADRs and the code, using curl against
+the running build and its own server on another port. It confirmed some
+things hold: pass detection matched a 50 ms brute-force oracle exactly over
+600 s and 35 satellites; a 40-satellite cascade gave identical words on all
+117 fragments whether run in one jump or in 5 s steps; `back` can't
+redirect off the site and cross-site posts get 403; a beacon of
+`</script><script>…` is escaped everywhere. What it found (acted on in the
+entries that follow):
+
+Must-fix:
+1. **"Heard by" was inflatable.** A request with no cookie gets a fresh
+   one, and its stream counted as a new listener: five cookieless
+   `curl /api/events` streams took the owner's own satellite to "Heard by
+   5 people". Hidden tabs counted forever; streams were uncapped. And the
+   copy said "nobody can raise their own".
+2. **Copy the code contradicts.** The Why page said bringing yours down is
+   "taking your words back" (the record keeps them), "nothing is
+   moderated" (there's a word filter), "heard by everyone all at once"
+   (several overhead take turns); a live, already-heard beacon's history
+   said "heard only as it passes over a station"; and the answering box,
+   ticked by default, tagged lines like "Second launch, mid band." as
+   answers, manufacturing "both were answering" connections.
+3. **The feed and stations broke in a busy sky**, just when a cascade
+   happens: 29 of 30 feed cards static, about four `heard` events a
+   second, every card jumping to the top and flashing under the reader;
+   "17 of 19 overhead"; one people's collision's fragments taking about
+   40% of every station's airtime for hours.
+4. **"Heard" was credited on entering the window, not on airtime**: with
+   two long lines overhead, one could get no turn yet still count as
+   "heard by N".
+5. **Ask 6 mostly invisible in a real session.** Staged collisions are
+   derelict against derelict (silent), and with a floor of 20 derelicts
+   most real collisions involve one, so the encounter read "a dead
+   satellite, nobody's, it had nothing to say" and the wreck was one line
+   chopped up. A two-stranger collision needs two people's satellites to
+   meet. Ideas: give derelicts a line, publish the wreck as one post,
+   tell owners on their next visit.
+6. **The card on the sky was modal**: it covered the beacons column and
+   made the sky inert. `/object/<id>/` still left about 45% of a wide
+   screen empty.
+7. **Ask 3's worry isn't fixed by layout alone**: at 1512x757 the stations
+   took about 600 px and the feed one card; on a phone "Sky now" sat
+   under 30 cards; "no handle" on every card reads as a missing person.
+
+Should-fix: tests that would pass with features broken (nothing covers the
+server's one-second ear, the `audience` and `heard` events' shape, or
+words surviving a replay; `typeof null === "object"`; a feed test that
+loops over nothing); an operator test that failed on a dirty database
+because a shard word was literally "owner"; a stations test timing out
+under load; `publish()` dropping a broken listener without recounting the
+audience; focus dropping to the page after a boost from a card; the
+listener hash being unsalted (the owner cookie is stored raw anyway, so a
+database holder could link owners to listening); the new tables
+unbounded. Opinions: the Why page leans preachy in places; the question
+turning at 10–11 am in Canberra suits the marker less than midnight
+there. And a list of README claims now stale, for my rewrite.
