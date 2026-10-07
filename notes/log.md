@@ -1708,3 +1708,17 @@ catalogue and blame lines (Advay's call: no disclosure for now), and the
 README (to be rewritten later, noted in `PLAN.md`).
 
 Commit `b58c2ac`.
+
+## 2026-10-07 — CI red on PR #5: a resident test that depended on the clock
+
+CI failed on a plan-only commit (`b180293`), on code that had passed the
+run before: "leaves room for a few derelicts" asserted that at least 20
+resident satellites were up, and how many are up depends on which hours
+the real clock puts in the backfill (19 that time). The feature was
+fine; the test's setup wasn't fixed. It now runs at a fixed hour (4 Jan
+2027, 09:20 UTC) with a derelict baseline of 10, which 35 residents fill
+(the derelicts come only from the minimum: exactly 5, none without it).
+Checked the other resident tests for the same flaw: "launches each one as
+it comes due" needed at least one launch in a two-hour window, missing
+about one run in 400; it now spans four hours (about one in 160,000).
+`pnpm check` green (245 tests) against a fresh build.

@@ -72,10 +72,11 @@ describe("the resident operators, on the server", async () => {
   });
 
   it("launches each one as it comes due, once, however often the sky is read, and announces it", () => {
-    const next = slotsBetween(T, T + 2 * HOUR, 3);
+    // four hours, so there's at least one, whatever today's clock
+    const next = slotsBetween(T, T + 4 * HOUR, 3);
     expect(next.length).toBeGreaterThan(0);
-    for (let t = T; t <= T + 2 * HOUR; t += 60_000) sky.settle(t);
-    sky.settle(T + 2 * HOUR);
+    for (let t = T; t <= T + 4 * HOUR; t += 60_000) sky.settle(t);
+    sky.settle(T + 4 * HOUR);
     const launched = residentRows(sky.catalogue("all", undefined));
     expect(launched.map((o) => o.launchedAt)).toEqual([...due, ...next].map((s) => s.at));
     const told = heard.flatMap((e) => (e.type === "launch" ? [e.object.launchedAt] : []));
@@ -84,7 +85,7 @@ describe("the resident operators, on the server", async () => {
 
   it("names the resident in the satellite's record, and knows it's a resident", () => {
     const [first] = residentRows(sky.catalogue("all", undefined));
-    const history = sky.historyOf(first.id, undefined, T + 2 * HOUR)!;
+    const history = sky.historyOf(first.id, undefined, T + 4 * HOUR)!;
     expect(history.handle).toBe(first.handle);
     expect(history.resident).toBe(true);
   });
@@ -104,9 +105,9 @@ describe("the resident operators, on the server", async () => {
   });
 
   it("tells a person's launch apart: it isn't a resident's", () => {
-    const result = sky.launch("a person", { band: "low", callsign: "MINE", beacon: "hello" }, T + 2 * HOUR);
+    const result = sky.launch("a person", { band: "low", callsign: "MINE", beacon: "hello" }, T + 4 * HOUR);
     if (!result.ok) throw new Error("launch refused");
-    expect(sky.historyOf(result.object.id, "a person", T + 2 * HOUR)!.resident).toBe(false);
+    expect(sky.historyOf(result.object.id, "a person", T + 4 * HOUR)!.resident).toBe(false);
   });
 });
 
@@ -209,9 +210,12 @@ describe("the residents' share of the sky", () => {
   });
 
   it("leaves room for a few derelicts, however many of theirs are up", async () => {
-    const { sky } = await server({ DERELICTS: "20", RESIDENTS_PER_HOUR: "12", RESIDENT_CAP: "20" });
-    const live = sky.liveSky(T);
-    expect(live.filter((o) => o.kind === "satellite").length).toBeGreaterThanOrEqual(20);
+    // a fixed hour, so how many of theirs are up doesn't depend on today's
+    // clock, and a baseline well under that, so theirs alone fill it
+    const at = Date.UTC(2027, 0, 4, 9, 20);
+    const { sky } = await server({ DERELICTS: "10", RESIDENTS_PER_HOUR: "12" });
+    const live = sky.liveSky(at);
+    expect(live.filter((o) => o.kind === "satellite").length).toBeGreaterThanOrEqual(10);
     expect(live.filter((o) => o.kind === "derelict").length).toBeGreaterThanOrEqual(sky.DERELICT_MIN);
   });
 
