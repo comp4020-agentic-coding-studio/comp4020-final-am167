@@ -1765,3 +1765,5 @@ only "raise a PR when done". Advay changed the rule in `CLAUDE.md` and
 branch an agent commits and pushes to that branch once the checks are
 green, and only merging into `main` (or opening a PR into it) waits for
 him. A red state is never committed either way.
+
+Commit `7093bf8`.
