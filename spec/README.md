@@ -27,8 +27,7 @@ Everything else in `spec/` is yours to write. Any `spec/*.test.ts` runs with
 `pnpm check`, against the same running app. `fit.test.ts` is the one that
 needs a browser: it drives Chrome (the installed stable one, or whatever
 `CHROME_PATH` points at) to check the launchpad and the sky fit one desktop
-screen without scrolling. `pnpm test` runs it on its own after the rest, so
-its Chrome doesn't slow the others past their timeouts. Some lines of a spec only a person
+screen without scrolling. Some lines of a spec only a person
 can judge; those are left to the crit and the marker.
 
 At a crit, a green `check` job is half the shipped mark, but it's never the

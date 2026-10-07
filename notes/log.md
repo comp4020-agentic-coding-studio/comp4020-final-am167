@@ -1783,3 +1783,16 @@ change had to be made twice in. Advay had it removed; `CLAUDE.md` is the one
 set of instructions.
 
 Commit `a3c9abd`.
+
+## 2026-10-07 — The fit test runs alongside the rest again
+
+Advay had the split test script reverted (`pnpm test` back to plain `vitest
+run`, the `vitest.config.ts` comment gone), so `fit.test.ts` runs in
+parallel with the other spec files again. Measured before reverting: one
+`pnpm check` passed (222), then two `pnpm test` runs failed,
+`collision-server.test.ts` timing out at 5.2 s and 5.4 s and once a
+`sky.test.ts` test too, from Chrome's CPU use. Kept as a known cost: a note
+in `CLAUDE.md` under the checks says to rerun such a file on its own before
+treating it as a real failure. The `spec/README.md` sentence about running
+it last went too.
+

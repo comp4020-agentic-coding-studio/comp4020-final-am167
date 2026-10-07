@@ -35,7 +35,11 @@ the repo is public, so run it yourself first.
 The spec suite checks a **running** app over HTTP at `APP_URL` (default
 `http://localhost:8080`) and starts nothing itself. One file,
 `spec/fit.test.ts`, also drives Chrome against it (installed stable Chrome,
-or `CHROME_PATH`). Rebuild and restart the app
+or `CHROME_PATH`). It runs alongside the rest, and its headless Chrome can
+starve the CPU-heavy tests: a 5 s timeout in `collision-server.test.ts` (or
+a `sky.test.ts` failure) in a full run may be that, so rerun that file on its
+own (`pnpm vitest run spec/<file>`) before treating it as a real failure.
+Rebuild and restart the app
 after a change before running it, or you're testing stale output. CI builds the
 Dockerfile image and points the suite at that.
 
