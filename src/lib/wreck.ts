@@ -17,11 +17,10 @@ export const wordsOf = (text: string): string[] =>
   text.split(/\s+/).filter((word) => word !== "" && word !== JOIN.trim());
 
 // what one side of a collision says: a satellite's beacon, a fragment's
-// shard; a derelict is dead, and says nothing
+// shard, a derelict's echo of a gone satellite's last words (or nothing)
 export function lineOf(object: { kind: string; beacon: string | null; words?: string | null }): string | null {
   if (object.kind === "satellite") return object.beacon;
-  if (object.kind === "debris") return object.words ?? null;
-  return null;
+  return object.words ?? null;
 }
 
 // A small seeded generator (mulberry32), as collide.ts uses for fragments.

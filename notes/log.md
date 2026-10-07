@@ -2093,3 +2093,40 @@ heard over a lap make one card `c:77` with three pieces, all up, its
 passes and two listeners; a satellite's card stays its own), red first
 (no `key`). The sky page's feed test checks a static card's wording and
 that no card says "no handle". `pnpm check` green (279 tests). Commit `855fc08`.
+
+## 2026-10-07 — Review fix 3: derelicts carry echoes; encounters are news
+
+Acting on the review's finding 5 (ask 6 mostly invisible in a real
+session: most collisions involve one of the 20 derelicts, which said
+nothing, and the collisions staged for a watcher were derelict against
+derelict, so silent):
+
+- **Derelicts carry an echo.** A derelict the server puts up now carries
+  the last words of a satellite long gone from the record, picked at
+  random (`objects.echo`, migration `0008_echo`, the line in `words`). It
+  doesn't broadcast them (the dead stay quiet at the stations), but a
+  collision breaks them like any line: your satellite hitting a derelict
+  breaks your words into a stranger's last ones, and the collisions staged
+  for someone watching break two old lines into static. Couplets read
+  "“I was here for a while” a derelict, echoing LANTERN"; a derelict's card
+  has "What it carries", linking to whose words they were; the encounter
+  says "A dead satellite, nobody's, still carrying LANTERN's last words …".
+  A fresh sky (nothing gone yet) has silent derelicts, as before.
+- **Encounters are news.** A cookie remembers when you last looked at
+  Yours (`kessler_seen`). Until you look again, the sky opens with "One of
+  yours met something: MOTH and LANTERN collided. See it in Yours"; Yours
+  says "Since you last looked: 3 more people heard yours, and one of yours
+  met something", and marks those encounters New.
+
+Not done from the reviewer's ideas: aiming a staged collision at two
+people's satellites (it would mean the server destroying someone's
+satellite on purpose), and publishing the wreck as its own feed post (the
+wreck's static is already one card, from fix 2).
+
+Tests: in `spec/collision-server.test.ts`, a derelict has no echo while
+nothing has gone, then carries LANTERN's last words once LANTERN has
+burned up; MOTH hitting it leaves fragments with every word of both, the
+collision names the echo, MOTH's owner meets it, and `newsSince` counts it
+before and not after; a story test for the echo in a couplet; an HTTP test
+that Yours sets the last-looked cookie (httpOnly). `pnpm check` green (283
+tests).

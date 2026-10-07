@@ -100,6 +100,25 @@ const moreLosses = f.destroyed.length - shownLosses.length;
     </section>
   )}
 
+  {h.kind === "derelict" && (
+    <section class="history-part">
+      <Heading>What it carries</Heading>
+      {h.words && h.echoOf ? (
+        <>
+          <blockquote class="history-beacon"><q>{h.words}</q></blockquote>
+          <p>
+            An echo: the last words of{" "}
+            {h.echoOf.callsign ? <a href={`/object/${h.echoOf.id}/`}>{h.echoOf.callsign}</a> : "a satellite"}, long gone
+            from the sky. It doesn't broadcast them; if anything hits it, they break into the
+            other side's.
+          </p>
+        </>
+      ) : (
+        <p>Nothing: it went up before anything here had gone.</p>
+      )}
+    </section>
+  )}
+
   {h.kind === "debris" && (
     <section class="history-part">
       <Heading>What it says</Heading>

@@ -188,8 +188,8 @@ describe("who a collision names (ADR 0010)", async () => {
     sky.settle(at + 1);
     const [collision] = collisions();
     expect(collision.parties).toEqual([
-      { id: alpha.id, kind: "satellite", callsign: "ALPHA", beacon: "hello from alpha", words: null, question: null, operator: null, from: null },
-      { id: bravo.id, kind: "satellite", callsign: "BRAVO", beacon: "bravo here", words: null, question: null, operator: "bravo_ops", from: null },
+      { id: alpha.id, kind: "satellite", callsign: "ALPHA", beacon: "hello from alpha", words: null, question: null, echoOf: null, operator: null, from: null },
+      { id: bravo.id, kind: "satellite", callsign: "BRAVO", beacon: "bravo here", words: null, question: null, echoOf: null, operator: "bravo_ops", from: null },
     ]);
   });
 
@@ -299,6 +299,36 @@ describe("who a collision names (ADR 0010)", async () => {
     expect(theirs.reentryAt).toBeGreaterThan(theirs.nextPass!.at);
     expect(theirs.followed).toEqual({ left: 0, collisions: 0, fragments: 0, up: 0, destroyed: [] });
     expect(sky.historyOf(delta.id, "dave", now)).toMatchObject({ beacon: "still up here", withheld: false, mine: true });
+  });
+});
+
+// the review, 2026-10-07: a derelict carries an echo of a gone satellite's
+// last words, so a collision with one still breaks someone's words
+describe("a derelict's echo", async () => {
+  const { sky, db, schema } = await freshServer();
+  it("is nothing while nothing has gone", () => {
+    expect(sky.addDerelict(orbit(2.3, 1, 1), T)).toMatchObject({ words: null, echo: null });
+  });
+
+  it("is the last words of a satellite that's gone, and breaks into a collision", () => {
+    const gone = db
+      .insert(schema.objects)
+      .values({ kind: "satellite", owner: "old", callsign: "LANTERN", beacon: "I was here for a while and it was good", band: "low", launchedAt: T - 9 * HOUR, fate: "decayed", fateAt: T - HOUR, ...orbit(1.3, 0, 1, T - 9 * HOUR) })
+      .returning()
+      .get();
+    const dead = sky.addDerelict(orbit(1.36, 0, 1), T);
+    expect(dead).toMatchObject({ kind: "derelict", words: gone.beacon, echo: gone.id });
+    // a satellite on the same height the other way round: dead centre
+    const moth = { ...db.insert(schema.objects).values({ kind: "satellite", owner: "mo", callsign: "MOTH", beacon: "every bird I've seen from my window", band: "low", launchedAt: T, ...orbit(1.36, 2, -1) }).returning().get(), kind: "satellite" as const, direction: -1 as const };
+    const at = Math.round(nextMeeting(dead, moth, T, fatalMeeting(dead, moth))!);
+    const [hit] = sky.settle(at + 1).collisions;
+    expect(hit.parties.find((p) => p.kind === "derelict")).toMatchObject({ words: gone.beacon, echoOf: "LANTERN" });
+    const carried = hit.fragments.flatMap((f) => (f.words ? wordsOf(f.words) : []));
+    expect(carried.sort()).toEqual([...wordsOf(gone.beacon!), ...wordsOf(moth.beacon!)].sort());
+    // and MOTH's owner meets the echo
+    expect(sky.encountersOf("mo", at + 1)[0].other).toMatchObject({ kind: "derelict", echoOf: "LANTERN" });
+    expect(sky.newsSince("mo", T, at + 1).encounters).toHaveLength(1);
+    expect(sky.newsSince("mo", at + 1, at + 1).encounters).toHaveLength(0);
   });
 });
 

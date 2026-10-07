@@ -91,6 +91,14 @@ describe("telling a collision", () => {
     ]);
     expect(couplet([alpha, derelict])).toEqual([{ callsign: "ALPHA", beacon: "hello from alpha" }]);
   });
+
+  it("hears a derelict's echo of a gone satellite's last words", () => {
+    const echoing: StoryParty = { ...derelict, words: "I was here for a while", echoOf: "LANTERN" };
+    expect(couplet([alpha, echoing])).toEqual([
+      { callsign: "ALPHA", beacon: "hello from alpha" },
+      { callsign: "a derelict, echoing LANTERN", beacon: "I was here for a while" },
+    ]);
+  });
 });
 
 describe("counting the sky", () => {

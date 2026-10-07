@@ -18,6 +18,8 @@ export interface StoryParty extends StoryRoot {
   beacon: string | null;
   // the stations' question it was answering, if any (ADR 0018)
   question?: string | null;
+  // a derelict's echo (in `words`): whose last words they were
+  echoOf?: string | null;
   // for debris, what it was carrying (ADR 0017)
   words?: string | null;
   // for debris, the satellites and derelicts at the root of its collision
@@ -93,9 +95,15 @@ export function blame(parties: readonly [StoryParty, StoryParty]): string {
 export const titleOf = (o: { id: number; kind: Kind; callsign: string | null }) =>
   o.kind === "satellite" && o.callsign ? o.callsign : `${o.kind === "debris" ? "Fragment" : "Derelict"} no. ${o.id}`;
 
-// The two beacons that met, side by side (debris and derelicts are silent).
+// The two lines that met, side by side: a satellite's beacon, or the echo
+// a derelict was carrying, an old line from the record (debris says its
+// piece elsewhere).
 export function couplet(parties: readonly [StoryParty, StoryParty]): { callsign: string; beacon: string }[] {
-  return parties.flatMap((p) => (p.kind === "satellite" && p.callsign && p.beacon ? [{ callsign: p.callsign, beacon: p.beacon }] : []));
+  return parties.flatMap((p) => {
+    if (p.kind === "satellite" && p.callsign && p.beacon) return [{ callsign: p.callsign, beacon: p.beacon }];
+    if (p.kind === "derelict" && p.words) return [{ callsign: `a derelict, echoing ${p.echoOf ?? "an old line"}`, beacon: p.words }];
+    return [];
+  });
 }
 
 // "2 satellites, 1 derelict and 1 fragment in orbit"

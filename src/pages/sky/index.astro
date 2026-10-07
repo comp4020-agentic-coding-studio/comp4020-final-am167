@@ -5,13 +5,14 @@ import ManoeuvreDialogs from "../../components/ManoeuvreDialogs.astro";
 import ObjectCard from "../../components/ObjectCard.astro";
 import HeardCard from "../../components/HeardCard.astro";
 import { ago, embed } from "../../lib/format.ts";
-import { listeningNow, skyCount } from "../../lib/story.ts";
+import { headline, listeningNow, skyCount } from "../../lib/story.ts";
 import { BANDS, bandAt, radiusAt, type Band } from "../../lib/orbit.ts";
 import { STATIONS } from "../../lib/stations.ts";
 import { audience } from "../../lib/events.ts";
 import { HEARD_FEED, heardCounts, listenerKey, recentlyHeard } from "../../lib/heard.ts";
 import { dayOf, questionOn } from "../../lib/questions.ts";
-import { conjunctions, isFirstLaunch, liveSky, recentCollisions, toPublic } from "../../lib/sky.ts";
+import { conjunctions, isFirstLaunch, liveSky, newsSince, recentCollisions, toPublic } from "../../lib/sky.ts";
+import { lastLooked } from "../../lib/seen.ts";
 
 // The shared sky. The server renders a summary of what's in orbit (counts per
 // band and the latest launches), and what the stations have heard (ADR
@@ -37,6 +38,8 @@ const launched = sky.find((o) => o.id === launchedParam && o.mine) ?? null;
 const mine = sky.find((o) => o.mine) ?? null;
 // straight after someone's first launch ever, the sky explains itself
 const first = launched !== null && isFirstLaunch(viewer, launched.id);
+// an encounter of yours since you last looked at Yours (ADR 0017): news
+const met = launched ? null : (newsSince(viewer, lastLooked(Astro.cookies), now).encounters[0] ?? null);
 // how many of the latest launches the summary lists (sky.ts keeps it live):
 // people's, not the derelicts the server adds or debris
 const RECENT = 6;
@@ -88,6 +91,12 @@ const view = launched ? "canberra" : null;
       <!-- a collision, as it happens: the two beacons and who launched what
            (ADR 0010); over the scene, or under it on a phone -->
       <div id="collision-card" class="collision-card" role="status" hidden></div>
+
+      {met && (
+        <p class="notice launched" id="launched-notice" role="status">
+          One of yours met something: {headline(met.parties)}. <a href="/catalogue/?show=mine#encounters-title">See it in Yours</a>.
+        </p>
+      )}
 
       {launched && (
         <p class="notice launched" id="launched-notice" role="status">

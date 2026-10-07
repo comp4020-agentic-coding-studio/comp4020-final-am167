@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull, lt, max, ne, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNotNull, isNull, lt, max, ne, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { fatalMeeting, fragmentsOf, impactOf, nextMeeting } from "./collide.ts";
 import { listening, publish } from "./events.ts";
@@ -69,6 +69,8 @@ export interface SkyObject extends Orbit {
   words: string | null;
   // the stations' question its beacon answered, if any (ADR 0018)
   question: string | null;
+  // for a derelict, the gone satellite whose last words it carries
+  echo: number | null;
   // a manoeuvre's rate and the end of a climb (ADR 0011), part of the orbit
   rate: number;
   until: number | null;
@@ -126,6 +128,7 @@ const columns = {
   sourceCollision: objects.sourceCollision,
   words: objects.words,
   question: objects.question,
+  echo: objects.echo,
   rate: objects.rate,
   until: objects.until,
   deorbitedAt: objects.deorbitedAt,
@@ -175,6 +178,8 @@ export interface Party {
   words: string | null;
   // the stations' question it was answering (ADR 0018)
   question: string | null;
+  // for a derelict carrying an echo (in `words`), whose last words they are
+  echoOf: string | null;
   operator: string | null;
   from: Root[] | null;
 }
@@ -372,6 +377,7 @@ const partyOf = (object: SkyObject): Party => ({
   beacon: object.beacon,
   words: object.words,
   question: object.question,
+  echoOf: object.echo === null ? null : (db.select({ callsign: objects.callsign }).from(objects).where(eq(objects.id, object.echo)).get()?.callsign ?? null),
   operator: object.operator === null ? null : (handles([object.operator]).get(object.operator) ?? null),
   from: object.kind === "debris" && object.sourceCollision !== null ? rootsOf(object.sourceCollision) : null,
 });
@@ -421,6 +427,24 @@ export function recentCollisions(n: number): CollisionStory[] {
 export interface Encounter extends CollisionStory {
   yours: Party;
   other: Party;
+}
+
+// What happened to the viewer's satellites since `since` (their last look
+// at Yours): encounters, and how many more people heard them.
+export function newsSince(who: Who, since: number, now = Date.now()): { encounters: Encounter[]; heardBy: number } {
+  const encounters = encountersOf(who, now).filter((e) => e.at > since);
+  const ids = viewerOf(who).person
+    ? db.select({ id: objects.id }).from(objects).where(ownerIs(who)).all().map((row) => row.id)
+    : [];
+  const heardBy =
+    ids.length === 0
+      ? 0
+      : (db
+          .select({ n: count() })
+          .from(listens)
+          .where(and(inArray(listens.object, ids), gt(listens.at, since)))
+          .get()?.n ?? 0);
+  return { encounters, heardBy };
 }
 
 // Every collision a satellite of the viewer's was in, newest first.
@@ -474,12 +498,23 @@ function markDecayed(now: number): SkyObject[] {
 
 // ── derelicts (ADR 0008) ──────────────────────────────────────────────────
 
-// A dead satellite, owned by nobody, put into the sky by the server.
+// A dead satellite, owned by nobody, put into the sky by the server. It
+// carries an echo: the last words of a satellite long gone from the record,
+// picked at random, so a collision with a derelict still breaks someone's
+// words into someone else's (the review, 2026-10-07). None until something
+// has gone.
 export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
+  const echo = db
+    .select({ id: objects.id, beacon: objects.beacon })
+    .from(objects)
+    .where(and(eq(objects.kind, "satellite"), ne(objects.fate, "live"), isNotNull(objects.beacon), lt(objects.launchedAt, now)))
+    .orderBy(sql`random()`)
+    .limit(1)
+    .get();
   const object = toObject(
     db
       .insert(objects)
-      .values({ kind: "derelict", band: bandAt(orbit.radius), launchedAt: now, ...orbit })
+      .values({ kind: "derelict", band: bandAt(orbit.radius), launchedAt: now, ...orbit, words: echo?.beacon ?? null, echo: echo?.id ?? null })
       .returning(columns)
       .get(),
   );
@@ -932,8 +967,10 @@ export interface History {
   boosts: number;
   // boosts and deorbits (ADR 0011), oldest first, with the band each aimed for
   manoeuvres: { kind: ManoeuvreKind; at: number; to: Band }[];
-  // for debris: the words it carries (ADR 0017)
+  // for debris, the words it carries (ADR 0017); for a derelict, the echo
+  // it carries, and whose last words they were
   words: string | null;
+  echoOf: { id: number; callsign: string | null } | null;
   // the stations' question it answered (ADR 0018)
   question: string | null;
   // for debris: the collision it came from, what met, and who that traces to
@@ -1059,6 +1096,7 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
     deorbitedAt: object.deorbitedAt,
     boosts: object.boosts,
     words: object.words,
+    echoOf: object.echo === null ? null : { id: object.echo, callsign: objectById(object.echo)?.callsign ?? null },
     question: object.question,
     manoeuvres: manoeuvresOf(id).map((m) => ({ kind: m.kind, at: m.at, to: bandAt(m.toRadius) })),
     origin: source && { collision: source.c.id, at: source.c.at, parties: source.parties, roots: rootsOf(source.c.id) },

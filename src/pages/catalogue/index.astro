@@ -7,6 +7,7 @@ import Wreck from "../../components/Wreck.astro";
 import { ago, falling, km } from "../../lib/format.ts";
 import { REFUSALS, isRefusal } from "../../lib/manoeuvre.ts";
 import { heardTotals } from "../../lib/heard.ts";
+import { lastLooked, looked } from "../../lib/seen.ts";
 import { BANDS, climbing, fallRate, heightKm, radiusAt, type Band } from "../../lib/orbit.ts";
 import {
   FIRST_DIR,
@@ -15,6 +16,7 @@ import {
   catalogueCounts,
   readCatalogueQuery,
   encountersOf,
+  newsSince,
   recentCollisions,
   satellitesOf,
   type CatalogueQuery,
@@ -47,6 +49,11 @@ const yoursHeard = heardTotals(yoursUp.map((o) => o.id));
 // stranger here
 const ENCOUNTERS = 20;
 const encounters = yours ? encountersOf(viewer, now).slice(0, ENCOUNTERS) : [];
+// what's new since they last looked here, and now they have
+const since = lastLooked(Astro.cookies);
+const news = yours ? newsSince(viewer, since, now) : null;
+if (yours) looked(Astro.cookies, now, Astro.url, Astro.request.headers);
+const fresh = new Set(news?.encounters.map((e) => e.id) ?? []);
 // back from bringing one down or boosting it without JavaScript
 const yoursById = (name: string) => yoursUp.find((o) => o.id === Number(Astro.url.searchParams.get(name))) ?? null;
 const deorbited = yours ? yoursById("deorbited") : null;
@@ -144,6 +151,14 @@ const number = (n: number) => n.toLocaleString("en");
 
     {yours && (
       <section class="yours-up" aria-labelledby="yours-up-title">
+        {news && since > 0 && (news.encounters.length > 0 || news.heardBy > 0) && (
+          <p class="yours-notice yours-news">
+            Since you last looked:{" "}
+            {news.heardBy > 0 && <>{news.heardBy === 1 ? "one more person heard yours" : `${news.heardBy} more people heard yours`}</>}
+            {news.heardBy > 0 && news.encounters.length > 0 && ", and "}
+            {news.encounters.length > 0 && <>{news.encounters.length === 1 ? "one of yours" : `${news.encounters.length} of yours`} met something (below)</>}.
+          </p>
+        )}
         {boosted && <p class="yours-notice" role="status"><strong>{boosted.callsign}</strong> is climbing a band. It stays up far longer.</p>}
         {!boosted && isRefusal(refused) && <p class="yours-notice" role="alert">{REFUSALS[refused]}</p>}
         <h2 id="yours-up-title">In orbit now</h2>
@@ -165,8 +180,9 @@ const number = (n: number) => n.toLocaleString("en");
         ) : (
           <ol class="encounters" aria-labelledby="encounters-title">
             {encounters.map((e) => (
-              <li class="encounter">
+              <li class:list={["encounter", { fresh: fresh.has(e.id) }]}>
                 <p class="collision-title">
+                  {fresh.has(e.id) && <span class="new">New</span>}
                   {headline(e.parties)}{" "}
                   <time datetime={new Date(e.at).toISOString()}>{ago(now - e.at)}</time>
                 </p>
@@ -182,7 +198,12 @@ const number = (n: number) => n.toLocaleString("en");
                     {e.other.words ? <>, carrying <span class="static-words">{e.other.words}</span></> : ", and was silent"}.
                   </p>
                 )}
-                {e.other.kind === "derelict" && <p class="encounter-line">A dead satellite, nobody's. It had nothing to say.</p>}
+                {e.other.kind === "derelict" && (
+                  <p class="encounter-line">
+                    A dead satellite, nobody's,
+                    {e.other.words ? <> still carrying {e.other.echoOf ?? "a gone satellite"}'s last words <q>{e.other.words}</q></> : " with nothing to say"}.
+                  </p>
+                )}
                 {sharedQuestion(e.parties) && <p class="encounter-line">Both were answering <q>{sharedQuestion(e.parties)}</q></p>}
                 {e.yours.beacon && (
                   <p class="encounter-line encounter-yours">
@@ -603,6 +624,19 @@ const number = (n: number) => n.toLocaleString("en");
 
   .encounter p {
     margin: 0;
+  }
+
+  .encounter .new {
+    margin-right: 0.45rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 3px;
+    background: var(--amber);
+    color: var(--night-deep);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    vertical-align: 0.1em;
   }
 
   .encounter-line {

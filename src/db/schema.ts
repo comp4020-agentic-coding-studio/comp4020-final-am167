@@ -35,6 +35,9 @@ export const objects = sqliteTable(
     words: text("words"),
     // the stations' question its beacon answered, as it was asked (ADR 0018)
     question: text("question"),
+    // for a derelict, the gone satellite whose last words it carries as an
+    // echo (in `words`), so a collision with it breaks real words too
+    echo: integer("echo"),
     // the operator it belongs to, once its person has claimed or signed in
     // to one (ADR 0009); until then it's the owner cookie's
     operator: integer("operator"),

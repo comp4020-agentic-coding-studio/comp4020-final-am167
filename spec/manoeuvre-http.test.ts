@@ -107,6 +107,14 @@ describe("yours, in the catalogue", () => {
     expect(yours.querySelector("main")!.textContent).not.toContain(theirs.name);
   });
 
+  it("remembers when you last looked, so what happens after is news", async () => {
+    const res = await new Session(baseUrl).get(YOURS);
+    const seen = res.headers.getSetCookie().find((c) => c.startsWith("kessler_seen="));
+    expect(seen, "no last-looked cookie").toBeDefined();
+    expect(Number(seen!.split(";")[0].split("=")[1])).toBeGreaterThan(Date.now() - 60_000);
+    expect(seen).toMatch(/HttpOnly/i);
+  });
+
   it("says when nothing of yours is up, and offers no manoeuvres", async () => {
     const yours = await page(new Session(baseUrl), YOURS);
     expect(yours.querySelector('main form[action="/manoeuvre/"]')).toBeNull();
