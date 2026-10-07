@@ -2092,4 +2092,4 @@ Tests: two in `spec/heard-server.test.ts` (three fragments of one wreck
 heard over a lap make one card `c:77` with three pieces, all up, its
 passes and two listeners; a satellite's card stays its own), red first
 (no `key`). The sky page's feed test checks a static card's wording and
-that no card says "no handle". `pnpm check` green (281 tests). Commit `855fc08`.
+that no card says "no handle". `pnpm check` green (279 tests). Commit `855fc08`.
