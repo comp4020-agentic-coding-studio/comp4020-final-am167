@@ -1956,4 +1956,4 @@ every transmission ever logged to find the latest per beacon; it now reads
 only the latest 2,000 passes (by the time index), which is days of them at
 a busy hour. Typecheck and the affected tests green (47); the full HTTP
 suite waits for a rebuild after the adversarial review, which is using the
-running server.
+running server. Commit `e0b2562`.
