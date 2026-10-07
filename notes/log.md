@@ -2065,3 +2065,31 @@ itself (fake timers; the reviewer noted deleting `startListening()` left
 the suite green). The lap test now looks at just under a lap: over a lap
 plus ten seconds the new code rightly finds Canberra twice. `pnpm check`
 green (277 tests), on a fresh database. Commit `1472389`.
+
+## 2026-10-07 — Review fix 2: a calmer feed, one card per wreck
+
+Acting on the review's findings 3 and 7:
+
+- **One card per wreck.** All the static from one collision's fragments is
+  one card ("Static from MOTH and LANTERN's collision"), showing the piece
+  heard last, how many passes, and "4 of 6 pieces still up" (or "all
+  fallen silent"); a satellite keeps a card of its own. Cards have a key
+  (`o:12`, `c:7`), and the server counts a wreck's passes and listeners
+  across its fragments.
+- **Cards don't jump.** A pass for a card already in the feed updates it
+  where it is; only a new card goes on top, lit for a moment. (Before,
+  every pass moved its card to the top and flashed it: about four a
+  second in a busy sky.)
+- **No "no handle" on every card**: a handle shows if there is one, "yours"
+  if it's yours, otherwise nothing.
+- **Room for the feed.** Station rows hold three lines at a slightly
+  smaller size (a 140-character line fits the column); at 1512x757 the
+  feed now starts at 478 px with about two and a half cards showing
+  (before: one card's worth). On a phone the order is the sky, the
+  stations, "Sky now", then the feed, so the summary isn't under 30 cards.
+
+Tests: two in `spec/heard-server.test.ts` (three fragments of one wreck
+heard over a lap make one card `c:77` with three pieces, all up, its
+passes and two listeners; a satellite's card stays its own), red first
+(no `key`). The sky page's feed test checks a static card's wording and
+that no card says "no handle". `pnpm check` green (281 tests).

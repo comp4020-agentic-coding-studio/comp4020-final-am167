@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { count, desc, eq, inArray, max, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, max, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { audience, publish } from "./events.ts";
 import { onAir, type Speaker } from "./airtime.ts";
@@ -62,6 +62,9 @@ export interface Transmission {
 // A beacon as the feed shows it: who launched it, what it said, where and
 // when it was last heard, and how often and by how many.
 export interface HeardItem {
+  // the card it's on: a satellite's own, or one for all of a wreck's static
+  key: string;
+  // the satellite, or the fragment of the wreck heard last
   id: number;
   kind: Kind;
   callsign: string | null;
@@ -70,6 +73,10 @@ export interface HeardItem {
   // derelicts) at the root of the collision it came from (ADR 0017)
   words: string | null;
   from: Root[] | null;
+  // for a wreck's static: how many of its fragments carry words, and how
+  // many of those are still up
+  pieces: number | null;
+  up: number | null;
   // the stations' question it answered (ADR 0018)
   question: string | null;
   handle: string | null;
@@ -162,77 +169,103 @@ export function listen(from: number, to: number, ears: ReadonlySet<string> = aud
   return passes.map((p) => ({ object: p.object.id, station: p.station, at: p.at, listeners: p.heard.length }));
 }
 
-// The feed's rows for these objects (unordered), as their owner-free selves.
+// A card's key in the feed: a satellite's own ("o:12"); for static, the
+// collision its fragments came from ("c:7"), so all of one wreck's static
+// is one card, not a fragment each (the review, 2026-10-07).
+const keyOf = (object: { id: number; kind: string; source: number | null }) =>
+  object.kind === "debris" && object.source !== null ? `c:${object.source}` : `o:${object.id}`;
+
+// The feed's cards for these objects (each the latest heard of its card),
+// unordered, as their owner-free selves. A static card counts every
+// fragment of its wreck that carries words: their passes, who heard any of
+// them, and how many are still up.
 function feedOf(ids: number[], who?: Viewer | string): HeardItem[] {
   if (ids.length === 0) return [];
-  const latest = db
-    .select({ object: transmissions.object, id: max(transmissions.id), passes: count() })
-    .from(transmissions)
-    .where(inArray(transmissions.object, ids))
-    .groupBy(transmissions.object)
+  const rows = db
+    .select({
+      id: objects.id,
+      kind: objects.kind,
+      callsign: objects.callsign,
+      beacon: objects.beacon,
+      words: objects.words,
+      question: objects.question,
+      source: objects.sourceCollision,
+      band: objects.band,
+      fate: objects.fate,
+      owner: objects.owner,
+      operator: objects.operator,
+      handle: operators.handle,
+    })
+    .from(objects)
+    .leftJoin(operators, eq(objects.operator, operators.id))
+    .where(inArray(objects.id, ids))
     .all();
+  // each wreck's fragments that carry words
+  const sources = [...new Set(rows.flatMap((row) => (row.kind === "debris" && row.source !== null ? [row.source] : [])))];
+  const pieces = new Map<number, { id: number; fate: Fate }[]>();
+  if (sources.length > 0) {
+    for (const piece of db
+      .select({ id: objects.id, fate: objects.fate, source: objects.sourceCollision })
+      .from(objects)
+      .where(and(inArray(objects.sourceCollision, sources), isNotNull(objects.words)))
+      .all()) {
+      pieces.set(piece.source!, [...(pieces.get(piece.source!) ?? []), piece]);
+    }
+  }
+  const membersOf = (row: (typeof rows)[number]) =>
+    row.kind === "debris" && row.source !== null ? (pieces.get(row.source) ?? [{ id: row.id, fate: row.fate }]).map((p) => p.id) : [row.id];
+  const all = [...new Set(rows.flatMap(membersOf))];
+  // every pass and every listener of any of them
+  const passCount = new Map<number, number>();
+  const latest = new Map<number, number>();
+  for (const pass of db
+    .select({ object: transmissions.object, id: max(transmissions.id), n: count() })
+    .from(transmissions)
+    .where(inArray(transmissions.object, all))
+    .groupBy(transmissions.object)
+    .all()) {
+    passCount.set(pass.object, pass.n);
+    latest.set(pass.object, pass.id ?? 0);
+  }
   const last = new Map(
     db
       .select({ id: transmissions.id, station: transmissions.station, at: transmissions.at })
       .from(transmissions)
-      .where(inArray(transmissions.id, latest.map((l) => l.id ?? 0)))
+      .where(inArray(transmissions.id, [...latest.values()]))
       .all()
       .map((t) => [t.id, t]),
   );
-  const heardBy = new Map(
-    db
-      .select({ object: listens.object, n: count() })
-      .from(listens)
-      .where(inArray(listens.object, ids))
-      .groupBy(listens.object)
-      .all()
-      .map((row) => [row.object, row.n]),
-  );
-  const rows = new Map(
-    db
-      .select({
-        id: objects.id,
-        kind: objects.kind,
-        callsign: objects.callsign,
-        beacon: objects.beacon,
-        words: objects.words,
-        question: objects.question,
-        source: objects.sourceCollision,
-        band: objects.band,
-        fate: objects.fate,
-        owner: objects.owner,
-        operator: objects.operator,
-        handle: operators.handle,
-      })
-      .from(objects)
-      .leftJoin(operators, eq(objects.operator, operators.id))
-      .where(inArray(objects.id, ids))
-      .all()
-      .map((row) => [row.id, row]),
-  );
+  const heardOf = new Map<number, string[]>();
+  for (const row of db.select({ object: listens.object, listener: listens.listener }).from(listens).where(inArray(listens.object, all)).all()) {
+    heardOf.set(row.object, [...(heardOf.get(row.object) ?? []), row.listener]);
+  }
   // each collision's roots once, however many of its fragments were heard
   const roots = new Map<number, Root[]>();
   const rootsFor = (collision: number) => roots.get(collision) ?? roots.set(collision, rootsOf(collision)).get(collision)!;
-  return latest.flatMap(({ object, id, passes }) => {
-    const row = rows.get(object);
-    const pass = last.get(id ?? 0);
-    if (!row || !pass) return [];
+  return rows.flatMap((row) => {
+    const pass = last.get(latest.get(row.id) ?? 0);
+    if (!pass) return [];
+    const members = membersOf(row);
+    const wreck = row.kind === "debris" && row.source !== null ? (pieces.get(row.source) ?? null) : null;
     return [
       {
+        key: keyOf(row),
         id: row.id,
         kind: row.kind,
         callsign: row.callsign,
         beacon: row.beacon,
         words: row.kind === "debris" ? row.words : null,
         from: row.kind === "debris" && row.source !== null ? rootsFor(row.source) : null,
+        pieces: wreck ? wreck.length : null,
+        up: wreck ? wreck.filter((p) => p.fate === "live").length : null,
         question: row.question,
         handle: row.handle,
         band: row.band,
         fate: row.fate,
         station: stationName(pass.station),
         at: pass.at,
-        passes,
-        heardBy: heardBy.get(object) ?? 0,
+        passes: members.reduce((sum, id) => sum + (passCount.get(id) ?? 0), 0),
+        heardBy: new Set(members.flatMap((id) => heardOf.get(id) ?? [])).size,
         mine: isOwnedBy(row, who),
       },
     ];
@@ -243,22 +276,26 @@ function feedOf(ids: number[], who?: Viewer | string): HeardItem[] {
 // days of them there are, so a page doesn't read the whole log to open.
 const LOOK_BACK = 2000;
 
-// What the stations have heard, each beacon once, the latest pass first.
+// What the stations have heard, a card each, the latest heard first: a
+// satellite's beacon, or all the static from one wreck.
 export function recentlyHeard(limit: number, who?: Viewer | string, now = Date.now()): HeardItem[] {
   const latest = db
-    .select({ object: transmissions.object, at: transmissions.at })
+    .select({ object: transmissions.object, kind: objects.kind, source: objects.sourceCollision })
     .from(transmissions)
+    .innerJoin(objects, eq(transmissions.object, objects.id))
     .where(sql`${transmissions.at} <= ${now}`)
     .orderBy(desc(transmissions.at), desc(transmissions.id))
     .limit(LOOK_BACK)
     .all();
-  // the latest pass of each, in order
-  const order = new Map<number, number>();
+  // the latest heard of each card, in order
+  const order = new Map<string, { at: number; object: number }>();
   for (const pass of latest) {
     if (order.size >= limit) break;
-    if (!order.has(pass.object)) order.set(pass.object, order.size);
+    const key = keyOf({ id: pass.object, kind: pass.kind, source: pass.source });
+    if (!order.has(key)) order.set(key, { at: order.size, object: pass.object });
   }
-  return feedOf([...order.keys()], who).sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+  const place = new Map([...order.values()].map((v) => [v.object, v.at]));
+  return feedOf([...place.keys()], who).sort((a, b) => place.get(a.id)! - place.get(b.id)!);
 }
 
 // How many different people have heard an object, and over how many passes.

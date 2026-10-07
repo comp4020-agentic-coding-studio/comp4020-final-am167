@@ -214,6 +214,31 @@ describe("what was heard", () => {
   });
 });
 
+// the review, 2026-10-07: a wreck's static is one card, not one a fragment
+describe("a wreck's static in the feed", () => {
+  it("is one card for all its fragments, counting their passes and what's still up", async () => {
+    const { heard, db, schema, put, ears } = await freshServer();
+    const pieces = [0, 1, 2].map((n) => put(null, { kind: "derelict", phase: NEAR_CANBERRA - n * 0.6 }));
+    for (const piece of pieces) {
+      db.update(schema.objects).set({ kind: "debris", sourceCollision: 77, words: `piece ${piece.id} … of two lines` }).where(eq(schema.objects.id, piece.id)).run();
+    }
+    // a lap: each piece comes over each station
+    const lap = Math.round(periodAt(1.3)) - 5_000;
+    const passes = heard.listen(T, T + lap, ears("bob", "carol"));
+    expect(passes.length).toBeGreaterThan(3);
+    const feed = heard.recentlyHeard(10, undefined, T + lap);
+    expect(feed).toHaveLength(1);
+    expect(feed[0]).toMatchObject({ key: "c:77", kind: "debris", pieces: 3, up: 3, passes: passes.length, heardBy: 2 });
+  });
+
+  it("keeps a satellite's card its own", async () => {
+    const { heard, put, ears } = await freshServer();
+    const sat = put("alice");
+    heard.listen(T, T + 10_000, ears("bob"));
+    expect(heard.recentlyHeard(10, undefined, T + 10_000)[0]).toMatchObject({ key: `o:${sat.id}`, pieces: null });
+  });
+});
+
 describe("a history", () => {
   it("withholds a flying satellite's beacon from strangers until it's been heard", async () => {
     const { sky, heard, put, ears } = await freshServer();

@@ -106,7 +106,7 @@ describe("the sky page", () => {
 
   it("says who's listening, and lists what the stations have heard, without JavaScript", async () => {
     const { page } = await skyPage();
-    const rail = page.querySelector("aside.rail")!;
+    const rail = page.querySelector(".rail")!;
     expect(rail, "no beacons column").not.toBeNull();
     // the stations live, and how many people are here (this viewer among them)
     expect(rail.querySelector(".station [data-station]")).not.toBeNull();
@@ -121,7 +121,15 @@ describe("the sky page", () => {
     if (items.length === 0) expect(heard.querySelector("#feed-empty")?.hasAttribute("hidden")).toBe(false);
     for (const item of items) {
       expect(item.querySelector(".heard-line")?.textContent).not.toBe("");
-      expect(item.querySelector(".heard-meta")?.textContent).toMatch(/^Over (Canberra|Goldstone|Madrid) · Heard by /);
+      // a beacon says who heard it; a wreck's static (one card for all its
+      // fragments) says how much of it is still up
+      expect(item.querySelector(".heard-meta")?.textContent?.trim()).toMatch(
+        item.classList.contains("static")
+          ? /^Over (Canberra|Goldstone|Madrid) · \d+ pass(es)? · (\d+ of \d+ pieces still up|all fallen silent)$/
+          : /^Over (Canberra|Goldstone|Madrid) · Heard by /,
+      );
+      // nobody's card says "no handle"
+      expect(item.textContent).not.toMatch(/no handle/);
       expect(item.querySelector('a[href^="/object/"]')).not.toBeNull();
     }
   });

@@ -412,13 +412,13 @@ const GONE = { live: null, decayed: "Burned up", deorbited: "Brought down", dest
 
 // one card, as src/components/HeardCard.astro makes it
 function heardCard(item: HeardItem, fresh = false): HTMLLIElement {
+  const debris = item.kind === "debris";
   const li = document.createElement("li");
   li.className = "heard-item";
   li.classList.toggle("mine", item.mine);
-  li.classList.toggle("gone", GONE[item.fate] !== null);
+  li.classList.toggle("gone", !debris && GONE[item.fate] !== null);
   li.classList.toggle("fresh", fresh && !reduced);
-  li.dataset.id = String(item.id);
-  const debris = item.kind === "debris";
+  li.dataset.key = item.key;
   li.classList.toggle("static", debris);
   const who = document.createElement("p");
   who.className = "heard-who";
@@ -449,10 +449,15 @@ function heardCard(item: HeardItem, fresh = false): HTMLLIElement {
     const name = document.createElement("strong");
     name.textContent = item.callsign;
     link.append(name);
-    const handle = document.createElement("span");
-    handle.className = "heard-handle";
-    handle.textContent = item.mine ? "yours" : (item.handle ?? "no handle");
-    who.append(swatch, link, handle, when);
+    who.append(swatch, link);
+    // a handle if it has one; nothing if not (no "no handle" on every card)
+    if (item.mine || item.handle) {
+      const handle = document.createElement("span");
+      handle.className = "heard-handle";
+      handle.textContent = item.mine ? "yours" : item.handle;
+      who.append(handle);
+    }
+    who.append(when);
     line.textContent = item.beacon;
   }
   // the stations' question it answered (ADR 0018)
@@ -466,7 +471,9 @@ function heardCard(item: HeardItem, fresh = false): HTMLLIElement {
   const meta = document.createElement("p");
   meta.className = "heard-meta";
   const gone = GONE[item.fate];
-  meta.textContent = `Over ${item.station} · ${heardBy(item.heardBy, item.mine)} · ${passes(item.passes)}${gone ? ` · ${gone}` : ""}`;
+  meta.textContent = debris
+    ? `Over ${item.station} · ${passes(item.passes)} · ${item.up === 0 ? "all fallen silent" : `${item.up} of ${item.pieces} pieces still up`}`
+    : `Over ${item.station} · ${heardBy(item.heardBy, item.mine)} · ${passes(item.passes)}${gone ? ` · ${gone}` : ""}`;
   li.append(who, line, ...(item.question ? [asked] : []), meta);
   return li;
 }
@@ -476,11 +483,18 @@ function renderFeed() {
   feedEmpty.hidden = feed.length > 0;
 }
 
-// A pass, heard: its card to the top, its count where the stations show it.
+// A pass, heard. A card already in the feed is updated where it is: cards
+// never jump under the reader (the review, 2026-10-07); a new one goes on
+// top, lit for a moment.
 function heard(item: HeardItem) {
-  feed = [item, ...feed.filter((f) => f.id !== item.id)].slice(0, FEED);
   heardCount.set(item.id, item.heardBy);
-  feedList.querySelector(`[data-id="${item.id}"]`)?.remove();
+  const listed = feed.findIndex((f) => f.key === item.key);
+  if (listed >= 0) {
+    feed[listed] = item;
+    feedList.querySelector(`[data-key="${CSS.escape(item.key)}"]`)?.replaceWith(heardCard(item));
+    return;
+  }
+  feed = [item, ...feed].slice(0, FEED);
   feedList.prepend(heardCard(item, true));
   while (feedList.children.length > FEED) feedList.lastElementChild!.remove();
   feedEmpty.hidden = true;
@@ -488,10 +502,10 @@ function heard(item: HeardItem) {
 
 // A beacon in the feed has come down or been destroyed: its card says so.
 function ended(id: number, fate: HeardItem["fate"]) {
-  const item = feed.find((f) => f.id === id);
+  const item = feed.find((f) => f.id === id && f.kind !== "debris");
   if (!item || item.fate === fate) return;
   item.fate = fate;
-  feedList.querySelector(`[data-id="${id}"]`)?.replaceWith(heardCard(item));
+  feedList.querySelector(`[data-key="${CSS.escape(item.key)}"]`)?.replaceWith(heardCard(item));
 }
 
 // How many people have the sky open now, this page included.

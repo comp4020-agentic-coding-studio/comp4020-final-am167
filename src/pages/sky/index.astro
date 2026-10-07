@@ -138,7 +138,7 @@ const view = launched ? "canberra" : null;
       </div>
     </div>
 
-    <aside class="rail" aria-label="Beacons">
+    <div class="rail">
       <section class="station" aria-labelledby="station-title">
         <div class="rail-head">
           <h2 id="station-title">Beacons</h2>
@@ -184,7 +184,7 @@ const view = launched ? "canberra" : null;
           station while someone is listening, as you are now.
         </p>
       </section>
-    </aside>
+    </div>
 
     <!-- an object's history (ADR 0012), opened by clicking it in the sky or
          a name in the latest launches, with your own's controls (ADR 0015) -->
@@ -706,7 +706,7 @@ const view = launched ? "canberra" : null;
   }
 
   .sky-page .post {
-    --beacon-size: 1.05rem;
+    --beacon-size: 0.95rem;
     padding-left: 0.7rem;
     border-left: 2px solid var(--grid-strong);
   }
@@ -746,13 +746,14 @@ const view = launched ? "canberra" : null;
     white-space: nowrap;
   }
 
-  /* four lines of beacon, always: room for one at its longest (140) */
+  /* three lines of beacon, always: room for one at its longest (140) in the
+     column's width */
   .sky-page .post-heard {
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 4;
-    line-clamp: 4;
-    height: calc(4 * 1.25 * var(--beacon-size));
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    height: calc(3 * 1.25 * var(--beacon-size));
     overflow: hidden;
     font-size: var(--beacon-size);
     line-height: 1.25;
@@ -955,14 +956,9 @@ const view = launched ? "canberra" : null;
   @media (min-width: 52.01rem) and (max-height: 42rem) {
     .sky-page .recent,
     .sky-page .band-counts,
-    .sky-page .pick-hint {
+    .sky-page .pick-hint,
+    .sky-page .today-kicker {
       display: none;
-    }
-
-    .sky-page .post-heard {
-      -webkit-line-clamp: 3;
-      line-clamp: 3;
-      height: calc(3 * 1.25 * var(--beacon-size));
     }
   }
 
@@ -1001,27 +997,34 @@ const view = launched ? "canberra" : null;
       font-size: var(--step--1);
     }
 
+    /* the stations, then the summary, then the feed, which can be long */
     .sky-page .rail {
-      order: 3;
-      height: auto;
-      border-left: 0;
-      background: none;
+      display: contents;
     }
 
-    .sky-page .station,
-    .sky-page .heard {
+    .sky-page .station {
+      order: 3;
       padding-inline: var(--gutter);
     }
 
-    .sky-page .heard {
-      overflow: visible;
+    /* narrower, so a beacon at its longest takes four lines */
+    .sky-page .post-heard {
+      -webkit-line-clamp: 4;
+      line-clamp: 4;
+      height: calc(4 * 1.25 * var(--beacon-size));
     }
 
     .sky-page .panels {
       order: 4;
       position: static;
       width: auto;
-      padding: 1rem var(--gutter) 2rem;
+      padding: 1rem var(--gutter) 0;
+    }
+
+    .sky-page .heard {
+      order: 5;
+      overflow: visible;
+      padding: 1.25rem var(--gutter) 2rem;
     }
   }
 </style>
