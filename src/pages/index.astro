@@ -234,10 +234,17 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   </main>
 
   <script>
+    import { readLaunch } from "../lib/launch.ts";
+
     // Opens the handle pop-up on the first Launch of a visit, before the
     // launch goes anywhere. "Launch without a handle" carries the launch on;
     // Escape or the backdrop just closes it. Without this script it never
     // opens, and the line under the Launch button makes the offer.
+    //
+    // Only for a launch that would go ahead: one with a field missing or
+    // refused goes straight on, so the form says what's wrong (the server
+    // has the last word, as ever), and the offer waits for a launch worth
+    // making.
     const prompt = document.getElementById("handle-prompt") as HTMLDialogElement | null;
     const SEEN = "kessler:handle-prompt";
     const launch = document.querySelector<HTMLFormElement>("form[data-launch]");
@@ -252,7 +259,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       document.addEventListener(
         "submit",
         (e) => {
-          if (seen || e.target !== launch) return;
+          if (seen || e.target !== launch || !readLaunch(new FormData(launch)).ok) return;
           e.preventDefault();
           e.stopImmediatePropagation();
           seen = true;
@@ -262,6 +269,9 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
           } catch {
             // shown again next visit, which is fine
           }
+          // what an earlier try said is wrong is fixed now
+          for (const el of launch.querySelectorAll("[data-error]")) el.textContent = "";
+          for (const el of launch.querySelectorAll("[aria-invalid]")) el.removeAttribute("aria-invalid");
           prompt.returnValue = "";
           prompt.showModal();
         },

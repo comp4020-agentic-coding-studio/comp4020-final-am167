@@ -1590,3 +1590,57 @@ gives way to the room between intro and form on narrow desktops (the
 comment now says so). `pnpm check` green (220 tests).
 
 Commit `c83719d`.
+
+## 2026-10-07 — Overnight round: Advay's feedback, and the plan for it
+
+After playing with the app, I left a list for the agent to work through
+overnight (branch `claude/nifty-thompson-s7cine`, in a worktree; a PR for
+me to review in the morning):
+
+- the catalogue should have a section for just me, with my satellites'
+  management (boost, bring down) in it;
+- take boosting and bringing down out of the sky page: with several of
+  mine up, the station panel's controls are for whichever passes next, which
+  makes no sense;
+- longer beacons, shown better, more like a social app. This is the one
+  that worries me: it's starting to feel less like a unique, thought-
+  provoking social thing and more like a web app visualising Kessler
+  syndrome;
+- the purpose, the "why", needs fleshing out a lot more;
+- an object's own page is mostly empty space: make it a pop-up dialog with
+  all its info, and the boost/bring-down buttons if it's mine;
+- "make messages that collide more meaningful, give them a connection":
+  the marker raised it too, and the couplet hasn't met it. Explore it
+  properly and build something meaningful;
+- bug: pressing Launch with nothing filled in opens the sign-up nudge.
+
+The agent's plan, in the order it's building them (each its own commit,
+pushed to the branch as it goes):
+1. the bug;
+2. an object's history as a dialog, with your own satellite's controls in
+   it; a "Yours" section in the catalogue; no controls in the station panel
+   (a new ADR, since ADR 0011 put them there);
+3. longer beacons, and the sky page's beacons as a social feed: what each
+   station is hearing now, and a running list of what's been heard, with how
+   many people heard each one;
+4. colliding beacons that break into each other: the wreck keeps the words
+   of both, and keeps broadcasting them as static;
+5. the purpose: being heard by real people at the same moment, a question
+   from the stations each day, and the "why" said on the launchpad and in
+   the explainer.
+
+## 2026-10-07 — The handle pop-up waits for a launch worth making
+
+Pressing Launch on an empty form opened "Launch under a handle?", then
+(after "Launch without a handle") came back refused. The pop-up's script
+caught the submit before anything checked the form. It now runs the same
+`readLaunch` the server does (it's shared code, `src/lib/launch.ts`) and
+only steps in when the launch would get through: a missing callsign or a
+linky beacon goes straight on to the server, which says what's wrong, as
+before. The server still has the last word. When the pop-up does open, any
+errors left from an earlier try are cleared first, since they've been
+fixed. Checked in Chromium (agent-browser, 1920x1080): empty form, no
+pop-up and both errors shown; filled in, pop-up, errors gone, and "Launch
+without a handle" landed on the sky; a beacon with a link, no pop-up and
+"No links". No spec test: the suite is HTTP only and this is the page
+script. `pnpm check` green (220 tests).
