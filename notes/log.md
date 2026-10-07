@@ -2434,7 +2434,7 @@ Advay reviewed PR 7 in the browser and raised four things.
 
 `pnpm check` green (297 tests, 0 errors, 0 warnings) against a fresh
 build; the launchpad and catalogue checked at 1920x1080 with
-`agent-browser`.
+`agent-browser`. Commit `a3a6af2`.
 
 ## 2026-10-08 — The Kessler syndrome page keeps to the physics; Why keeps the argument
 
@@ -2464,4 +2464,4 @@ regression test on both pages' sources and figures (it failed on the old
 build).
 
 `pnpm check` green (300 tests, 0 errors, 0 warnings) against a fresh
-build.
+build. Commit `a3a6af2`.
