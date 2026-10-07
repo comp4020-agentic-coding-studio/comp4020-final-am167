@@ -132,6 +132,30 @@ const descent = Math.round(MANOEUVRE.descentMs / 60_000);
         <a href="/kessler/">What's Kessler syndrome?</a>
       </p>
     </section>
+
+    <!-- the three this page argues from; the physics and the real cases are
+         sourced on the Kessler syndrome page -->
+    <section aria-labelledby="sources-title" class="sources">
+      <h2 id="sources-title">Sources</h2>
+      <ul>
+        <li>
+          Hardin, G. (1968). The tragedy of the commons. <cite>Science</cite>{" "}
+          162(3859), 1243–1248.{" "}
+          <a href="https://doi.org/10.1126/science.162.3859.1243">doi:10.1126/science.162.3859.1243</a>
+        </li>
+        <li>
+          Kessler, D. J. and Cour-Palais, B. G. (1978). Collision frequency of
+          artificial satellites: the creation of a debris belt.{" "}
+          <cite>Journal of Geophysical Research</cite> 83(A6), 2637–2646.{" "}
+          <a href="https://doi.org/10.1029/JA083iA06p02637">doi:10.1029/JA083iA06p02637</a>
+        </li>
+        <li>
+          Ostrom, E. (1990). <cite>Governing the Commons: The Evolution of
+          Institutions for Collective Action</cite>. Cambridge University Press.{" "}
+          <a href="https://doi.org/10.1017/CBO9780511807763">doi:10.1017/CBO9780511807763</a>
+        </li>
+      </ul>
+    </section>
   </main>
 </Base>
 
@@ -245,6 +269,23 @@ const descent = Math.round(MANOEUVRE.descentMs / 60_000);
     color: var(--night-deep);
     font-weight: 800;
     text-decoration: none;
+  }
+
+  /* as the Kessler syndrome page lists its own */
+  .sources ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+  }
+
+  .sources li {
+    margin-bottom: 0.5rem;
+  }
+
+  .sources a {
+    color: var(--ink-dim);
+    overflow-wrap: anywhere;
   }
 
   @media (max-width: 30rem) {

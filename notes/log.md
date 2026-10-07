@@ -2412,3 +2412,56 @@ four targeted fixes, each with its own test.
 
 `pnpm check` green (297 tests, 0 errors, 0 warnings) against a fresh
 build on a scratch database; `pnpm check:evidence` green. Commit `bef0696`.
+
+## 2026-10-08 — Advay's look at the running app: a lost link, cramped selects, a redundant box
+
+Advay reviewed PR 7 in the browser and raised four things.
+
+- **"What's Kessler syndrome?" was hard to see** under the new "What this
+  is, and why" button. It was plain dim text over the launchpad's warm
+  afterglow. It's now a small dark chip with an amber edge: still quieter
+  than the button above it, but it reads.
+- **The catalogue's Kind and Band selects had their chevrons against the
+  right edge** (the browser's own, with only the text's 0.5 rem of
+  padding). They now draw their own chevron, in `--ink-dim`, 0.7 rem in,
+  with 2 rem of padding for it.
+- **"Only yours" was redundant** now that Yours is a view of its own (ADR
+  0015), and it showed in every view but Yours. The box is gone, and so
+  is `mine` from the catalogue query. An old `?mine=1` link opens Yours.
+  The spec test now checks Yours, the old link, and that no view has the
+  box (it failed first on the old link).
+- **Is the Why page redundant?** Asked, not changed: see below.
+
+`pnpm check` green (297 tests, 0 errors, 0 warnings) against a fresh
+build; the launchpad and catalogue checked at 1920x1080 with
+`agent-browser`.
+
+## 2026-10-08 — The Kessler syndrome page keeps to the physics; Why keeps the argument
+
+Advay's question above: is the Why page redundant? Not with the README,
+which tells the project to the marker; Why is for people in the app.
+The overlap was between `/why/` and `/kessler/`, which both argued the
+commons (Hardin, Ostrom) and both said how the app maps onto it. Advay
+picked trimming Kessler over merging the two:
+
+- **Kessler** keeps the cascade, the real cases and the regulation facts
+  (the FCC's five-year rule), plus its real-orbit-to-this-sky table, now
+  without the rows and clauses that re-explained being heard and static.
+  It names Hardin once, drops Ostrom, and hands "what it's for" to Why.
+- **Why** keeps the purpose, the commons argument and its own
+  sky-to-attention mapping, and now lists the three sources it argues
+  from (Hardin, Kessler and Cour-Palais, Ostrom).
+
+New spec test: Kessler links to Why and doesn't argue Ostrom or explain
+being heard again, and Why cites its three sources. It failed first.
+
+Checking the pages in Chrome (1920x1080, iPhone 14; no horizontal
+overflow) turned up an older bug. Astro drops the space where a line of
+text breaks before or after a tag, so the Kessler page's sources read
+"Science162" and "belt.Journal", and the table said "every3 minutes" (the
+last introduced by this trim). They now have explicit spaces, with a
+regression test on both pages' sources and figures (it failed on the old
+build).
+
+`pnpm check` green (300 tests, 0 errors, 0 warnings) against a fresh
+build.

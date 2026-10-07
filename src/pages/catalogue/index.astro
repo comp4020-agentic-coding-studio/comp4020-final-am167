@@ -92,7 +92,6 @@ function href(changes: Partial<CatalogueQuery>): string {
   if (q.kind) params.set("kind", q.kind);
   if (q.band) params.set("band", q.band);
   if (q.show !== "live" && q.fate) params.set("fate", q.fate);
-  if (q.mine && q.show !== "mine") params.set("mine", "1");
   if (q.sort !== "launched" || q.dir !== FIRST_DIR.launched) {
     params.set("sort", q.sort);
     params.set("dir", q.dir);
@@ -102,8 +101,8 @@ function href(changes: Partial<CatalogueQuery>): string {
   const text = params.toString();
   return `/catalogue/${text ? `?${text}` : ""}`;
 }
-const filtered = Boolean(query.q || query.kind || query.band || query.fate || (query.mine && !yours));
-const clear = href({ q: "", kind: null, band: null, fate: null, mine: false });
+const filtered = Boolean(query.q || query.kind || query.band || query.fate);
+const clear = href({ q: "", kind: null, band: null, fate: null });
 // a column's header: a link that sorts by it, or turns the sort round
 const sortBy = (sort: Sort) =>
   href({ sort, dir: query.sort === sort ? (query.dir === "asc" ? "desc" : "asc") : FIRST_DIR[sort] });
@@ -155,7 +154,7 @@ const number = (n: number) => n.toLocaleString("en");
 
     <nav class="views" aria-label="Show">
       {views.map((v) => (
-        <a href={href({ show: v.show, fate: null, mine: false })} aria-current={v.show === query.show ? "page" : undefined}>{v.label}</a>
+        <a href={href({ show: v.show, fate: null })} aria-current={v.show === query.show ? "page" : undefined}>{v.label}</a>
       ))}
     </nav>
 
@@ -268,12 +267,6 @@ const number = (n: number) => n.toLocaleString("en");
               <option value={f} selected={query.fate === f}>{fates[f]}</option>
             ))}
           </select>
-        </label>
-      )}
-      {!yours && (
-        <label class="check">
-          <input type="checkbox" name="mine" value="1" checked={query.mine} />
-          <span>Only yours</span>
         </label>
       )}
       <button type="submit">Apply</button>
@@ -412,7 +405,7 @@ const number = (n: number) => n.toLocaleString("en");
     // and for the search box (Enter works too).
     const filters = document.querySelector<HTMLFormElement>("form.filters");
     filters?.addEventListener("change", (event) => {
-      if ((event.target as HTMLElement).matches("select, input[type=checkbox]")) filters.requestSubmit();
+      if ((event.target as HTMLElement).matches("select")) filters.requestSubmit();
     });
   </script>
 
@@ -795,19 +788,14 @@ const number = (n: number) => n.toLocaleString("en");
     border-radius: 3px;
   }
 
-  .filters .check {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    min-height: 2.25rem;
-    color: var(--ink);
-  }
-
-  .filters .check input {
-    accent-color: var(--amber);
-    width: 1rem;
-    height: 1rem;
-    margin: 0;
+  /* its own chevron, clear of the edge (the browser's sat against it) */
+  .filters select {
+    appearance: none;
+    padding-right: 2rem;
+    background: var(--night-deep)
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2393a6bf' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      no-repeat right 0.7rem center / 0.7rem auto;
+    cursor: pointer;
   }
 
   .filters button {

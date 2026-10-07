@@ -784,7 +784,6 @@ export interface CatalogueQuery {
   fate: Fate | null;
   // a callsign or an operator's handle, or part of one
   q: string;
-  mine: boolean;
   sort: Sort;
   dir: "asc" | "desc";
   page: number;
@@ -808,7 +807,9 @@ const oneOf = <T extends string>(value: string | null, options: readonly T[]): T
   value !== null && (options as readonly string[]).includes(value) ? (value as T) : null;
 
 export function readCatalogueQuery(params: URLSearchParams): CatalogueQuery {
-  const show = oneOf(params.get("show"), ["all", "mine"] as const) ?? "live";
+  // (`mine=1` was the "Only yours" box before Yours was a view of its own:
+  // an old link to it opens Yours)
+  const show = params.get("mine") === "1" ? "mine" : (oneOf(params.get("show"), ["all", "mine"] as const) ?? "live");
   const sort = oneOf(params.get("sort"), SORTS) ?? "launched";
   const whole = (value: string | null, fallback: number, min: number, max: number) => {
     const n = Math.floor(Number(value));
@@ -820,7 +821,6 @@ export function readCatalogueQuery(params: URLSearchParams): CatalogueQuery {
     band: oneOf(params.get("band"), Object.keys(BANDS) as Band[]),
     fate: show !== "live" ? oneOf(params.get("fate"), ["live", "decayed", "deorbited", "destroyed"] as const) : null,
     q: (params.get("q") ?? "").trim().slice(0, 40),
-    mine: params.get("mine") === "1",
     sort,
     dir: oneOf(params.get("dir"), ["asc", "desc"] as const) ?? FIRST_DIR[sort],
     page: whole(params.get("page"), 1, 1, 1_000_000),
@@ -846,7 +846,6 @@ export function browse(query: CatalogueQuery, who: Who, now = Date.now()): Catal
   settle(now);
   const pattern = `%${query.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
   const fate = query.show === "live" ? "live" : query.fate;
-  const mine = query.mine || query.show === "mine";
   const rows = db
     .select({
       id: objects.id,
@@ -876,7 +875,7 @@ export function browse(query: CatalogueQuery, who: Who, now = Date.now()): Catal
         fate ? eq(objects.fate, fate) : undefined,
         query.kind ? eq(objects.kind, query.kind) : undefined,
         query.band ? eq(objects.band, query.band) : undefined,
-        mine ? ownerIs(who) : undefined,
+        query.show === "mine" ? ownerIs(who) : undefined,
         query.q
           ? sql`(${objects.callsign} LIKE ${pattern} ESCAPE '\\' OR ${operators.handle} LIKE ${pattern} ESCAPE '\\')`
           : undefined,

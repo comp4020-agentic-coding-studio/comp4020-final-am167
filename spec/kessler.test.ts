@@ -52,6 +52,36 @@ describe("the Kessler syndrome page", () => {
     expect(text).toMatch(/real collisions/i);
   });
 
+  // the Why page says what the app is for and argues it (ADR 0018), so this
+  // page keeps to the physics and doesn't argue it twice (the user's
+  // review, 2026-10-08)
+  it("leaves what the app is for to the Why page, which cites what it argues from", async () => {
+    const main = (await page("/kessler/")).querySelector("main")!;
+    expect(main.querySelector('a[href="/why/"]'), "no link to /why/").not.toBeNull();
+    const text = main.textContent ?? "";
+    expect(text, "argues Ostrom's commons again").not.toMatch(/Ostrom/);
+    expect(text, "explains being heard again").not.toMatch(/stations keep count|heard by everyone/i);
+    const why = (await page("/why/")).querySelector("main")!;
+    const sources = why.querySelector(".sources")?.textContent ?? "";
+    expect(sources).toMatch(/Hardin[^]*1968/);
+    expect(sources).toMatch(/Kessler[^]*Cour-Palais[^]*1978/);
+    expect(sources).toMatch(/Ostrom[^]*1990/);
+  });
+
+  // Astro drops the space where a line of text breaks before or after a tag,
+  // which ran citations together ("Science162", "belt.Journal") and said
+  // "every3 minutes" (the user's review, 2026-10-08)
+  it.each(["/kessler/", "/why/"])("keeps the spaces in %s's sources and figures", async (path) => {
+    const main = (await page(path)).querySelector("main")!;
+    for (const el of main.querySelectorAll(".sources cite, .sources a")) {
+      const before = el.previousSibling?.textContent ?? " ";
+      const after = el.nextSibling?.textContent ?? " ";
+      expect(before, `nothing before ${el.textContent}`).toMatch(/[\s(]$/);
+      expect(after, `nothing after ${el.textContent}`).toMatch(/^[\s.,)]|^$/);
+    }
+    expect(main.textContent).not.toMatch(/every\d/);
+  });
+
   for (const [name, path] of [
     ["the launchpad", "/"],
     ["the sky", "/sky/"],

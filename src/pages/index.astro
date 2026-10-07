@@ -710,12 +710,25 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     font-style: italic;
   }
 
+  /* the second way in: quieter than the first, but dark behind it like the
+     first, so it reads over the afterglow */
   .explainer-more {
     display: block;
     width: fit-content;
     margin-top: 0.6rem;
-    color: var(--ink-dim);
+    padding: 0.3rem 0.65rem;
+    border: 1px solid rgb(242 165 65 / 0.45);
+    border-radius: 4px;
+    background: rgb(6 11 24 / 0.78);
+    color: var(--ink);
     font-size: var(--step--1);
+    text-decoration-color: rgb(242 165 65 / 0.6);
+    text-underline-offset: 0.2em;
+  }
+
+  .explainer-more:hover {
+    color: var(--amber);
+    text-decoration-color: currentColor;
   }
 
   /* the way into the explainer, for anyone who doesn't know the name */
