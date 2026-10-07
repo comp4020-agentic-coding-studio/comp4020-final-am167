@@ -33,7 +33,9 @@ one, write a new record that supersedes it.
 the repo is public, so run it yourself first.
 
 The spec suite checks a **running** app over HTTP at `APP_URL` (default
-`http://localhost:8080`) and starts nothing itself. Rebuild and restart the app
+`http://localhost:8080`) and starts nothing itself. One file,
+`spec/fit.test.ts`, also drives Chrome against it (installed stable Chrome,
+or `CHROME_PATH`). Rebuild and restart the app
 after a change before running it, or you're testing stale output. CI builds the
 Dockerfile image and points the suite at that.
 
@@ -100,6 +102,20 @@ which starts its own server and database and writes reports to the ignored
 - No test for every minor fix. Copy edits, style tweaks and mechanical cleanup
   use the existing checks; add regression coverage only for a distinct,
   plausible failure that could recur.
+- **The launchpad and the sky are one screen on a laptop or desktop: no
+  page scroll, in any state, and what matters wholly on it.**
+  `spec/fit.test.ts` enforces it in `pnpm check`: real Chrome, ten browser
+  windows from 1920×1080 down to 1280×640 and 900×700 (including 1512×757
+  and 1366×657), with a satellite of your own just launched and the longest
+  lines either page writes, checking the Launch button, the beacons, your
+  line and buttons, the news and the links are on screen. Each page sheds
+  optional parts in a fixed order while it would scroll (`data-fit` steps in
+  its CSS, taken by `src/scripts/fit.ts`). Anything you add to either page
+  (a line, a notice, a button) gets a place in that order or in a step,
+  never a `max-height` media query tuned to today's content (that's how it
+  regressed three times); anything that can grow gets a bounded longest
+  form, which goes into the test's `fill`; anything essential goes into
+  its `essentials`. Phones may scroll; they aren't checked.
 - Turning the published spec into tests is your work: add your own
   `spec/*.test.ts` alongside the supplied one, and test the contract (what the
   page must do), not the implementation.

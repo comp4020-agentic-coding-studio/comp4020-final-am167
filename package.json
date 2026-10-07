@@ -7,7 +7,7 @@
     "typecheck": "astro check && tsc --noEmit",
     "check": "pnpm typecheck && pnpm test",
     "check:evidence": "node scripts/check-evidence.ts",
-    "test": "vitest run",
+    "test": "vitest run --exclude spec/fit.test.ts && vitest run spec/fit.test.ts",
     "dev": "node scripts/migrate.mjs && astro dev",
     "build": "astro build",
     "start": "node scripts/migrate.mjs && node dist/server/entry.mjs",

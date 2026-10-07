@@ -45,8 +45,10 @@ if (form) {
 const mine = satellitesOf(viewer);
 const wait = nextLaunchAt(viewer) - Date.now();
 const full = skyIsFull();
+// "A", "A and B", then "A and 2 more": a short line however many are up,
+// so the form stays on the first screen
 const names = (list: string[]) =>
-  list.length < 2 ? list.join("") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+  list.length > 2 ? `${list[0]} and ${list.length - 1} more` : list.join(" and ");
 const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 const hint: Record<Band, string> = {
   low: "Heard most often.",
@@ -120,17 +122,18 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     <section class="console" aria-labelledby="launch-title">
       <h2 id="launch-title">Launch a satellite</h2>
 
-      {mine.length > 0 && (
-        <p class="notice">
-          {mine.length === 1 ? "Yours in orbit: " : `Yours in orbit (${mine.length}): `}
-          <strong>{names(mine.map((o) => o.callsign ?? "unnamed"))}</strong>. Another
-          launch is another beacon heard, and one more thing for everyone to share the
-          sky with. <a href="/sky/">Watch the sky</a>
-        </p>
-      )}
-
-      {wait > 0 && !errors.form && (
-        <p class="notice" id="launch-wait" data-wait={wait}>{waitMessage(wait)}</p>
+      {(mine.length > 0 || (wait > 0 && !errors.form)) && (
+        <div class="notice">
+          {mine.length > 0 && (
+            <p>
+              {mine.length === 1 ? "Yours in orbit: " : `Yours in orbit (${mine.length}): `}
+              <strong>{names(mine.map((o) => o.callsign ?? "unnamed"))}</strong>.
+              <span class="notice-more">Another launch is another beacon heard, and one
+              more thing for everyone to share the sky with.</span> <a href="/sky/">Watch the sky</a>
+            </p>
+          )}
+          {wait > 0 && !errors.form && <p id="launch-wait" data-wait={wait}>{waitMessage(wait)}</p>}
+        </div>
       )}
 
       {full && (
@@ -150,7 +153,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
               <label class="band">
                 <input type="radio" name="band" value={band} checked={values.band === band} />
                 <span class="band-name">{b.label}</span>
-                <span class="band-period">round the planet every {every(b.period)}</span>
+                <span class="band-period"><span class="band-round">round the planet </span>every {every(b.period)}</span>
                 <span class="band-hint">{hint[band]} <span class="band-life">{life(band)}</span></span>
               </label>
             ))}
@@ -337,6 +340,14 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   </script>
 
   <script>
+    import { fitScreen } from "../scripts/fit.ts";
+
+    // the Launch button on the first screen, whatever the notices say
+    const pad = document.querySelector<HTMLElement>("main.pad")!;
+    fitScreen(pad, 7, [document.querySelector(".console")!, document.querySelector(".intro")!]);
+  </script>
+
+  <script>
     // Counts down the gap between your launches, and opens the form when
     // it's over. Without this script, reloading the page does the same.
     const notice = document.getElementById("launch-wait");
@@ -354,7 +365,9 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
           return;
         }
         clearInterval(tick);
+        const box = notice.parentElement!;
         notice.remove();
+        if (box.childElementCount === 0) box.remove();
         document.querySelector<HTMLFieldSetElement>("form[data-launch] > fieldset")!.disabled =
           document.querySelector(".notice.full") !== null;
       }, 250);
@@ -836,6 +849,15 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     background: rgb(242 165 65 / 0.08);
   }
 
+  /* yours in orbit, and when you can launch again: one box */
+  .notice p {
+    margin: 0;
+  }
+
+  .notice p + p {
+    margin-top: 0.35rem;
+  }
+
   button {
     width: 100%;
     padding: 0.8rem 1rem;
@@ -1029,21 +1051,63 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     }
   }
 
-  /* On a short laptop screen the form still fits without scrolling: each band
-     keeps how often it passes and gives up its note, and the spacing tightens. */
-  @media (min-width: 52.01rem) and (max-height: 46rem) {
-    .band-hint {
-      display: none;
-    }
+  /* While the page would scroll on a laptop or desktop, the form gives
+     things up until it fits: the notice its aside; each band its note
+     (keeping how often it passes) as the spacing tightens; the bands side
+     by side; then the callsign's help, the line about a handle (the pop-up
+     still offers one at Launch) and the beacon's; last, tighter spacing.
+     src/scripts/fit.ts takes the steps. */
+  .pad[data-fit~="1"] .notice-more,
+  .pad[data-fit~="2"] .band-hint,
+  .pad[data-fit~="3"] .band-round,
+  .pad[data-fit~="4"] #callsign-help,
+  .pad[data-fit~="5"] .launch-as,
+  .pad[data-fit~="6"] #beacon-help {
+    display: none;
+  }
 
-    .bands,
-    .field {
-      margin-bottom: 0.75rem;
-    }
+  .pad[data-fit~="3"] .bands {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 
-    .console {
-      margin-bottom: 1rem;
-    }
+  .pad[data-fit~="3"] .bands .field-error {
+    grid-column: 1 / -1;
+  }
+
+  .pad[data-fit~="3"] .band-period {
+    grid-column: 2 / 4;
+    text-align: left;
+  }
+
+  .pad[data-fit~="2"] .bands,
+  .pad[data-fit~="2"] .field {
+    margin-bottom: 0.75rem;
+  }
+
+  .pad[data-fit~="2"] .console {
+    margin-bottom: 1rem;
+  }
+
+  .pad[data-fit~="7"] .console {
+    padding-block: 1rem;
+  }
+
+  .pad[data-fit~="7"] h2 {
+    margin-bottom: 0.5rem;
+  }
+
+  .pad[data-fit~="7"] .notice {
+    margin-bottom: 0.75rem;
+    padding-block: 0.5rem;
+  }
+
+  .pad[data-fit~="7"] legend,
+  .pad[data-fit~="7"] .field label {
+    margin-bottom: 0.25rem;
+  }
+
+  .pad[data-fit~="7"] .field input {
+    padding-block: 0.45rem;
   }
 
   @media (max-width: 52rem) {

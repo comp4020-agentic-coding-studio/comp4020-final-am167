@@ -99,6 +99,9 @@ a:hover {
   position: absolute;
   width: 1px;
   height: 1px;
+  /* a hidden paragraph's margin would still push the page a line longer */
+  margin: -1px;
+  padding: 0;
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;

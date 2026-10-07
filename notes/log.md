@@ -1590,3 +1590,166 @@ gives way to the room between intro and form on narrow desktops (the
 comment now says so). `pnpm check` green (220 tests).
 
 Commit `c83719d`.
+
+## 2026-10-07 — One screen, enforced: the sky and launchpad stop scrolling for good
+
+**The third time.** On my laptop (Chrome at about 1512×757) "Sky now" ran
+off the bottom of the sky page again, with my own satellite up: its line
+and the Boost / Bring it down buttons sat in the Beacons panel, and the
+summary's links were below the fold.
+
+![The regression as Advay saw it: Sky now cut off at "Full catalogue", with BOOM8's line and buttons in the Beacons panel](screenshots/2026-10-07-sky-now-below-the-fold-again.webp)
+
+This is the same bug fixed on 2026-10-05 ("A station panel that holds
+still", then "The launchpad fits a laptop screen") and again in PR #4 ("Sky
+now ran off the bottom… measured the overflow at heights from 544 to 1080").
+Each fix was the same shape: measure the page *as it was that day*, then
+tune `max-height` media queries so it fits. Each time, a later feature added
+content the breakpoints had never seen (the three stations' Beacons panel,
+the "click anything" hint, and now the manoeuvre buttons from ADR 0011,
+which only show when you have a satellite up, which none of the
+measurements did), and nothing noticed. "Layout only, so no new spec" was
+the decision each time, because the spec suite is HTTP and can't see layout.
+That was the real bug: a requirement I cared about that no check enforced.
+
+**Measured first.** A new `spec/fit.test.ts` drives real Chrome (via the
+`playwright-core` the performance suite already uses) against the running
+app, as a person with a satellite just launched, and measures
+`scrollHeight − innerHeight` at nine browser-window sizes from 1920×1080 down
+to 1280×640 (including my 1512×757 and 1366×657, what the commonest laptop
+screen leaves under the browser's bars). On the sky it also writes the
+longest lines the page can produce into your line and the news line, and
+re-writes them before each size, since the page rewrites them every second.
+It failed everywhere, for the expected reason: the sky scrolled at every
+size (68 px at 1512×757), the launchpad by up to 305 px. Two finds on the
+way:
+
+- **A phantom 17 px on the sky at every size, even with nothing of yours
+  up.** `.visually-hidden` had no margin reset, so the hidden status line
+  for the history panel (a `<p>`) kept its 1em margin below the scene.
+  Fixed in `global.css` (`margin: -1px; padding: 0`), so it holds on every
+  page.
+- **The launchpad overflowed far more than the sky** once you had a
+  satellite up and a launch to wait for: two notice boxes (the "Yours in
+  orbit" paragraph and the countdown) took about 140 px above the form.
+
+**The fix is a mechanism, not new numbers.** `src/scripts/fit.ts`: while
+the page would scroll on a desktop-width screen, it adds one step at a time
+to a `data-fit` attribute ("1 2 3"), and each page's CSS says what each step
+gives up (`[data-fit~="3"] .band-counts`). It starts again from nothing on
+resize, when the web font arrives, and whenever the panels change size (a
+`ResizeObserver`, deferred a frame so it never loops), so content that grows
+takes another step and content that shrinks gets things back. The phone
+layout scrolls by design and is left alone. The steps keep the old
+breakpoints' order:
+
+- **Sky:** the latest launches past three, then all of them, the band
+  counts, the count line and the Beacons note, smaller beacon type, the
+  "What's Kessler syndrome?" link (it's in the nav), the "click anything"
+  hint, and last tighter panels. The beacons, your line and buttons, the
+  news and the links to the catalogue and the launchpad always stay.
+- **Launchpad:** the two notices are now one box (yours in orbit, then the
+  countdown), and its aside ("Another launch is another beacon heard…") is
+  the first thing to go; then each band's note (with tighter margins), the
+  bands side by side ("every 3 minutes"), the callsign's help, the
+  "Launching without a handle" line (the pop-up still offers a handle at
+  Launch), the beacon's help ("It stays on record…", kept longest), and
+  last tighter spacing still.
+
+The old `max-height` media queries are gone. The cost: without JavaScript
+the sky's summary is shown whole and may scroll on a short screen (the sky
+itself needs JavaScript anyway), and the launchpad's notes stay too.
+
+**Enforced from now on.** `fit.test.ts` runs in `pnpm check`, so CI runs it
+before every deploy (GitHub's Ubuntu runners have stable Chrome; locally it
+finds Chrome, or `CHROME_PATH`). `CLAUDE.md` and `AGENTS.md` now say, under
+Tests, that the launchpad and the sky are one screen on desktop in any
+state, that new content gets a place in the fit steps rather than a
+breakpoint, and that content that can grow goes into the test's worst case.
+Advay: phones may scroll ("idc if you need scrolling on a phone, just
+desktop"), so the test doesn't check them; I'd briefly added a phone
+sideways-scroll check (the sky's panels run 2–22 px wide on a 390 px phone
+with a long callsign in "Next: …") and took it out at that.
+
+![After (with the review's changes): the sky at 1512×757 with BOOM9 up, its line and buttons, a three-line collision in the news, the hint and the summary's links all on the first screen](screenshots/2026-10-07-sky-fits-1512x757.png)
+
+Checked in Chrome at 1920×1080, 1512×757 and 1280×640 with one satellite
+up on both pages (all exactly one screen), and the phone layout unchanged.
+
+**For `PROCESS.md`:** the lesson is about the harness, not the CSS. A
+requirement that lives only in my head and in a one-off manual measurement
+will regress as soon as someone (an agent, usually) adds a feature without
+re-measuring, and "the test suite can't see it" is a reason to extend the
+suite, not to skip the test. Three manual fixes cost more than the one
+browser test that would have caught all three.
+
+**Adversarial review.** A fresh Sonnet reviewer attacked the uncommitted
+work (the fitter, the test, the rule and this entry). What it found and
+what changed:
+
+1. **The launchpad still scrolled with several satellites up.** "Yours in
+   orbit (5): A, B, C, D and E" with 16-character callsigns overflowed 54 px
+   at 1280×640 after every step, and the rule said "in any state". The test
+   only ever had one satellite. The list is capped now: "A", "A and B",
+   then "A and 4 more", so the line has a longest form, and the test writes
+   that form in ("Yours in orbit (12): <16 W> and 11 more").
+2. **The test couldn't fail if an essential was hidden**: it checked only
+   `scrollHeight`, so a step that hid the Launch button would pass. It now
+   checks named essentials are displayed and wholly on screen: on the
+   launchpad the notice, the bands, both fields and Launch; on the sky the
+   manoeuvre buttons, the beacons, your line, the news and the catalogue
+   and launchpad links.
+3. **The test could read the page before the fitter had reacted** (two
+   frames, while the fitter waits for the observer and then a frame), and
+   **the injected worst case didn't stay**: the sky rewrites your line every
+   second, and in headless Chrome a frame took ~200 ms. Measuring now waits
+   until the fit has held for three frames, and the sky's two lines are
+   pinned for the test (what the page writes to them is dropped), so it
+   measures the worst case every time. My first try, re-writing them before
+   each measurement and retrying, failed outright: they never stayed.
+   `pageerror` is listened for from before the page loads.
+4. **The sky had no slack at 1280×640** (0 px spare with a three-line line
+   of yours; the reviewer once caught 21 px over). One more step, tighter
+   panels; the hint now goes after the count line, not before, since it's
+   how people find the history panel.
+5. Smaller: the fitter does nothing mid-launch (the scene's
+   `translateY(70vh)` would have taken every step); a 900×700 window added
+   (between the phone layout and 1024); CLAUDE.md's "twice" was three
+   times; test timeouts raised to 120 s (each takes 15–25 s in headless
+   Chrome with software WebGL).
+
+Two more found by the stronger test itself:
+
+- **A 60-character beacon with no spaces ran the collision card 463 px off
+  the right of the page** (desktop, sideways scroll). The test's own
+  satellite, beacon "WWWW…", was hit by debris mid-run and the card showed
+  it. Anyone can type that beacon. The card wraps anywhere now, as the
+  beacon rows and the history panel already did.
+- That hit was the test being flaky in a crowded database: the scratch
+  database had many test runs of debris in the low band, and the test's
+  satellite died within 40 s more than once. It now launches into the
+  middle band (still boostable, far less crowded); three runs in a row
+  passed.
+
+A mutation check: built with the sky's fitter switched off, the test fails
+(scrolls 162 px at 1536×864, 269 px at 1512×757, the news and links off
+screen); switched back on, it passes.
+
+Left as is: without JavaScript nothing is shed (the sky needs it anyway);
+the hidden help text is still read by screen readers through
+`aria-describedby`, but sighted users lose the character limits at the
+smallest sizes; a change in line count can show a scrollbar for one frame
+before the fitter reacts (running it inside the observer's callback would
+loop); and the test leaves one live satellite per run, which burns up
+within a day.
+
+**Running it beside the rest starved the simulation tests.** The first full
+`pnpm check` after the review failed `collision-server.test.ts` ("ends
+with the same sky as a server that ran through it") on its 5 s timeout;
+without the fit test, all 220 others passed. Headless Chrome with software
+WebGL took the CPU (4 cores here, 2 on a GitHub runner), which is what the
+reviewer had warned about for CI. Rather than loosen another test's
+timeout, `pnpm test` now runs `fit.test.ts` on its own after the rest
+(`vitest run --exclude spec/fit.test.ts && vitest run spec/fit.test.ts`).
+`pnpm check` green: 220 then 2, no errors or warnings.
+

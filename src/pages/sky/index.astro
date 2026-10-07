@@ -180,7 +180,11 @@ const view = launched ? "canberra" : null;
 
   <script type="application/json" id="sky-data" set:html={embed({ serverTime: now, sky, launched: launched?.id ?? null, view, conjunctions: coming, collisions: collided })} />
   <script>
+    import { fitScreen } from "../../scripts/fit.ts";
     import "../../scripts/sky.ts";
+
+    const panels = document.querySelector<HTMLElement>(".sky-page .panels")!;
+    fitScreen(panels, 8, [panels]);
   </script>
 </Base>
 
@@ -428,6 +432,8 @@ const view = launched ? "canberra" : null;
     border-left: 3px solid #ff7a45;
     background: rgb(24 10 6 / 0.85);
     backdrop-filter: blur(6px);
+    /* a beacon or callsign with no spaces wraps, not runs off the page */
+    overflow-wrap: anywhere;
     transition: opacity 0.8s;
   }
 
@@ -797,46 +803,38 @@ const view = launched ? "canberra" : null;
     margin: 0.75rem 0 0;
   }
 
-  /* On a shorter screen the summary gives up its latest launches, then its
-     counts, then the beacons their note and the summary its hint, so the
-     panels always fit over the sky without scrolling. The beacons stay. */
-  @media (min-width: 52.01rem) and (max-height: 60rem) {
-    .sky-page .recent li:nth-child(n + 4) {
-      display: none;
-    }
+  /* While the page would scroll on a laptop or desktop, the summary gives
+     up its latest launches, then its counts, then its count line and the
+     beacons their note; then the beacon type gets smaller, the link to the
+     Kessler page goes (it's in the site's nav), the hint to click anything
+     goes, and last the panels tighten. The beacons, your line and its
+     buttons, the news and the links to the catalogue and the launchpad
+     stay. src/scripts/fit.ts takes the steps. */
+  .sky-page .panels[data-fit~="1"] .recent li:nth-child(n + 4),
+  .sky-page .panels[data-fit~="2"] .recent,
+  .sky-page .panels[data-fit~="3"] .band-counts,
+  .sky-page .panels[data-fit~="4"] .count,
+  .sky-page .panels[data-fit~="4"] .station-note,
+  .sky-page .panels[data-fit~="6"] .more a[href="/kessler/"],
+  .sky-page .panels[data-fit~="7"] .pick-hint {
+    display: none;
   }
 
-  @media (min-width: 52.01rem) and (max-height: 54rem) {
-    .sky-page .recent {
-      display: none;
-    }
+  .sky-page .panels[data-fit~="5"] .post {
+    --beacon-size: var(--step-0);
   }
 
-  @media (min-width: 52.01rem) and (max-height: 45rem) {
-    .sky-page .band-counts {
-      display: none;
-    }
+  .sky-page .panels[data-fit~="8"] {
+    gap: 0.5rem;
   }
 
-  @media (min-width: 52.01rem) and (max-height: 41rem) {
-    .sky-page .station-note,
-    .sky-page .pick-hint {
-      display: none;
-    }
+  .sky-page .panels[data-fit~="8"] .station,
+  .sky-page .panels[data-fit~="8"] .summary {
+    padding-block: 0.7rem;
   }
 
-  @media (min-width: 52.01rem) and (max-height: 38rem) {
-    .sky-page .post {
-      --beacon-size: var(--step-0);
-    }
-
-    .sky-page .count {
-      display: none;
-    }
-
-    .sky-page .panels {
-      gap: 0.5rem;
-    }
+  .sky-page .panels[data-fit~="8"] .posts {
+    gap: 0.4rem;
   }
 
   /* On a phone the panel would cover the sky, so it follows it instead. */

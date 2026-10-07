@@ -64,6 +64,10 @@ _Last updated 2026-10-07 (PRs #3 and #4 merged, so all C9 building is done; stal
     Madrid), all heard by everyone, to give the passes back; the sky opens
     on the whole planet with a beacon panel per station, and the horizon
     over any station one click away.
+  - **One screen on desktop, enforced** (Advay, 2026-10-07): the sky and
+    the launchpad shed optional parts while they'd scroll
+    (`src/scripts/fit.ts`), and `spec/fit.test.ts` checks it in real Chrome
+    in `pnpm check`; after the third time "Sky now" ran off the screen.
   - Not built, though once listed for C9: conjunction alerts and dodging
     (moved to C10).
 - **C9 cutoff:** Mon 12 Oct 2026, 12:00.
