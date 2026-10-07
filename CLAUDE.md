@@ -109,9 +109,16 @@ which starts its own server and database and writes reports to the ignored
 **`notes/log.md` is the raw material `PROCESS.md` is built from later**, so
 what isn't logged as we go is lost to the write-up. After each meaningful chunk
 of work (a feature, a fix, a design decision, a review and what it found),
-append a short entry saying what was done and why, with the commit hash once
-there is one. Do it as we go, not reconstructed at the end. Log generously;
-`PROCESS.md` is the write-up.
+append a short entry saying what was done and why. Do it as we go, not
+reconstructed at the end. Log generously; `PROCESS.md` is the write-up.
+
+**Every log entry gets its commit hash, every time, without being asked.**
+`PROCESS.md` cites work by hash, so an entry without one is evidence lost.
+Right after each commit, add ``Commit `<hash>`.`` to every entry that commit
+covers and commit that as a small follow-up ("Log <subject>'s hash"); my
+approval of a commit covers its hash follow-up (and its push, if I said to
+push). Before ending a turn after a commit, check `notes/log.md` for entries
+still missing their hash.
 
 **Screenshots in the log are the exception, not the default.** Add one only
 when it is necessary evidence you'd want to cite in `PROCESS.md`: a bug found

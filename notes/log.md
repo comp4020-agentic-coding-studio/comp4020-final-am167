@@ -1468,6 +1468,8 @@ alerts and fuel moved to C10 everywhere; open questions that ADRs 0008,
 0010, 0012 and 0013 had already settled (collision radius, who sees the
 blame, the couplet, beacon epitaphs, Three.js) struck through or rewritten.
 
+Commit `d0c90a8`.
+
 ## 2026-10-07 — Launchpad: a draft that survives signing in, a rocket that holds still
 
 Two things noticed on the launchpad.
@@ -1505,6 +1507,8 @@ shrinks to fit. Checked at 1512×757, 1920×1080, 1280×720, 1366×600, 900×700
 and iPhone 14 (the phone's gutter rocket is unchanged). `pnpm check` green
 (215 tests).
 
+Commit `c83719d` (with the other two changes and the review fixes).
+
 ## 2026-10-07 — The sky explains itself after your first launch
 
 Asked for: on arriving at the sky after someone's first launch, a dialog
@@ -1531,6 +1535,8 @@ first, false for a second after the first burned up, false for another
 person). Checked in Chrome at 1920×1080 and iPhone 14 via a real launch;
 fixed autofocus scrolling the phone dialog to the bottom. `pnpm check`
 green (217 tests).
+
+Commit `c83719d` (with the other two changes and the review fixes).
 
 ## 2026-10-07 — Adversarial review of the three launchpad/sky changes
 
@@ -1582,3 +1588,5 @@ Left as is: the no-JS explainer shows again on reloading the same
 `?launched=` URL (only the script can drop it), and the rocket's 20rem
 gives way to the room between intro and form on narrow desktops (the
 comment now says so). `pnpm check` green (220 tests).
+
+Commit `c83719d`.
