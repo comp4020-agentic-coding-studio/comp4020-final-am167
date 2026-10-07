@@ -1643,4 +1643,4 @@ fixed. Checked in Chromium (agent-browser, 1920x1080): empty form, no
 pop-up and both errors shown; filled in, pop-up, errors gone, and "Launch
 without a handle" landed on the sky; a beacon with a link, no pop-up and
 "No links". No spec test: the suite is HTTP only and this is the page
-script. `pnpm check` green (220 tests).
+script. `pnpm check` green (220 tests). Commit `3b41406`.
