@@ -2265,6 +2265,8 @@ and switchable, no overflow on a phone, one cookie set at an object's
 address, the same-pass rule against a brute-force oracle (449 of 453
 passes, no extras), and no owner leaking through the stream.
 
+Logged with its fixes: commit `5f14155`.
+
 ## 2026-10-07 — Review fix 6: the second review's findings
 
 All six must-fixes, and most of the rest:
@@ -2339,3 +2341,5 @@ tests, 0 errors, 0 warnings); `pnpm check:evidence` green. Checked in
 Chromium at 1280x720 (four-line beacon, the card over the column, the
 notice clear of the buttons), 1920x1080, 1366x768 (switching cards) and
 an iPhone 14 (390 wide, no overflow, the notice dismissed).
+
+Commit `5f14155`.

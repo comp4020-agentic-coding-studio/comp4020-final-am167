@@ -95,15 +95,16 @@ _Last updated 2026-10-07, overnight (Advay's feedback round on branch `claude/ni
     question is opt-in and turns at Canberra midnight, the copy matches
     the code, test gaps closed (`262e2b4`). Plus derelicts counted
     together in lineage wording and a bounded feed query (`e0b2562`).
-  - **Second adversarial review** (fresh Sonnet reviewer; must-fixes
-    all fixed in one round, "Review fix 6" in `notes/log.md`): a stream
-    counts only from a browser that has loaded something here (a new
-    `visitors` table), the 200 cap is drawn at random, and people who
-    arrive mid-pass are credited; a 140-character line fits the stations
-    on a laptop; a tab opened hidden pauses; the derelicts already up get
-    echoes; the encounter notice stays until dismissed; on a laptop the
-    sky's card covers the beacons column, not the globe; the question's
-    day follows Canberra's clock, summer time included.
+  - **Second adversarial review** (fresh Sonnet reviewer; its
+    must-fixes all fixed in one round, `5f14155`, "Review fix 6" in
+    `notes/log.md`): a stream counts only from a browser that has loaded
+    something here (a new `visitors` table), the 200 cap is drawn at
+    random, and people who arrive mid-pass are credited; a 140-character
+    line fits the stations on a laptop; a tab opened hidden pauses; the
+    derelicts already up get echoes; the encounter notice stays until
+    dismissed; on a laptop the sky's card covers the beacons column, not
+    the globe; the question's day follows Canberra's clock, summer time
+    included.
   - For Advay: accept (or change) ADRs 0015–0018; edit the question list
     (`src/lib/questions.ts`) and the Why page's wording into his own; the
     README is now further out of date (it says 60 characters and "one live
