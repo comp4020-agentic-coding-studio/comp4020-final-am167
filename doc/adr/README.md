@@ -24,3 +24,4 @@ be edited until it's accepted.
 | [0015](0015-yours-and-each-objects-card.md) | Your satellites are managed from "Yours" and from each one's card | proposed |
 | [0016](0016-heard-by-people.md) | A beacon is heard by people, and the sky keeps a log of what was heard | proposed |
 | [0017](0017-the-wreck-keeps-the-words.md) | When two beacons collide, the wreck keeps both their words | proposed |
+| [0018](0018-a-question-from-the-stations.md) | The stations ask a question each day, and the app says what it's for | proposed |

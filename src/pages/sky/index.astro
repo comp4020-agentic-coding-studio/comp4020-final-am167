@@ -10,6 +10,7 @@ import { BANDS, bandAt, radiusAt, type Band } from "../../lib/orbit.ts";
 import { STATIONS } from "../../lib/stations.ts";
 import { audience } from "../../lib/events.ts";
 import { HEARD_FEED, heardCounts, listenerKey, recentlyHeard } from "../../lib/heard.ts";
+import { dayOf, questionOn } from "../../lib/questions.ts";
 import { conjunctions, isFirstLaunch, liveSky, recentCollisions, toPublic } from "../../lib/sky.ts";
 
 // The shared sky. The server renders a summary of what's in orbit (counts per
@@ -29,6 +30,8 @@ const heard = recentlyHeard(HEARD_FEED, viewer, now);
 const heardBy = heardCounts(live.map((o) => o.id));
 const ears = audience();
 const listening = ears.size + (ears.has(listenerKey(viewer)) ? 0 : 1);
+// what the stations ask today (ADR 0018)
+const question = questionOn(dayOf(now));
 const launchedParam = Number(Astro.url.searchParams.get("launched"));
 const launched = sky.find((o) => o.id === launchedParam && o.mine) ?? null;
 const mine = sky.find((o) => o.mine) ?? null;
@@ -142,6 +145,11 @@ const view = launched ? "canberra" : null;
           <span class="listening" id="listening" data-listening={listening}>{listeningNow(listening)}</span>
         </div>
         <p class="station-note">What the three ground stations hear now. Everyone listening hears it at the same moment.</p>
+        <p class="today">
+          <span class="today-kicker">Today the stations ask</span>
+          <q>{question}</q>
+          <a href="/">Answer it</a>
+        </p>
         <!-- a row for each station (ADR 0014), each a fixed height: what it
              hears now, taking turns when more than one is overhead, or
              what's next -->
@@ -534,6 +542,47 @@ const view = launched ? "canberra" : null;
     border-radius: 50%;
     background: var(--amber);
     box-shadow: 0 0 6px 1px rgb(242 165 65 / 0.5);
+  }
+
+  /* the stations' question today (ADR 0018) */
+  .sky-page .today {
+    margin: 0 0 0.75rem;
+    padding: 0.45rem 0.65rem 0.5rem;
+    border-left: 3px solid var(--amber);
+    background: rgb(242 165 65 / 0.08);
+    font-size: var(--step--1);
+  }
+
+  .sky-page .today-kicker {
+    display: block;
+    color: var(--ink-dim);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .sky-page .today q {
+    font-size: var(--step-0);
+    font-style: italic;
+  }
+
+  .sky-page .today a {
+    margin-left: 0.4rem;
+    white-space: nowrap;
+  }
+
+  .sky-page .heard-question,
+  .sky-page .collision-question {
+    margin-top: 0.3rem;
+    color: var(--ink-dim);
+    font-size: 0.8rem;
+  }
+
+  .sky-page .heard-question q,
+  .sky-page .collision-question q {
+    color: var(--ink);
+    font-style: italic;
   }
 
   /* What's been heard: a feed, newest first, scrolling inside the column */

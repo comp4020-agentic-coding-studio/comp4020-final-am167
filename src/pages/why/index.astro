@@ -1,0 +1,252 @@
+---
+import Base from "../../layouts/Base.astro";
+import { BEACON_MAX } from "../../lib/launch.ts";
+import { MANOEUVRE } from "../../lib/orbit.ts";
+import { dayOf, questionOn } from "../../lib/questions.ts";
+import { STATIONS } from "../../lib/stations.ts";
+
+// What Kessler is for (ADR 0018): what a visitor is here to do, and the
+// argument the mechanics make. The launchpad says it in four lines; this is
+// the long version. The physics is the Kessler syndrome page's.
+const stations = STATIONS.map((s) => s.name);
+const question = questionOn(dayOf(Date.now()));
+const descent = Math.round(MANOEUVRE.descentMs / 60_000);
+---
+<Base
+  title="Kessler: why"
+  description="What Kessler is for: say one thing to the people who are here, be heard, listen, and decide what your words cost a sky everyone shares."
+  current="why"
+>
+  <main class="why-page">
+    <header class="hero">
+      <p class="eyebrow">What this is, and why</p>
+      <h1>One sky, and everyone's words in it</h1>
+      <p class="lede">
+        Kessler is a place to say one thing to the people who are here. Your
+        words go up as a satellite into a sky everyone shares, where they're
+        heard, where they take up room, and where too many of them can ruin it
+        for everyone.
+      </p>
+    </header>
+
+    <section aria-labelledby="do-title">
+      <h2 id="do-title">What you do here</h2>
+
+      <h3>Say one thing</h3>
+      <p>
+        You get {BEACON_MAX} characters and a satellite. Each time it passes over
+        one of the three ground stations ({stations.join(", ").replace(/, ([^,]*)$/, " and $1")}),
+        its line is heard by everyone who has the sky open at that moment, all at
+        once. The stations keep a log of what they heard, and each line says how
+        many different people have heard it. That count is people, not clicks:
+        nobody can raise their own.
+      </p>
+
+      <h3>Listen</h3>
+      <p>
+        The sky is also a radio. Leaving it open makes you part of everyone
+        else's audience, the way their being here makes them part of yours. A
+        line passing over a station while nobody is listening isn't heard at
+        all.
+      </p>
+
+      <h3>Answer the question</h3>
+      <p>
+        Each day the stations ask one question. Today's is <q>{question}</q>{" "}
+        Answer it or say something else; tomorrow there's another, and the
+        record keeps how strangers answered.
+      </p>
+
+      <h3>Decide what your words cost</h3>
+      <p>
+        Every launch is one more thing in an orbit everyone shares. A low orbit
+        comes round the stations most often, so it's heard by the most people,
+        and it's where everyone crowds. When two satellites meet, both break
+        apart, and their fragments carry pieces of both lines, broadcast at the
+        stations as static. Static takes its turn like any beacon, so a
+        collision doesn't only end two satellites: it puts noise made of two
+        people's words over everyone else's, until the fragments burn up. You
+        can launch as often as every five minutes, and you can bring one of
+        yours down in {descent} minutes to leave the sky clearer.
+      </p>
+
+      <h3>Meet someone, the only way you can</h3>
+      <p>
+        There's no chat and no replies. The only way your words ever touch a
+        stranger's is a collision. When one of yours collides, you'll find it
+        in <a href="/catalogue/?show=mine">Yours</a>: who it met, what they had
+        said, and what the wreck of both lines says now. Neither of you chose
+        it, and neither of you can take it back.
+      </p>
+    </section>
+
+    <section aria-labelledby="about-title">
+      <h2 id="about-title">What it's about</h2>
+      <p>
+        Attention is a commons. A post costs nothing to make, but each one
+        takes a little of something everyone shares: the room to be heard.
+        Nobody pays for that directly, so it gets used up. Garrett Hardin called
+        this the tragedy of the commons (1968): people each acting sensibly for
+        themselves can ruin a shared thing for everyone. Low orbit is the
+        newest commons, and it's filling up the same way; Donald Kessler and
+        Burton Cour-Palais showed in 1978 that past a point, collisions make
+        debris faster than the sky can clear it.
+      </p>
+      <p>
+        Kessler puts the two together and makes the cost something you can see
+        and hear. Words take up room. Crowding makes collisions. Collisions
+        turn words into noise, and the noise is made of real people's words,
+        torn out of what they meant and mixed with a stranger's.
+      </p>
+      <p>
+        Nothing is moderated and nothing is voted on. Elinor Ostrom (1990) found
+        that commons last when the people using them can see the state of the
+        resource and what each of them takes. Here everyone can see the sky, who
+        launched what, who has been heard, and what each launch went on to cost:
+        every fragment traces back to the launches that made it. What happens
+        next is up to what each person does with their own satellites.
+      </p>
+      <p class="ask">What's worth saying, if saying it costs everyone a little?</p>
+    </section>
+
+    <section aria-labelledby="map-title">
+      <h2 id="map-title">How it maps</h2>
+      <dl class="map">
+        <div><dt>A satellite</dt><dd>a post: something you put into a space everyone shares</dd></div>
+        <div><dt>Its beacon</dt><dd>what you say, in {BEACON_MAX} characters</dd></div>
+        <div><dt>A ground station</dt><dd>where it's heard, by whoever is there at that moment</dd></div>
+        <div><dt>Heard by</dt><dd>an audience of people who were present, not a count of views</dd></div>
+        <div><dt>The low band</dt><dd>where the attention is, and the crowd</dd></div>
+        <div><dt>A collision</dt><dd>two people's words, broken into each other</dd></div>
+        <div><dt>Static</dt><dd>the noise everyone has to hear around</dd></div>
+        <div><dt>Decay</dt><dd>time: everything falls in the end, and the sky heals slowly</dd></div>
+        <div><dt>Bringing yours down</dt><dd>taking your words back, so others can be heard</dd></div>
+      </dl>
+      <p class="go">
+        <a class="primary" href="/">Launch a satellite</a>
+        <a href="/sky/">Listen to the sky</a>
+        <a href="/kessler/">What's Kessler syndrome?</a>
+      </p>
+    </section>
+  </main>
+</Base>
+
+<style>
+  .why-page {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 1.5rem var(--gutter) 4rem;
+    line-height: 1.6;
+  }
+
+  .hero {
+    margin-bottom: 2.5rem;
+  }
+
+  .eyebrow {
+    margin: 0 0 0.5rem;
+    color: var(--amber);
+    font-size: var(--step--1);
+    font-weight: 700;
+    font-variation-settings: "wdth" 118;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    margin: 0 0 1.25rem;
+    font-size: clamp(2.4rem, 7vw, 4.5rem);
+    font-weight: 800;
+    font-variation-settings: "wdth" 125;
+    line-height: 0.95;
+  }
+
+  .lede {
+    margin: 0;
+    font-size: var(--step-1);
+    line-height: 1.45;
+  }
+
+  section {
+    margin-top: 3rem;
+  }
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: var(--step-2);
+    font-weight: 700;
+    font-variation-settings: "wdth" 112;
+    line-height: 1.15;
+  }
+
+  h3 {
+    margin: 1.5rem 0 0.25rem;
+    color: var(--amber);
+    font-size: var(--step-1);
+    font-weight: 700;
+    font-variation-settings: "wdth" 108;
+    line-height: 1.3;
+  }
+
+  p {
+    margin: 0 0 1rem;
+  }
+
+  q {
+    font-style: italic;
+  }
+
+  .ask {
+    margin-top: 1.5rem;
+    padding-left: 1rem;
+    border-left: 3px solid var(--amber);
+    font-size: var(--step-1);
+    font-style: italic;
+  }
+
+  .map {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0 0 1.5rem;
+  }
+
+  .map div {
+    display: grid;
+    grid-template-columns: minmax(8rem, 12rem) 1fr;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--grid);
+  }
+
+  .map dt {
+    font-weight: 700;
+  }
+
+  .map dd {
+    margin: 0;
+    color: var(--ink-dim);
+  }
+
+  .go {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.5rem;
+  }
+
+  .go .primary {
+    padding: 0.6rem 1.1rem;
+    border-radius: 3px;
+    background: var(--amber);
+    color: var(--night-deep);
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  @media (max-width: 30rem) {
+    .map div {
+      grid-template-columns: 1fr;
+      gap: 0.1rem;
+    }
+  }
+</style>

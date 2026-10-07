@@ -5,7 +5,7 @@ import { ago, falling, km, until } from "../lib/format.ts";
 import { BANDS, fallRate, heightKm, radiusAt } from "../lib/orbit.ts";
 import { stationOver } from "../lib/stations.ts";
 import type { History } from "../lib/sky.ts";
-import { blame, collisionOf, couplet, describe, headline, heardBy, passes, titleOf, type StoryParty } from "../lib/story.ts";
+import { blame, collisionOf, couplet, describe, headline, heardBy, passes, sharedQuestion, titleOf, type StoryParty } from "../lib/story.ts";
 import { countdown } from "../scripts/countdown.ts";
 
 // One object's history (ADR 0012), for its own page and for the card that
@@ -29,6 +29,7 @@ const self: StoryParty = {
   kind: h.kind,
   callsign: h.callsign,
   beacon: h.beacon,
+  question: h.question,
   operator: h.handle,
   from: h.origin?.roots ?? null,
 };
@@ -80,6 +81,7 @@ const moreLosses = f.destroyed.length - shownLosses.length;
     <section class="history-part">
       <Heading>{live ? "Its beacon" : "What it said"}</Heading>
       {h.beacon !== null && <blockquote class="history-beacon"><q>{h.beacon}</q></blockquote>}
+      {h.question && <p class="history-question">Answering the stations' question <q>{h.question}</q></p>}
       {h.heard.passes > 0 && (
         <p class="history-heard">{heardBy(h.heard.by, h.mine)}, over {passes(h.heard.passes)} of a station.</p>
       )}
@@ -166,6 +168,7 @@ const moreLosses = f.destroyed.length - shownLosses.length;
           {h.end.with.kind !== "debris" && <> <a href={`/object/${h.end.with.id}/`}>See {describe(h.end.with)}</a>.</>}
         </p>
         {theirLine && <p class="history-couplet"><q>{theirLine.beacon}</q> {theirLine.callsign}</p>}
+        {sharedQuestion(met) && <p class="history-question">Both were answering <q>{sharedQuestion(met)}</q></p>}
         {h.end.with.kind === "debris" && h.end.with.words && (
           <p class="history-couplet">The debris was carrying <span class="static-words">{h.end.with.words}</span></p>
         )}

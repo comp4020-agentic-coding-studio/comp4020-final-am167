@@ -6,6 +6,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { FRAGMENTS, HIT, fatalMeeting, nextMeeting } from "../src/lib/collide.ts";
 import { angleAt, periodAt, radiusAt, type Elements } from "../src/lib/orbit.ts";
 import { wordsOf } from "../src/lib/wreck.ts";
+import { sharedQuestion } from "../src/lib/story.ts";
 import type { SkyEvent } from "../src/lib/events.ts";
 
 // The server's side of collisions (ADR 0008): a collision is predicted and
@@ -187,8 +188,8 @@ describe("who a collision names (ADR 0010)", async () => {
     sky.settle(at + 1);
     const [collision] = collisions();
     expect(collision.parties).toEqual([
-      { id: alpha.id, kind: "satellite", callsign: "ALPHA", beacon: "hello from alpha", words: null, operator: null, from: null },
-      { id: bravo.id, kind: "satellite", callsign: "BRAVO", beacon: "bravo here", words: null, operator: "bravo_ops", from: null },
+      { id: alpha.id, kind: "satellite", callsign: "ALPHA", beacon: "hello from alpha", words: null, question: null, operator: null, from: null },
+      { id: bravo.id, kind: "satellite", callsign: "BRAVO", beacon: "bravo here", words: null, question: null, operator: "bravo_ops", from: null },
     ]);
   });
 
@@ -298,6 +299,28 @@ describe("who a collision names (ADR 0010)", async () => {
     expect(theirs.reentryAt).toBeGreaterThan(theirs.nextPass!.at);
     expect(theirs.followed).toEqual({ left: 0, collisions: 0, fragments: 0, up: 0, destroyed: [] });
     expect(sky.historyOf(delta.id, "dave", now)).toMatchObject({ beacon: "still up here", withheld: false, mine: true });
+  });
+});
+
+// ADR 0018: two answers to the same question that collide are told as such
+describe("two answers that collide", async () => {
+  const { sky, db, schema } = await freshServer();
+  const put = (owner: string, question: string, values: Elements) =>
+    db
+      .insert(schema.objects)
+      .values({ kind: "satellite", owner, callsign: owner.toUpperCase(), beacon: `${owner}'s answer`, question, band: "low", launchedAt: values.epoch, ...values })
+      .returning()
+      .get();
+  // the same height, opposite ways: dead centre, so their first meeting hits
+  const a = { ...put("ann", "Who do you wish were listening?", orbit(1.33, 0, 1)), kind: "satellite" as const, direction: 1 as const };
+  const b = { ...put("ben", "Who do you wish were listening?", orbit(1.33, 2, -1)), kind: "satellite" as const, direction: -1 as const };
+
+  it("keeps the question each was answering, so the collision can say so", () => {
+    const at = Math.round(nextMeeting(a, b, T, fatalMeeting(a, b))!);
+    sky.settle(at + 1);
+    const [story] = sky.recentCollisions(1);
+    expect(story.parties.map((p) => p.question)).toEqual(["Who do you wish were listening?", "Who do you wish were listening?"]);
+    expect(sharedQuestion(story.parties)).toBe("Who do you wish were listening?");
   });
 });
 

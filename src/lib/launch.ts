@@ -1,4 +1,5 @@
 import { isBand, type Band } from "./orbit.ts";
+import { answered } from "./questions.ts";
 
 // What a launch form may carry (PLAN.md, "Beacon rules"). The beacon is shown
 // to everyone and kept forever (ADR 0003), so it's short, plain and filtered.
@@ -12,11 +13,14 @@ export interface LaunchInput {
   band: Band;
   callsign: string;
   beacon: string;
+  // the stations' question it answers, if it does (ADR 0018)
+  question: string | null;
 }
 
 export type LaunchErrors = Partial<Record<"band" | "callsign" | "beacon" | "form", string>>;
 
-export type LaunchValues = Record<"band" | "callsign" | "beacon", string>;
+// what the form held, to give back with a refusal: "1" if it was answering
+export type LaunchValues = Record<"band" | "callsign" | "beacon" | "answering", string>;
 
 // Anything that reads as an address: a scheme, "www.", a name.tld with no
 // space around the dot, or the usual dodges ("bit . ly", "example(dot)com").
@@ -73,11 +77,13 @@ export const blocked = (text: string) =>
 
 export function readLaunch(
   form: FormData,
+  now = Date.now(),
 ): { ok: true; input: LaunchInput } | { ok: false; errors: LaunchErrors; values: LaunchValues } {
   const values: LaunchValues = {
     band: String(form.get("band") ?? ""),
     callsign: String(form.get("callsign") ?? "").trim(),
     beacon: String(form.get("beacon") ?? "").trim().replace(/\s+/g, " "),
+    answering: form.get("answering") ? "1" : "",
   };
   const errors: LaunchErrors = {};
 
@@ -99,5 +105,7 @@ export function readLaunch(
   else if (blocked(beacon)) errors.beacon = "That line has a word we don't broadcast. Try rewording it.";
 
   if (Object.keys(errors).length > 0) return { ok: false, errors, values };
-  return { ok: true, input: { band: values.band as Band, callsign, beacon } };
+  // the question its form showed, if the box was ticked and it's not stale
+  const question = values.answering ? answered(form.get("asked")?.toString() ?? null, now) : null;
+  return { ok: true, input: { band: values.band as Band, callsign, beacon, question } };
 }

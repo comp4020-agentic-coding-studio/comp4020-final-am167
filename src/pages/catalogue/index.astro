@@ -20,7 +20,7 @@ import {
   type CatalogueQuery,
   type Sort,
 } from "../../lib/sky.ts";
-import { blame, collisionOf, couplet, describe, headline, staticFrom } from "../../lib/story.ts";
+import { blame, collisionOf, couplet, describe, headline, sharedQuestion, staticFrom } from "../../lib/story.ts";
 
 // The record of everything launched (ADR 0003), as a table: filtered,
 // searched, sorted and paged by a plain GET form and links, so it works
@@ -183,6 +183,7 @@ const number = (n: number) => n.toLocaleString("en");
                   </p>
                 )}
                 {e.other.kind === "derelict" && <p class="encounter-line">A dead satellite, nobody's. It had nothing to say.</p>}
+                {sharedQuestion(e.parties) && <p class="encounter-line">Both were answering <q>{sharedQuestion(e.parties)}</q></p>}
                 {e.yours.beacon && (
                   <p class="encounter-line encounter-yours">
                     <a href={`/object/${e.yours.id}/`}>{e.yours.callsign}</a> said <q>{e.yours.beacon}</q>
@@ -357,6 +358,7 @@ const number = (n: number) => n.toLocaleString("en");
                 {couplet(c.parties).map(({ callsign, beacon }) => (
                   <p class="collision-beacon"><q>{beacon}</q> {callsign}</p>
                 ))}
+                {sharedQuestion(c.parties) && <p class="collision-beacon">Both were answering <q>{sharedQuestion(c.parties)}</q></p>}
                 <Wreck pieces={c.wreck} />
                 <p class="collision-blame">{blame(c.parties)}</p>
               </li>
@@ -561,6 +563,15 @@ const number = (n: number) => n.toLocaleString("en");
     border-left: 2px solid var(--grid-strong);
     font-style: italic;
     overflow-wrap: anywhere;
+  }
+
+  .your-sats :global(.your-sat-question) {
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+  }
+
+  .your-sats :global(.your-sat-question q) {
+    color: var(--ink);
   }
 
   .your-sats :global(.your-sat-heard) {

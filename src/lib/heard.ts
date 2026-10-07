@@ -61,6 +61,8 @@ export interface HeardItem {
   // derelicts) at the root of the collision it came from (ADR 0017)
   words: string | null;
   from: Root[] | null;
+  // the stations' question it answered (ADR 0018)
+  question: string | null;
   handle: string | null;
   band: Band;
   fate: Fate;
@@ -153,6 +155,7 @@ function feedOf(ids: number[], who?: Viewer | string): HeardItem[] {
         callsign: objects.callsign,
         beacon: objects.beacon,
         words: objects.words,
+        question: objects.question,
         source: objects.sourceCollision,
         band: objects.band,
         fate: objects.fate,
@@ -181,6 +184,7 @@ function feedOf(ids: number[], who?: Viewer | string): HeardItem[] {
         beacon: row.beacon,
         words: row.kind === "debris" ? row.words : null,
         from: row.kind === "debris" && row.source !== null ? rootsFor(row.source) : null,
+        question: row.question,
         handle: row.handle,
         band: row.band,
         fate: row.fate,

@@ -33,6 +33,8 @@ export const objects = sqliteTable(
     // for debris, the shard of both lines it carries (ADR 0017): heard as
     // static over the stations; null if what met said nothing
     words: text("words"),
+    // the stations' question its beacon answered, as it was asked (ADR 0018)
+    question: text("question"),
     // the operator it belongs to, once its person has claimed or signed in
     // to one (ADR 0009); until then it's the owner cookie's
     operator: integer("operator"),

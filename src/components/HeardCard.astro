@@ -32,6 +32,7 @@ const debris = h.kind === "debris";
     <time class="heard-when" datetime={new Date(h.at).toISOString()}>{ago(now - h.at)}</time>
   </p>
   <p class="heard-line">{debris ? <span class="static-words">{h.words}</span> : h.beacon}</p>
+  {h.question && <p class="heard-question">Answering <q>{h.question}</q></p>}
   <p class="heard-meta">
     Over {h.station} · {heardBy(h.heardBy, h.mine)} · {passes(h.passes)}{gone && <> · {gone}</>}
   </p>

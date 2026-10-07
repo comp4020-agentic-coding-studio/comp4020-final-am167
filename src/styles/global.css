@@ -347,3 +347,14 @@ a:hover {
 .history-static {
   font-size: var(--step-1);
 }
+
+/* the stations' question a beacon answered (ADR 0018) */
+.history-question {
+  color: var(--ink-dim);
+  font-size: var(--step--1);
+}
+
+.history-question q {
+  color: var(--ink);
+  font-style: italic;
+}

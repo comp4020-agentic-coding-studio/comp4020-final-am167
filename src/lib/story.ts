@@ -16,6 +16,8 @@ export interface StoryRoot {
 // one of the two objects that met (sky.ts's Party)
 export interface StoryParty extends StoryRoot {
   beacon: string | null;
+  // the stations' question it was answering, if any (ADR 0018)
+  question?: string | null;
   // for debris, what it was carrying (ADR 0017)
   words?: string | null;
   // for debris, the satellites and derelicts at the root of its collision
@@ -124,3 +126,10 @@ export function listeningNow(n: number): string {
 // (ADR 0017), or plain "from a collision" when its roots aren't known.
 export const staticFrom = (from: readonly StoryRoot[] | null) =>
   from && from.length > 0 ? `from ${collisionOf(from)}` : "from a collision";
+
+// The question both were answering, if they were answering the same one
+// (ADR 0018): two answers that collide.
+export function sharedQuestion(parties: readonly [StoryParty, StoryParty]): string | null {
+  const [a, b] = parties;
+  return a.question && a.question === b.question ? a.question : null;
+}

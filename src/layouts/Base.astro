@@ -4,12 +4,12 @@ import "../styles/global.css";
 interface Props {
   title: string;
   description?: string;
-  current?: "launchpad" | "sky" | "catalogue" | "kessler" | "readme" | "operator";
+  current?: "launchpad" | "sky" | "catalogue" | "why" | "kessler" | "readme" | "operator";
 }
 
 const {
   title,
-  description = "One shared orbit. Launch a satellite and its beacon is heard by everyone watching.",
+  description = "One shared orbit. Say one thing: your satellite's beacon is heard by everyone listening as it passes over a ground station.",
   current,
 } = Astro.props;
 const here = (page: Props["current"]) => (page === current ? "page" : undefined);
@@ -38,6 +38,7 @@ const { operator } = Astro.locals;
         <a href="/" aria-current={here("launchpad")}>Launchpad</a>
         <a href="/sky/" aria-current={here("sky")}>Sky</a>
         <a href="/catalogue/" aria-current={here("catalogue")}>Catalogue</a>
+        <a href="/why/" aria-current={here("why")}>Why</a>
         <a href="/kessler/" aria-current={here("kessler")}>Kessler syndrome</a>
         <a href="/readme/" aria-current={here("readme")}>README</a>
         <a href="/operator/" class="operator-link" aria-current={here("operator")}>

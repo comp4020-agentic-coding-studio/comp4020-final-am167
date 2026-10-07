@@ -2,7 +2,7 @@ import { turnAt, turnLength } from "../lib/airtime.ts";
 import { ago, until } from "../lib/format.ts";
 import { BANDS, bandAt, climbing, plungeAt, radiusAt, reentryAt, type Band } from "../lib/orbit.ts";
 import { STATIONS, nextStation, stationOver, untilStation, type StationId } from "../lib/stations.ts";
-import { blame, couplet, headline, heardBy, listeningNow, passes, skyCount, staticFrom, type StoryParty } from "../lib/story.ts";
+import { blame, couplet, headline, heardBy, listeningNow, passes, sharedQuestion, skyCount, staticFrom, type StoryParty } from "../lib/story.ts";
 import type { HeardItem } from "../lib/heard.ts";
 import type { WreckPiece } from "../lib/wreck.ts";
 import { countdown } from "./countdown.ts";
@@ -449,11 +449,19 @@ function heardCard(item: HeardItem, fresh = false): HTMLLIElement {
     who.append(swatch, link, handle, when);
     line.textContent = item.beacon;
   }
+  // the stations' question it answered (ADR 0018)
+  const asked = document.createElement("p");
+  if (item.question) {
+    asked.className = "heard-question";
+    const q = document.createElement("q");
+    q.textContent = item.question;
+    asked.append("Answering ", q);
+  }
   const meta = document.createElement("p");
   meta.className = "heard-meta";
   const gone = GONE[item.fate];
   meta.textContent = `Over ${item.station} · ${heardBy(item.heardBy, item.mine)} · ${passes(item.passes)}${gone ? ` · ${gone}` : ""}`;
-  li.append(who, line, meta);
+  li.append(who, line, ...(item.question ? [asked] : []), meta);
   return li;
 }
 
@@ -568,7 +576,16 @@ function tell(story: Story) {
   const who = document.createElement("p");
   who.className = "collision-blame";
   who.textContent = blame(story.parties);
-  card.replaceChildren(title, ...lines, ...wreckOf(story.wreck), who);
+  // two answers to the same question (ADR 0018)
+  const both = sharedQuestion(story.parties);
+  const asked = document.createElement("p");
+  asked.className = "collision-question";
+  if (both) {
+    const q = document.createElement("q");
+    q.textContent = both;
+    asked.append("Both were answering ", q);
+  }
+  card.replaceChildren(title, ...lines, ...(both ? [asked] : []), ...wreckOf(story.wreck), who);
   card.hidden = false;
   card.classList.remove("fading");
   clearTimeout(cardTimer);

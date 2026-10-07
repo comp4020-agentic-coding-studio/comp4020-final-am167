@@ -67,6 +67,8 @@ export interface SkyObject extends Orbit {
   // 0017)
   sourceCollision: number | null;
   words: string | null;
+  // the stations' question its beacon answered, if any (ADR 0018)
+  question: string | null;
   // a manoeuvre's rate and the end of a climb (ADR 0011), part of the orbit
   rate: number;
   until: number | null;
@@ -123,6 +125,7 @@ const columns = {
   direction: objects.direction,
   sourceCollision: objects.sourceCollision,
   words: objects.words,
+  question: objects.question,
   rate: objects.rate,
   until: objects.until,
   deorbitedAt: objects.deorbitedAt,
@@ -170,6 +173,8 @@ export interface Party {
   beacon: string | null;
   // for debris, what it was carrying (ADR 0017)
   words: string | null;
+  // the stations' question it was answering (ADR 0018)
+  question: string | null;
   operator: string | null;
   from: Root[] | null;
 }
@@ -366,6 +371,7 @@ const partyOf = (object: SkyObject): Party => ({
   callsign: object.callsign,
   beacon: object.beacon,
   words: object.words,
+  question: object.question,
   operator: object.operator === null ? null : (handles([object.operator]).get(object.operator) ?? null),
   from: object.kind === "debris" && object.sourceCollision !== null ? rootsOf(object.sourceCollision) : null,
 });
@@ -928,6 +934,8 @@ export interface History {
   manoeuvres: { kind: ManoeuvreKind; at: number; to: Band }[];
   // for debris: the words it carries (ADR 0017)
   words: string | null;
+  // the stations' question it answered (ADR 0018)
+  question: string | null;
   // for debris: the collision it came from, what met, and who that traces to
   origin: { collision: number; at: number; parties: [Party, Party]; roots: Root[] } | null;
   // for anything destroyed: its collision, what it met, and what the wreck
@@ -1051,6 +1059,7 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
     deorbitedAt: object.deorbitedAt,
     boosts: object.boosts,
     words: object.words,
+    question: object.question,
     manoeuvres: manoeuvresOf(id).map((m) => ({ kind: m.kind, at: m.at, to: bandAt(m.toRadius) })),
     origin: source && { collision: source.c.id, at: source.c.at, parties: source.parties, roots: rootsOf(source.c.id) },
     end: own && {
@@ -1130,6 +1139,7 @@ function checkAndInsert(viewer: Viewer, input: LaunchInput, now: number, random:
         operator: viewer.operator,
         callsign: input.callsign,
         beacon: input.beacon,
+        question: input.question,
         band: input.band,
         launchedAt: now,
         ...placeInBand(input.band, now, random),

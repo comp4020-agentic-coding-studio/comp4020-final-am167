@@ -1878,3 +1878,66 @@ collision.
 ![An encounter in Yours: who MOTH met, what LANTERN had said, and what the wreck says](screenshots/2026-10-07-an-encounter-in-yours.png)
 
 Commit `fd0a0df`.
+
+## 2026-10-07 — The purpose: a question a day, and the why said plainly (ADR 0018)
+
+My ask: flesh out the purpose, the "why", a lot more. The agent's reading:
+the why has two halves, for a visitor (why launch, stay, come back) and
+for the project (the argument), and the app only ever said the second;
+nothing told a stranger what they were there to do besides "launch". Of
+the three purpose ideas in the plan, two were now built (being heard,
+counted: ADR 0016; debris eating airtime: ADR 0017), so this adds the third
+and says the whole thing.
+
+- **A question from the stations each day** (ADR 0018, proposed): a fixed
+  list of 21 in `src/lib/questions.ts` for me to edit ("What do you want to
+  outlast you?", "What should we all stop saying?", "Who do you wish were
+  listening?"…), turning at midnight UTC. The launch form shows today's
+  above the beacon with "It answers today's question" ticked; the form
+  carries which day it showed, so a launch just after midnight answers the
+  one it was written to (today's or yesterday's; older answers nothing).
+  The satellite keeps the question's text (`objects.question`, migration
+  `0007_question`), so editing the list never rewrites the record. Shown in
+  the feed, histories, Yours, and today's on the sky's beacons column with
+  "Answer it". Two answers to the same question that collide say "Both
+  were answering …": a thematic connection on top of the causal one,
+  without anything judging the text.
+- **The why, said plainly.** The launchpad's intro now leads with what
+  you're there to do and what it costs, and ends on the question the app
+  asks: "What's worth saying, if saying it costs everyone a little?" Its
+  big button goes to a new **Why** page (`/why/`, in the nav): what you do
+  here (say one thing, listen, answer the question, decide what your words
+  cost, meet someone the only way you can), what it's about (attention as
+  a commons; Hardin, Kessler and Cour-Palais, Ostrom), and how it maps.
+  The Kessler syndrome page's mapping now mentions being heard and static.
+  The first-launch explainer says it's heard by the people listening, that
+  a collision breaks it into static and Yours shows who it met, and that
+  the controls are on its card and in Yours (it still said "under
+  Beacons", stale since ADR 0015).
+- `PLAN.md`: status for the overnight round; "The idea" and the core loop
+  carry the words; decision rows for 0015–0018; "Collisions that mean
+  something" and "A purpose" rewritten as decided ("What Kessler is for").
+
+Tests first: `spec/questions.test.ts` (the list; same all day, next
+tomorrow, round again; answered from today's or yesterday's form only, and
+junk refused; `sharedQuestion`) was written with its module in one go, so
+its red was a missing module; `spec/question.test.ts` over HTTP (the
+launchpad's question, ticked box and day; the Why page linked and saying
+heard/listen/question/collide/static/commons/worth saying; a launch
+answering keeps it and its history says so; unticked or a week-old form
+answers nothing; today's question on the sky with a way to answer it) went
+red for the expected reasons (4 of 6; the two "answers nothing" cases
+passed before anything existed). A server test stages two answers to the
+same question colliding. `pnpm check` green (267 tests).
+
+Checked in Chromium: at 1920x1080 the launchpad's new intro and form; at
+1512x757 the form had grown past the first screen by 200 px (the question,
+a three-line text box and the tick box), so the question went on one block
+with its label, the box starts at two lines and grows with what's written
+(`field-sizing`), the help text is shorter, and the band notes drop below
+800 px tall instead of 736: it scrolls 75 px now, as it did 62 px before,
+with Launch on the first screen. iPhone 14: intro and button fit, no
+sideways scroll. The Why page at 1920x1080 (a missing space after the
+quoted question fixed).
+
+![The launchpad: the intro saying what it's for, today's question above the beacon, and the box ticked to answer it](screenshots/2026-10-07-launchpad-why-and-question.png)
