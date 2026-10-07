@@ -1,114 +1,22 @@
 ---
-import Base from "../../../layouts/Base.astro";
-import ManoeuvreDialogs from "../../../components/ManoeuvreDialogs.astro";
-import ObjectHistory from "../../../components/ObjectHistory.astro";
-import { REFUSALS, isRefusal } from "../../../lib/manoeuvre.ts";
 import { historyOf } from "../../../lib/sky.ts";
-import { titleOf } from "../../../lib/story.ts";
 
-// One object's history (ADR 0012), at an address of its own: for a link
-// opened on its own, and complete without JavaScript. Everywhere else it
-// pops up as a card (ADR 0015); this is the same card, centred on the page.
-// Your own satellite's controls come back here without JavaScript.
+// An object's own address (ADR 0012): the catalogue, with its card open
+// over it (ADR 0015), for a link opened on its own and without JavaScript.
+// The address stays this one. What came back from bringing it down or
+// boosting it without JavaScript (`deorbited`, `boosted`, `refused`) goes
+// along.
 const { person, operator } = Astro.locals;
 // one address per object: digits, no leading zero
 const id = /^[1-9]\d{0,15}$/.test(Astro.params.id ?? "") ? Number(Astro.params.id) : null;
-const now = Date.now();
-const history = id === null ? null : historyOf(id, { person, operator: operator?.id ?? null }, now);
-if (!history) return new Response("Nothing by that number has been in this sky.", { status: 404 });
-const title = titleOf(history);
-// back from bringing it down or boosting it without JavaScript (ADR 0011)
-const said = (name: string) => history.mine && Number(Astro.url.searchParams.get(name)) === history.id;
-const refused = Astro.url.searchParams.get("refused");
+if (id === null || !historyOf(id, { person, operator: operator?.id ?? null })) {
+  return new Response("Nothing by that number has been in this sky.", { status: 404 });
+}
+const params = new URLSearchParams();
+for (const name of ["deorbited", "boosted", "refused"]) {
+  const value = Astro.url.searchParams.get(name);
+  if (value !== null) params.set(name, value);
+}
+params.set("object", String(id));
+return Astro.rewrite(`/catalogue/?${params}`);
 ---
-<Base title={`Kessler: ${title}`} current="catalogue">
-  <main class="history-page">
-    <article class="history-card" aria-labelledby="history-title" data-id={history.id}>
-      <h1 id="history-title">{title}</h1>
-      {said("boosted") && <p class="history-notice" role="status">It's climbing a band. It stays up far longer.</p>}
-      {history.mine && isRefusal(refused) && <p class="history-notice" role="alert">{REFUSALS[refused]}</p>}
-      <div class="history-body">
-        <ObjectHistory history={history} now={now} level={2} />
-      </div>
-      <p class="history-links">
-        <a href="/sky/">See the sky</a>
-        {history.mine && <a href="/catalogue/?show=mine">Yours</a>}
-        <a href="/catalogue/?show=all">The whole catalogue</a>
-      </p>
-    </article>
-    <ManoeuvreDialogs thanks={said("deorbited") ? (history.callsign ?? "Your satellite") : null} />
-  </main>
-</Base>
-
-<script>
-  import { keepCounting } from "../../../scripts/history.ts";
-  import { wireManoeuvres } from "../../../scripts/manoeuvres.ts";
-
-  // Keeps it counting down, and, for your own satellite, boosts it or
-  // brings it down in place: the card is asked for again, as the server
-  // now tells it.
-  const body = document.querySelector<HTMLElement>(".history-body")!;
-  const card = document.querySelector<HTMLElement>(".history-card")!;
-  const first = body.querySelector<HTMLElement>(".history")!;
-  const offset = Number(first.dataset.serverTime) - Date.now();
-  const now = () => Date.now() + offset;
-  let stop = keepCounting(first, now);
-  wireManoeuvres({
-    inPlace: async () => {
-      try {
-        const res = await fetch(`/object/${card.dataset.id}/panel`);
-        if (!res.ok) return;
-        const fresh = new DOMParser().parseFromString(await res.text(), "text/html").querySelector<HTMLElement>(".history");
-        if (!fresh) return;
-        stop();
-        body.replaceChildren(fresh);
-        stop = keepCounting(fresh, now);
-      } catch {
-        // offline: the card says what it said, and a reload catches up
-      }
-    },
-  });
-</script>
-
-<style>
-  .history-page {
-    display: grid;
-    place-items: start center;
-    padding: clamp(1rem, 4vw, 3rem) var(--gutter) 3rem;
-  }
-
-  /* the same card that pops up elsewhere (ADR 0015), on a page of its own */
-  .history-card {
-    width: min(48rem, 100%);
-    padding: clamp(1.25rem, 3vw, 2rem);
-    border: 1px solid var(--grid-strong);
-    border-top: 3px solid var(--amber);
-    border-radius: 6px;
-    background: var(--night-deep);
-    box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.45);
-  }
-
-  h1 {
-    margin: 0;
-    font-size: var(--step-2);
-    font-variation-settings: "wdth" 112;
-    overflow-wrap: anywhere;
-  }
-
-  .history-notice {
-    margin: 0.75rem 0 0;
-    padding: 0.5rem 0.75rem;
-    border-left: 3px solid var(--amber);
-    background: rgb(242 165 65 / 0.08);
-  }
-
-  .history-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 1.5rem;
-    margin: 1.75rem 0 0;
-    padding-top: 1rem;
-    border-top: 1px solid var(--grid);
-    font-size: var(--step--1);
-  }
-</style>

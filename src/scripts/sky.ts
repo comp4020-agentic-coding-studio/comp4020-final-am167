@@ -181,6 +181,8 @@ import("./scene.ts")
         document.getElementById("views")!,
         ...(document.getElementById("launched-notice") ? [document.getElementById("launched-notice")!] : []),
         document.getElementById("collision-card")!,
+        // an object's card, beside the beacons (it's not modal here)
+        document.getElementById("object-card")!,
       ],
       selected: () => historyCard?.showing() ?? null,
     });
@@ -706,7 +708,7 @@ wireManoeuvres<Satellite>({
   inPlace: (sat) => {
     manoeuvred(sat);
     listen();
-    refreshHistory(sat.id);
+    historyCard?.refresh(sat.id, true);
   },
 });
 

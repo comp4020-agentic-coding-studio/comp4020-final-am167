@@ -2130,3 +2130,41 @@ collision names the echo, MOTH's owner meets it, and `newsSince` counts it
 before and not after; a story test for the echo in a couplet; an HTTP test
 that Yours sets the last-looked cookie (httpOnly). `pnpm check` green (283
 tests). Commit `72a17dd`.
+
+## 2026-10-07 — Review fix 4: the card leaves the sky usable; an object's address is a pop-up
+
+Acting on the review's findings 6 and 12:
+
+- **On the sky the card isn't modal.** It sits beside the beacons column,
+  under the view buttons, so the sky, the stations and the feed stay
+  readable and usable while it's open: clicking another object (or a name
+  in the feed) switches the card to it; Escape or × closes it. On a phone
+  it's a sheet from the bottom. (It was modal, covering the column and
+  making the sky inert, despite ADR 0015 promising the sky stayed in view.)
+  The scene's labels keep clear of it.
+- **An object's address is the catalogue with its card popped up**
+  (`/object/<id>/` rewrites to `/catalogue/?object=<id>`, the address
+  staying the same), so following a link to an object, or arriving without
+  JavaScript, gives the same pop-up as everywhere else, not a card on an
+  empty page. Without JavaScript it's open over the page and closes with
+  its own form; with it, it's modal, and closing it leaves you at
+  `/catalogue/`. Boost and bring-down from it without JavaScript still
+  come back to it, thanked or told why not. The card's body is one
+  component (`ObjectCardBody.astro`) for the server's render and the
+  fetched fragment.
+- **Focus**: after a boost or deorbit from a card's own buttons, focus goes
+  back into the card (it fell to the page, since the button is disabled
+  while it posts), and a refresh that answers before the first ask now
+  opens the card properly (focus and announcement).
+
+Tests: the history test now checks the object's address shows the
+catalogue with the card open and its name in the card's heading; the
+manoeuvre tests for the card (forms with `back=object`, a stranger's
+none, the thank-you after a no-JavaScript deorbit) pass against the
+rewritten address unchanged. `pnpm check` green (283 tests). Checked in
+Chromium: `/object/1134/` at 1920x1080 (modal, focus on its heading,
+Escape leaves `/catalogue/`); on the sky, the card opened from the latest
+launches beside the column, not modal, then switched to another object
+from the feed; on an iPhone 14, a 468 px sheet.
+
+![An object's address: the catalogue, with the object's card popped up over it](screenshots/2026-10-07-object-address-card-over-catalogue.png)

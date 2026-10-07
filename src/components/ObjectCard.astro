@@ -1,19 +1,29 @@
 ---
+import ObjectCardBody from "./ObjectCardBody.astro";
+import type { History } from "../lib/sky.ts";
+
 // The card an object's history pops up in (ADR 0012, 0015): empty until a
 // link to an object, or an object in the sky, is clicked, then filled from
-// /object/<id>/panel by src/scripts/object-card.ts. Without JavaScript the
-// links go to the object's own page instead. On the sky it sits down the
-// right, so the object stays in view (a sheet from the bottom on a phone);
-// elsewhere it's centred.
+// /object/<id>/panel by src/scripts/object-card.ts. An object's own address
+// renders it open, filled, over the catalogue (`history`), and that works
+// without JavaScript: the close button is the dialog's own form. On the sky
+// it sits beside the beacons and leaves the sky usable (a sheet from the
+// bottom on a phone); elsewhere it's centred, over a dimmed page.
 interface Props {
   side?: boolean;
+  history?: History | null;
+  now?: number;
 }
-const { side = false } = Astro.props;
+const { side = false, history = null, now = Date.now() } = Astro.props;
 ---
-<dialog id="object-card" class:list={["object-card", { side }]} aria-labelledby="object-card-title">
+<dialog id="object-card" class:list={["object-card", { side }]} aria-labelledby="object-card-title" open={history !== null}>
   <div class="object-card-frame">
-    <button type="button" class="object-card-close" aria-label="Close">×</button>
-    <div class="object-card-body history-body"></div>
+    <form method="dialog" class="object-card-close-form">
+      <button type="submit" class="object-card-close" aria-label="Close">×</button>
+    </form>
+    <div class="object-card-body history-body">
+      {history && <ObjectCardBody history={history} now={now} />}
+    </div>
   </div>
 </dialog>
 <!-- what screen readers hear when a card opens: its name, once -->
@@ -54,6 +64,10 @@ const { side = false } = Astro.props;
     outline: none;
   }
 
+  .object-card-close-form {
+    margin: 0;
+  }
+
   .object-card-close {
     position: absolute;
     top: 0.75rem;
@@ -90,20 +104,31 @@ const { side = false } = Astro.props;
     color: var(--ink-dim);
   }
 
-  /* over the sky: a drawer over the beacons' column, with the sky only
-     lightly dimmed, so what was clicked stays in view */
-  .object-card.side {
-    width: var(--rail-width, min(26rem, 40vw));
-    max-width: none;
-    height: calc(100svh - 4rem);
-    max-height: none;
-    margin: 4rem 0 0 auto;
-    border-width: 3px 0 0 1px;
-    border-radius: 0;
+  /* open without JavaScript (an object's own address): not modal, so placed
+     over the page by hand */
+  .object-card[open]:not(:modal) {
+    position: fixed;
+    inset: 50% auto auto 50%;
+    z-index: 30;
+    margin: 0;
+    max-height: calc(100svh - 6rem);
+    overflow-y: auto;
+    transform: translate(-50%, -50%);
   }
 
-  .object-card.side::backdrop {
-    background: rgb(3 6 14 / 0.3);
+  /* over the sky: not modal, beside the beacons' column, so the sky and the
+     stations stay in view and usable (another object can be clicked) */
+  .object-card.side[open] {
+    position: fixed;
+    /* under the view buttons, which stay usable */
+    inset: 8.25rem auto auto auto;
+    right: calc(var(--rail-width, 0rem) + var(--gutter));
+    z-index: 20;
+    width: min(26rem, 34vw);
+    max-height: calc(100svh - 9.5rem);
+    margin: 0;
+    overflow-y: auto;
+    transform: none;
   }
 
   .object-card.side h2 {
@@ -112,11 +137,11 @@ const { side = false } = Astro.props;
 
   /* on a phone, a sheet from the bottom */
   @media (max-width: 52rem) {
-    .object-card.side {
+    .object-card.side[open] {
+      inset: auto 0 0 0;
       width: 100%;
-      height: auto;
-      max-height: 78svh;
-      margin: auto 0 0;
+      max-width: none;
+      max-height: 70svh;
       border-width: 3px 0 0;
       border-radius: 10px 10px 0 0;
     }

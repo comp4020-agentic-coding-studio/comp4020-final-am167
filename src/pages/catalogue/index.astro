@@ -16,13 +16,14 @@ import {
   catalogueCounts,
   readCatalogueQuery,
   encountersOf,
+  historyOf,
   newsSince,
   recentCollisions,
   satellitesOf,
   type CatalogueQuery,
   type Sort,
 } from "../../lib/sky.ts";
-import { blame, collisionOf, couplet, describe, headline, sharedQuestion, staticFrom } from "../../lib/story.ts";
+import { blame, collisionOf, couplet, describe, headline, sharedQuestion, staticFrom, titleOf } from "../../lib/story.ts";
 
 // The record of everything launched (ADR 0003), as a table: filtered,
 // searched, sorted and paged by a plain GET form and links, so it works
@@ -56,9 +57,14 @@ if (yours) looked(Astro.cookies, now, Astro.url, Astro.request.headers);
 const fresh = new Set(news?.encounters.map((e) => e.id) ?? []);
 // back from bringing one down or boosting it without JavaScript
 const yoursById = (name: string) => yoursUp.find((o) => o.id === Number(Astro.url.searchParams.get(name))) ?? null;
-const deorbited = yours ? yoursById("deorbited") : null;
-const boosted = yours ? yoursById("boosted") : null;
-const refused = yours ? Astro.url.searchParams.get("refused") : null;
+// (in Yours, or on one's own address, which is this page with its card open)
+const card = /^[1-9]\d{0,15}$/.test(Astro.url.searchParams.get("object") ?? "")
+  ? historyOf(Number(Astro.url.searchParams.get("object")), viewer, now)
+  : null;
+const told = yours || (card?.mine ?? false);
+const deorbited = told ? yoursById("deorbited") : null;
+const boosted = told ? yoursById("boosted") : null;
+const refused = told ? Astro.url.searchParams.get("refused") : null;
 // the latest collisions, told the way the sky page tells them
 const COLLISIONS = 50;
 const collided = recentCollisions(COLLISIONS);
@@ -115,7 +121,7 @@ const views = [
 const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 const number = (n: number) => n.toLocaleString("en");
 ---
-<Base title={yours ? "Kessler: yours" : "Kessler: the catalogue"} current="catalogue">
+<Base title={card ? `Kessler: ${titleOf(card)}` : yours ? "Kessler: yours" : "Kessler: the catalogue"} current="catalogue">
   <main class="catalogue-page" data-server-time={now}>
     <h1>{yours ? "Yours" : "The catalogue"}</h1>
     {yours ? (
@@ -148,6 +154,10 @@ const number = (n: number) => n.toLocaleString("en");
         <a href={href({ show: v.show, fate: null, mine: false })} aria-current={v.show === query.show ? "page" : undefined}>{v.label}</a>
       ))}
     </nav>
+
+    <!-- back from boosting one of yours from its own address, or refused -->
+    {!yours && boosted && <p class="yours-notice" role="status"><strong>{boosted.callsign}</strong> is climbing a band. It stays up far longer.</p>}
+    {!yours && !boosted && isRefusal(refused) && <p class="yours-notice" role="alert">{REFUSALS[refused]}</p>}
 
     {yours && (
       <section class="yours-up" aria-labelledby="yours-up-title">
@@ -389,7 +399,7 @@ const number = (n: number) => n.toLocaleString("en");
       )}
     </section>
     )}
-    <ObjectCard />
+    <ObjectCard history={card} now={now} />
     <ManoeuvreDialogs thanks={deorbited ? (deorbited.callsign ?? "Your satellite") : null} />
   </main>
 
@@ -413,7 +423,7 @@ const number = (n: number) => n.toLocaleString("en");
     const serverTime = Number(document.querySelector<HTMLElement>("[data-server-time]")?.dataset.serverTime ?? Date.now());
     const offset = serverTime - Date.now();
     const now = () => Date.now() + offset;
-    const card = objectCard(now);
+    const objects = objectCard(now);
     const list = document.getElementById("yours-list");
     let stops: (() => void)[] = [];
     const count = () => {
@@ -423,7 +433,7 @@ const number = (n: number) => n.toLocaleString("en");
     count();
     wireManoeuvres({
       inPlace: async (object) => {
-        card?.refresh(object.id);
+        objects?.refresh(object.id, true);
         if (!list) return;
         try {
           const res = await fetch(location.pathname + location.search);
