@@ -4,7 +4,9 @@ import { isBand, type Band } from "./orbit.ts";
 // to everyone and kept forever (ADR 0003), so it's short, plain and filtered.
 
 export const CALLSIGN_MAX = 16;
-export const BEACON_MAX = 60;
+// a thought, not a slogan, and readable in the dozen seconds a low
+// satellite is over a station (ADR 0016)
+export const BEACON_MAX = 140;
 
 export interface LaunchInput {
   band: Band;

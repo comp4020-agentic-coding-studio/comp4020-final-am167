@@ -100,3 +100,20 @@ export function skyCount(sky: readonly { kind: Kind }[]): string {
     .map(([count, word]) => `${count} ${word}${count === 1 ? "" : "s"}`);
   return parts.length === 0 ? "Nothing in orbit" : `${listed(parts)} in orbit`;
 }
+
+// "Heard by 7 people", "Heard by nobody else yet": a beacon's audience (ADR
+// 0016). Its owner isn't counted, so their own says "else".
+export function heardBy(n: number, mine: boolean): string {
+  if (n === 0) return mine ? "Heard by nobody else yet" : "Heard by nobody yet";
+  return `Heard by ${n} ${n === 1 ? "person" : "people"}`;
+}
+
+// "1 pass", "12 passes": how often the stations have heard it.
+export const passes = (n: number) => `${n} ${n === 1 ? "pass" : "passes"}`;
+
+// "You and 2 others listening": who has the sky open now, the viewer
+// among them.
+export function listeningNow(n: number): string {
+  if (n <= 1) return "Just you, listening";
+  return `You and ${n - 1} ${n === 2 ? "other" : "others"} listening`;
+}

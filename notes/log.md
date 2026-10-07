@@ -1714,3 +1714,72 @@ rather than half-overlapping them (they're inert behind it anyway).
 ![Yours in the catalogue: a card for each of mine in orbit with its beacon, countdowns and controls, then my record](screenshots/2026-10-07-yours-in-the-catalogue.png)
 
 Commit `51e1fc0`.
+
+## 2026-10-07 — Beacons heard by people: 140 characters, a feed, who's listening (ADR 0016)
+
+The ask: longer beacons, shown better, more like a social app, because the
+app was turning into a Kessler visualiser. The agent's read of why: the
+beacon was meant to be the point, but it was a line of small type in a
+corner, gone as its satellite left a window, and nothing said whether anyone
+had been there to read it. Everything else on the sky page was physics; the
+people were only in the callsigns. So three things, written up as ADR 0016
+(proposed):
+
+- **140 characters**, not 60: a thought, not a slogan, readable in the
+  dozen seconds a low satellite is over a station (ADR 0013 made that
+  possible). The beacon is a text box now, with a live "52 / 140" count.
+  When several are overhead they take turns sized to the line (4 to 10
+  seconds, `src/lib/airtime.ts`), still by the server's clock.
+- **Heard by people.** Listening is having the sky open (its event stream).
+  The server counts **people, not tabs**: each stream is tagged with its
+  operator, or a one-way hash of its cookie (the cookie isn't stored again).
+  Every second, while anyone is listening, the server works out in closed
+  form what came into a station's window since its last look
+  (`src/lib/heard.ts`); each such pass is a **transmission** (logged with
+  station, time and how many heard it), and each listener who isn't the
+  owner is recorded once per satellite. "Heard by" is how many different
+  people that is; the owner can't raise their own. A pass with nobody
+  listening isn't heard and leaves nothing behind. Everyone is told
+  (`heard`), and how many are listening (`audience`). New tables
+  `transmissions` and `listens` (migration `0005_heard`).
+- **A feed.** The sky page has a column beside the sky (under it on a
+  phone): "Beacons" (the three stations live, as before, plus "You and 2
+  others listening"), then **Heard**: each beacon picked up while someone
+  was listening, latest pass first, as a card with who launched it, the
+  line, the station, when, "Heard by 3 people · 5 passes", and Burned up /
+  Destroyed once it's gone. A new pass moves its card to the top with a
+  flash. It's server-rendered, so it reads without JavaScript. The
+  summary ("Sky now") stays over the sky on the left; the object card
+  became a drawer over the column. Histories and the cards in Yours say how
+  many have heard it.
+
+The bigger shift, said in the ADR: a beacon that's been heard is now
+public in the feed while it still flies (ADR 0012 withheld it until it was
+gone; a history now shows it once it's been heard). So the altitude
+trade-off moves from visibility to audience: a low satellite passes a
+station every minute or so, gets heard by more of the people who come and
+go, and keeps returning to the top of the feed.
+
+Tests: server tests on throwaway databases (`spec/heard-server.test.ts`,
+13: heard by everyone listening and logged; the owner not counted; owner
+alone logged with nobody else; each person once over a whole lap of three
+stations; nobody listening, nothing logged; only from launch; a satellite
+burning up first is never heard; derelicts silent; the feed's order and
+fields; your own marked with nobody's owner leaked; a history's beacon
+withheld until heard; tabs counted once; an operator one listener on any
+device, and no cookie kept). These were written before `heard.ts` existed
+but only run once it did, so their first red was "module not found", not
+each assertion. `spec/airtime.test.ts` for the turns; HTTP tests for the
+140 limit (141 refused and kept in the form, 140 taken), the column and
+feed on the sky page, and `heard`, `heardBy` and `listening` in the
+stream's hello. One run against a crowded scratch sky (about 260
+satellites left by earlier runs) failed "a second boost is refused for
+fuel", most likely because the satellite was destroyed in between; two
+runs against a fresh database were green. `pnpm check` green (245 tests).
+
+Checked in Chromium at 1920x1080 on a fresh database with the test runs'
+satellites up: after 40 seconds listening, the feed had filled with cards
+("Over Madrid · Heard by 1 person · 3 passes"), and the column held the
+three stations and "Just you, listening".
+
+![The sky with the beacons column: the three stations live, how many are listening, and the Heard feed of cards](screenshots/2026-10-07-beacons-column-and-heard-feed.png)

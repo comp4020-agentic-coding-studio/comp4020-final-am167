@@ -1,3 +1,4 @@
+import type { HeardItem } from "./heard.ts";
 import type { CollisionReport, Conjunction, SkyObject } from "./sky.ts";
 
 // In-process pub/sub behind the SSE endpoint. One machine, so no broker needed.
@@ -9,24 +10,52 @@ export type SkyEvent =
   // its operator's handle if it has one
   | { type: "manoeuvre"; manoeuvre: "deorbit" | "boost"; object: SkyObject; operator: string | null }
   | { type: "conjunction"; conjunction: Conjunction }
-  | { type: "collision"; collision: CollisionReport };
+  | { type: "collision"; collision: CollisionReport }
+  // a beacon heard over a station (ADR 0016), with whose it is, which each
+  // stream turns into whether it's its viewer's
+  | { type: "heard"; heard: Omit<HeardItem, "mine">; owner: string | null; operator: number | null }
+  // how many people are listening now (ADR 0016)
+  | { type: "audience"; listening: number };
 
 type Listener = (event: SkyEvent) => void;
 
-const listeners = new Set<Listener>();
+// each listener, and who it is, if it's a person with the sky open: an
+// operator or a hashed cookie (heard.ts, listenerKey)
+const listeners = new Map<Listener, string | null>();
 
 // How many are listening: an open page's stream, or a test.
 export const listening = () => listeners.size;
 
-export function subscribe(fn: Listener): () => void {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
+// The people listening (ADR 0016): each once, however many tabs they have open.
+export function audience(): Set<string> {
+  const people = new Set<string>();
+  for (const who of listeners.values()) if (who) people.add(who);
+  return people;
+}
+
+// Everyone is told when the number of people listening changes.
+let heardCount = 0;
+function recount(): void {
+  const now = audience().size;
+  if (now === heardCount) return;
+  heardCount = now;
+  publish({ type: "audience", listening: now });
+}
+
+export function subscribe(fn: Listener, who: string | null = null): () => void {
+  listeners.set(fn, who);
+  if (who) recount();
+  return () => {
+    const was = listeners.get(fn);
+    listeners.delete(fn);
+    if (was) recount();
+  };
 }
 
 // One broken stream mustn't stop the others hearing, or fail the launch that
 // caused the event (it's already saved): drop it and carry on.
 export function publish(event: SkyEvent): void {
-  for (const fn of listeners) {
+  for (const fn of [...listeners.keys()]) {
     try {
       fn(event);
     } catch {

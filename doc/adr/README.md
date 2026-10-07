@@ -22,3 +22,4 @@ be edited until it's accepted.
 | [0013](0013-slower-orbits.md) | Slower orbits, so a beacon can be read | accepted |
 | [0014](0014-three-ground-stations.md) | Three ground stations, and the whole sky first | accepted |
 | [0015](0015-yours-and-each-objects-card.md) | Your satellites are managed from "Yours" and from each one's card | proposed |
+| [0016](0016-heard-by-people.md) | A beacon is heard by people, and the sky keeps a log of what was heard | proposed |

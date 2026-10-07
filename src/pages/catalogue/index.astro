@@ -5,6 +5,7 @@ import ObjectCard from "../../components/ObjectCard.astro";
 import YourSatellite from "../../components/YourSatellite.astro";
 import { ago, falling, km } from "../../lib/format.ts";
 import { REFUSALS, isRefusal } from "../../lib/manoeuvre.ts";
+import { heardTotals } from "../../lib/heard.ts";
 import { BANDS, climbing, fallRate, heightKm, radiusAt, type Band } from "../../lib/orbit.ts";
 import {
   FIRST_DIR,
@@ -39,6 +40,7 @@ const rows = result.rows;
 const counts = catalogueCounts();
 const yours = query.show === "mine";
 const yoursUp = satellitesOf(viewer).filter((o) => o.launchedAt <= now);
+const yoursHeard = heardTotals(yoursUp.map((o) => o.id));
 // back from bringing one down or boosting it without JavaScript
 const yoursById = (name: string) => yoursUp.find((o) => o.id === Number(Astro.url.searchParams.get(name))) ?? null;
 const deorbited = yours ? yoursById("deorbited") : null;
@@ -144,7 +146,7 @@ const number = (n: number) => n.toLocaleString("en");
             <p class="empty">Nothing of yours in orbit. <a href="/">Launch a satellite</a>.</p>
           ) : (
             <ol class="your-sats">
-              {yoursUp.map((o) => <YourSatellite object={o} now={now} />)}
+              {yoursUp.map((o) => <YourSatellite object={o} heard={yoursHeard.get(o.id)!} now={now} />)}
             </ol>
           )}
         </div>
@@ -512,6 +514,10 @@ const number = (n: number) => n.toLocaleString("en");
     border-left: 2px solid var(--grid-strong);
     font-style: italic;
     overflow-wrap: anywhere;
+  }
+
+  .your-sats :global(.your-sat-heard) {
+    font-size: var(--step--1);
   }
 
   .your-sats :global(.your-sat-now) {

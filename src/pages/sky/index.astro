@@ -3,24 +3,32 @@ import Base from "../../layouts/Base.astro";
 import FirstLaunch from "../../components/FirstLaunch.astro";
 import ManoeuvreDialogs from "../../components/ManoeuvreDialogs.astro";
 import ObjectCard from "../../components/ObjectCard.astro";
+import HeardCard from "../../components/HeardCard.astro";
 import { ago, embed } from "../../lib/format.ts";
-import { skyCount } from "../../lib/story.ts";
+import { listeningNow, skyCount } from "../../lib/story.ts";
 import { BANDS, bandAt, radiusAt, type Band } from "../../lib/orbit.ts";
 import { STATIONS } from "../../lib/stations.ts";
+import { audience } from "../../lib/events.ts";
+import { HEARD_FEED, heardCounts, listenerKey, recentlyHeard } from "../../lib/heard.ts";
 import { conjunctions, isFirstLaunch, liveSky, recentCollisions, toPublic } from "../../lib/sky.ts";
 
 // The shared sky. The server renders a summary of what's in orbit (counts per
-// band and the latest launches), so the page is complete without JavaScript;
-// the full list is the catalogue's. The script draws the whole sky, or the
-// horizon over a ground station, from the same orbits, says what each
-// station hears, and keeps everything live over the event stream (ADR 0004,
-// 0014).
+// band and the latest launches), and what the stations have heard (ADR
+// 0016), so the page reads without JavaScript; the full list is the
+// catalogue's. The script draws the whole sky, or the horizon over a ground
+// station, from the same orbits, says what each station hears, and keeps
+// everything live over the event stream (ADR 0004, 0014).
 const { person, operator } = Astro.locals;
 const viewer = { person, operator: operator?.id ?? null };
 const now = Date.now();
-const sky = liveSky()
-  .map((object) => toPublic(object, viewer))
-  .sort((a, b) => b.launchedAt - a.launchedAt);
+const live = liveSky();
+const sky = live.map((object) => toPublic(object, viewer)).sort((a, b) => b.launchedAt - a.launchedAt);
+// what was heard, and by how many; and who's listening, this viewer
+// included (their stream opens as the page does)
+const heard = recentlyHeard(HEARD_FEED, viewer, now);
+const heardBy = heardCounts(live.map((o) => o.id));
+const ears = audience();
+const listening = ears.size + (ears.has(listenerKey(viewer)) ? 0 : 1);
 const launchedParam = Number(Astro.url.searchParams.get("launched"));
 const launched = sky.find((o) => o.id === launchedParam && o.mine) ?? null;
 const mine = sky.find((o) => o.mine) ?? null;
@@ -40,7 +48,9 @@ const view = launched ? "canberra" : null;
 ---
 <Base title="Kessler: the sky" current="sky">
   <main class="sky-page">
-    <section class="scene" aria-labelledby="chart-title">
+    <!-- the sky, and over it the summary; beside it (under it on a phone)
+         the beacons: what the stations hear, and what they've heard -->
+    <div class="scene">
       <h1 id="chart-title" class="visually-hidden">The shared sky</h1>
       <div class="view">
         <canvas
@@ -60,8 +70,9 @@ const view = launched ? "canberra" : null;
         </div>
         <noscript>
           <p class="no-view">
-            The sky and the beacons need JavaScript. Everything in orbit is
-            listed in the <a href="/catalogue/">catalogue</a>.
+            The sky and the live beacons need JavaScript. What the stations
+            have heard is listed beside it, and everything in orbit is in the
+            <a href="/catalogue/">catalogue</a>.
           </p>
         </noscript>
         <p id="no-webgl" class="no-view" hidden>
@@ -86,30 +97,6 @@ const view = launched ? "canberra" : null;
       )}
 
       <div class="panels">
-        <section class="station" aria-labelledby="station-title">
-          <h2 id="station-title">Beacons</h2>
-          <p class="station-note">Heard by everyone, at three ground stations.</p>
-          <!-- a row for each station (ADR 0014), each a fixed height: what it
-               hears now, taking turns when more than one is overhead, or
-               what's next -->
-          <ol class="posts">
-            {STATIONS.map((s) => (
-              <li class="post" data-station={s.id}>
-                <p class="post-head">
-                  <span class="post-name">{s.name}</span>
-                  <span class="post-next" data-next></span>
-                </p>
-                <p class="post-heard" data-heard aria-live="polite"></p>
-              </li>
-            ))}
-          </ol>
-          <!-- what yours is doing; boosting it or bringing it down is on its
-               card and in Yours (ADR 0015), never here, since this line
-               moves on to whichever of yours passes next -->
-          {mine && <p id="your-pass" class="your-pass" data-id={mine.id}>Yours: {mine.callsign}.</p>}
-          {mine && <p class="your-manage"><a href="/catalogue/?show=mine">Boost or bring down yours</a></p>}
-        </section>
-
         <section class="summary" aria-labelledby="summary-title" data-recent={RECENT}>
           <div class="summary-head">
             <h2 id="summary-title">Sky now</h2>
@@ -146,7 +133,50 @@ const view = launched ? "canberra" : null;
           </p>
         </section>
       </div>
-    </section>
+    </div>
+
+    <aside class="rail" aria-label="Beacons">
+      <section class="station" aria-labelledby="station-title">
+        <div class="rail-head">
+          <h2 id="station-title">Beacons</h2>
+          <span class="listening" id="listening" data-listening={listening}>{listeningNow(listening)}</span>
+        </div>
+        <p class="station-note">What the three ground stations hear now. Everyone listening hears it at the same moment.</p>
+        <!-- a row for each station (ADR 0014), each a fixed height: what it
+             hears now, taking turns when more than one is overhead, or
+             what's next -->
+        <ol class="posts">
+          {STATIONS.map((s) => (
+            <li class="post" data-station={s.id}>
+              <p class="post-head">
+                <span class="post-name">{s.name}</span>
+                <span class="post-next" data-next></span>
+              </p>
+              <p class="post-heard" data-heard aria-live="polite"></p>
+            </li>
+          ))}
+        </ol>
+        <!-- what yours is doing; boosting it or bringing it down is on its
+             card and in Yours (ADR 0015), never here, since this line
+             moves on to whichever of yours passes next -->
+        {mine && <p id="your-pass" class="your-pass" data-id={mine.id}>Yours: {mine.callsign}.</p>}
+        {mine && <p class="your-manage"><a href="/catalogue/?show=mine">Boost or bring down yours</a></p>}
+      </section>
+
+      <!-- what the stations have heard while someone was listening, each
+           beacon once, the latest pass first (ADR 0016) -->
+      <section class="heard" aria-labelledby="heard-title">
+        <h2 id="heard-title">Heard</h2>
+        <p class="heard-note">Each beacon the stations picked up while someone was listening, the latest first.</p>
+        <ol class="feed" id="feed" data-size={HEARD_FEED}>
+          {heard.map((item) => <HeardCard item={item} now={now} />)}
+        </ol>
+        <p class="feed-empty" id="feed-empty" hidden={heard.length > 0}>
+          Nothing heard yet. A beacon is heard when its satellite comes over a
+          station while someone is listening, as you are now.
+        </p>
+      </section>
+    </aside>
 
     <!-- an object's history (ADR 0012), opened by clicking it in the sky or
          a name in the latest launches, with your own's controls (ADR 0015) -->
@@ -155,7 +185,7 @@ const view = launched ? "canberra" : null;
     {first && <FirstLaunch callsign={launched!.callsign ?? "Your satellite"} signedIn={Boolean(operator)} />}
   </main>
 
-  <script type="application/json" id="sky-data" set:html={embed({ serverTime: now, sky, launched: launched?.id ?? null, view, conjunctions: coming, collisions: collided })} />
+  <script type="application/json" id="sky-data" set:html={embed({ serverTime: now, sky, launched: launched?.id ?? null, view, conjunctions: coming, collisions: collided, heard, heardBy, listening })} />
   <script>
     import "../../scripts/sky.ts";
   </script>
@@ -168,11 +198,17 @@ const view = launched ? "canberra" : null;
     --space: #03060e;
     /* the first screen under the site header */
     --scene-height: max(30rem, calc(100svh - 4rem));
+    /* the beacons' column beside the sky */
+    --rail-width: clamp(21rem, 27vw, 30rem);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--rail-width);
   }
 
-  /* The sky fills the first screen; the panels float over it. */
+  /* The sky fills the first screen beside the beacons; the summary floats
+     over it. */
   .sky-page .scene {
     position: relative;
+    min-width: 0;
   }
 
   .sky-page .view {
@@ -451,19 +487,159 @@ const view = launched ? "canberra" : null;
     text-decoration-color: currentColor;
   }
 
-  /* The beacons: a row for each ground station (ADR 0014), each a fixed
-     height (its name, and at most two lines of beacon), so the panel never
-     changes size as satellites come and go. */
+  /* The beacons (ADR 0016): a column beside the sky, as tall as it. At the
+     top, what each station hears now; under it, scrolling, what they've
+     heard. */
+  .sky-page .rail {
+    display: flex;
+    flex-direction: column;
+    height: var(--scene-height);
+    border-left: 1px solid var(--grid);
+    background: var(--night-deep);
+  }
+
+  /* a row for each ground station (ADR 0014), each a fixed height (its
+     name, and up to four lines of beacon), so the column never jumps as
+     satellites come and go */
   .sky-page .station {
-    padding: 1rem;
-    border: 1px solid var(--amber-dim);
-    border-radius: 4px;
-    background: rgb(6 11 24 / 0.72);
-    backdrop-filter: blur(6px);
+    flex: none;
+    padding: 1rem 1.1rem 0.9rem;
+    border-bottom: 1px solid var(--grid);
+  }
+
+  .sky-page .rail-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
   }
 
   .sky-page .station h2 {
     margin-bottom: 0.15rem;
+  }
+
+  /* who else is here: the people listening now */
+  .sky-page .listening {
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+    white-space: nowrap;
+  }
+
+  .sky-page .listening::before {
+    content: "";
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.4rem;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 6px 1px rgb(242 165 65 / 0.5);
+  }
+
+  /* What's been heard: a feed, newest first, scrolling inside the column */
+  .sky-page .heard {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0.9rem 1.1rem 1.25rem;
+    scrollbar-color: var(--grid-strong) transparent;
+  }
+
+  .sky-page .heard h2 {
+    margin-bottom: 0.15rem;
+    font-size: var(--step-0);
+  }
+
+  .sky-page .heard-note,
+  .sky-page .feed-empty {
+    margin: 0 0 0.75rem;
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+  }
+
+  .sky-page .feed {
+    display: grid;
+    gap: 0.6rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .sky-page .heard-item {
+    padding: 0.7rem 0.8rem 0.75rem;
+    border: 1px solid var(--grid);
+    border-radius: 6px;
+    background: rgb(14 26 48 / 0.6);
+  }
+
+  .sky-page .heard-item.mine {
+    border-color: var(--amber-dim);
+  }
+
+  .sky-page .heard-item.fresh {
+    animation: fresh 2.5s ease-out;
+  }
+
+  @keyframes fresh {
+    from {
+      border-color: var(--amber);
+      background: rgb(242 165 65 / 0.14);
+    }
+  }
+
+  .sky-page .heard-item p {
+    margin: 0;
+  }
+
+  .sky-page .heard-who {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem 0.45rem;
+    font-size: var(--step--1);
+  }
+
+  .sky-page .heard-who a {
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .sky-page .heard-who a:hover {
+    color: var(--amber);
+    text-decoration: underline;
+  }
+
+  .sky-page .heard-handle {
+    overflow: hidden;
+    color: var(--ink-dim);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sky-page .heard-item.mine .heard-handle {
+    color: var(--amber);
+  }
+
+  .sky-page .heard-when {
+    margin-left: auto;
+    color: var(--ink-dim);
+    white-space: nowrap;
+  }
+
+  .sky-page .heard-line {
+    margin-top: 0.35rem;
+    font-size: 1.05rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .sky-page .heard-meta {
+    margin-top: 0.4rem;
+    color: var(--ink-dim);
+    font-size: 0.8rem;
+  }
+
+  .sky-page .heard-item.gone .heard-line {
+    color: var(--ink-dim);
   }
 
   .sky-page .station-note {
@@ -481,7 +657,7 @@ const view = launched ? "canberra" : null;
   }
 
   .sky-page .post {
-    --beacon-size: var(--step-1);
+    --beacon-size: 1.05rem;
     padding-left: 0.7rem;
     border-left: 2px solid var(--grid-strong);
   }
@@ -521,13 +697,13 @@ const view = launched ? "canberra" : null;
     white-space: nowrap;
   }
 
-  /* two lines of beacon, always: room for one at its longest */
+  /* four lines of beacon, always: room for one at its longest (140) */
   .sky-page .post-heard {
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    height: calc(2 * 1.25 * var(--beacon-size));
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    height: calc(4 * 1.25 * var(--beacon-size));
     overflow: hidden;
     font-size: var(--beacon-size);
     line-height: 1.25;
@@ -713,80 +889,90 @@ const view = launched ? "canberra" : null;
   }
 
   /* On a shorter screen the summary gives up its latest launches, then its
-     counts, then the beacons their note and the summary its hint, so the
-     panels always fit over the sky without scrolling. The beacons stay. */
-  @media (min-width: 52.01rem) and (max-height: 60rem) {
+     counts, so it always fits over the sky without scrolling; the beacons'
+     column gives up its notes and a line of each beacon, so the feed keeps
+     some room. */
+  @media (min-width: 52.01rem) and (max-height: 50rem) {
     .sky-page .recent li:nth-child(n + 4) {
       display: none;
     }
-  }
 
-  @media (min-width: 52.01rem) and (max-height: 54rem) {
-    .sky-page .recent {
-      display: none;
-    }
-  }
-
-  @media (min-width: 52.01rem) and (max-height: 45rem) {
-    .sky-page .band-counts {
-      display: none;
-    }
-  }
-
-  @media (min-width: 52.01rem) and (max-height: 41rem) {
     .sky-page .station-note,
+    .sky-page .heard-note {
+      display: none;
+    }
+  }
+
+  @media (min-width: 52.01rem) and (max-height: 42rem) {
+    .sky-page .recent,
+    .sky-page .band-counts,
     .sky-page .pick-hint {
       display: none;
     }
-  }
 
-  @media (min-width: 52.01rem) and (max-height: 38rem) {
-    .sky-page .post {
-      --beacon-size: var(--step-0);
-    }
-
-    .sky-page .count {
-      display: none;
-    }
-
-    .sky-page .panels {
-      gap: 0.5rem;
+    .sky-page .post-heard {
+      -webkit-line-clamp: 3;
+      line-clamp: 3;
+      height: calc(3 * 1.25 * var(--beacon-size));
     }
   }
 
-  /* On a phone the panel would cover the sky, so it follows it instead. */
+  /* On a phone: the sky, then the beacons, then the summary. */
   @media (max-width: 52rem) {
     .sky-page {
       --scene-height: 52svh;
+      display: flex;
+      flex-direction: column;
     }
 
-    .sky-page .panels {
-      position: static;
-      width: auto;
-      padding: 1rem var(--gutter) 2rem;
+    /* its parts take their places in the page's column */
+    .sky-page .scene {
+      display: contents;
+    }
+
+    .sky-page .view {
+      order: 0;
     }
 
     .sky-page .notice {
+      order: 1;
       position: static;
       width: auto;
       margin: 1rem var(--gutter) 0;
       transform: none;
     }
 
-    /* narrower, so a beacon at its longest takes three lines */
-    .sky-page .post-heard {
-      -webkit-line-clamp: 3;
-      line-clamp: 3;
-      height: calc(3 * 1.25 * var(--beacon-size));
-    }
-
-    /* under the scene, like the notice: over it, a long one hides the beacons */
+    /* under the scene, like the notice: over it, a long one hides the sky */
     .sky-page .collision-card {
+      order: 2;
       position: static;
       width: auto;
       margin: 1rem var(--gutter) 0;
       padding: 0.6rem 0.8rem;
       font-size: var(--step--1);
+    }
+
+    .sky-page .rail {
+      order: 3;
+      height: auto;
+      border-left: 0;
+      background: none;
+    }
+
+    .sky-page .station,
+    .sky-page .heard {
+      padding-inline: var(--gutter);
+    }
+
+    .sky-page .heard {
+      overflow: visible;
+    }
+
+    .sky-page .panels {
+      order: 4;
+      position: static;
+      width: auto;
+      padding: 1rem var(--gutter) 2rem;
     }
   }
 </style>

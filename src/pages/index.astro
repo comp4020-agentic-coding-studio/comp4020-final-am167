@@ -178,19 +178,20 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
 
           <div class="field">
             <label for="beacon">Beacon</label>
-            <input
+            <textarea
               id="beacon"
               name="beacon"
+              rows="3"
               required
               maxlength={BEACON_MAX}
               autocomplete="off"
-              value={values.beacon}
               aria-invalid={errors.beacon ? "true" : undefined}
               aria-describedby={describe("beacon", "beacon-help")}
-            />
+            >{values.beacon}</textarea>
             <p class="help" id="beacon-help">
-              Up to {BEACON_MAX} characters, no links. It stays on record after
-              your satellite is gone.
+              <span>Up to {BEACON_MAX} characters, no links. It stays on record after
+              your satellite is gone.</span>
+              <span class="count" id="beacon-count" aria-hidden="true" hidden></span>
             </p>
             <p class="field-error" id="beacon-error" data-error="beacon">{errors.beacon}</p>
           </div>
@@ -288,13 +289,31 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   </script>
 
   <script>
+    // How much of the beacon is left, as it's written (the field stops at
+    // the limit itself).
+    const beacon = document.querySelector<HTMLTextAreaElement>("textarea[name=beacon]");
+    const counter = document.getElementById("beacon-count");
+    if (beacon && counter) {
+      const max = beacon.maxLength;
+      const show = () => {
+        const used = [...beacon.value].length;
+        counter.textContent = `${used} / ${max}`;
+        counter.classList.toggle("near", used > max - 20);
+      };
+      counter.hidden = false;
+      beacon.addEventListener("input", show);
+      show();
+    }
+  </script>
+
+  <script>
     // Keeps what's been filled in across a detour to claim a handle or sign
     // in: saved on following one of the launchpad's own links to the operator
     // page (they come back here), filled back in only when arriving from that
     // page, and dropped otherwise.
     const DRAFT = "kessler:launch-draft";
     const pad = document.querySelector<HTMLFormElement>("form[data-launch]");
-    const field = (name: string) => pad?.querySelector<HTMLInputElement>(`input[name=${name}]:not([type=radio])`);
+    const field = (name: string) => pad?.querySelector<HTMLInputElement | HTMLTextAreaElement>(`:is(input, textarea)[name=${name}]:not([type=radio])`);
     if (pad) {
       document.addEventListener("click", (e) => {
         if (!(e.target instanceof Element) || !e.target.closest('a[href^="/operator/?back=launchpad"]')) return;
@@ -342,6 +361,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
         if (band) band.checked = true;
         field("callsign")!.value = String(draft.callsign ?? "");
         field("beacon")!.value = String(draft.beacon ?? "");
+        field("beacon")!.dispatchEvent(new Event("input"));
       }
     }
   </script>
@@ -794,7 +814,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     margin-bottom: 1rem;
   }
 
-  .field input {
+  .field :is(input, textarea) {
     width: 100%;
     padding: 0.6rem 0.7rem;
     font: inherit;
@@ -804,8 +824,30 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     border-radius: 3px;
   }
 
-  .field input[aria-invalid="true"] {
+  .field textarea {
+    display: block;
+    resize: vertical;
+    line-height: 1.4;
+  }
+
+  .field :is(input, textarea)[aria-invalid="true"] {
     border-color: var(--danger);
+  }
+
+  /* how much of the beacon is left, beside its rules */
+  #beacon-help {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  #beacon-help .count {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #beacon-help .count.near {
+    color: var(--amber);
   }
 
   .help,

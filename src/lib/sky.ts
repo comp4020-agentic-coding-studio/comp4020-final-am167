@@ -22,7 +22,7 @@ import {
   type Orbit,
 } from "./orbit.ts";
 
-const { objects, collisions, operators, manoeuvres } = schema;
+const { objects, collisions, operators, manoeuvres, transmissions, listens } = schema;
 
 // How long between one person's launches (PLAN.md, "Launch limits"). There's
 // no limit on how many you have up: each launch is another beacon heard, and
@@ -83,6 +83,7 @@ const viewerOf = (who: Who): Viewer => (typeof who === "object" ? who : { person
 
 // Whether an object is the viewer's: its operator's, once it has one,
 // otherwise the cookie's that launched it.
+export const isOwnedBy = (object: { owner: string | null; operator: number | null }, who: Who) => ownedBy(object, who);
 const ownedBy = (object: { owner: string | null; operator: number | null }, who: Who) => {
   const viewer = viewerOf(who);
   if (object.operator !== null) return object.operator === viewer.operator;
@@ -840,10 +841,12 @@ export interface History {
   mine: boolean;
   fate: Fate;
   fateAt: number | null;
-  // its beacon, once it's gone (or to its owner, always); while it flies,
-  // everyone else hears it only over a ground station, and it's withheld here
+  // its beacon, once it's been heard or it's gone (or to its owner,
+  // always: ADR 0012, 0016); until then it's withheld here
   beacon: string | null;
   withheld: boolean;
+  // how many people have heard it, over how many passes (ADR 0016)
+  heard: { by: number; passes: number };
   // while it's up: when it next passes over a ground station, and which
   // (null if it burns up first), and when it burns up
   nextPass: { at: number; station: string } | null;
@@ -883,7 +886,11 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
   const object = toObject(row);
   const mine = ownedBy(object, who);
   const flying = object.fate === "live";
-  const shown = !flying || mine;
+  const heard = {
+    by: db.select({ n: count() }).from(listens).where(eq(listens.object, id)).get()?.n ?? 0,
+    passes: db.select({ n: count() }).from(transmissions).where(eq(transmissions.object, id)).get()?.n ?? 0,
+  };
+  const shown = !flying || mine || heard.passes > 0;
   const pass = flying ? nextStation(object, now) : null;
 
   // Every collision and every fragment, read once and walked in memory: two
@@ -956,6 +963,7 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
     fateAt: row.fateAt,
     beacon: shown ? object.beacon : null,
     withheld: !shown && object.beacon !== null,
+    heard,
     nextPass: pass === null ? null : { at: now + pass.in, station: pass.station.name },
     reentryAt: flying ? reentryAt(object) : null,
     orbit: flying

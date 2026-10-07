@@ -1,4 +1,4 @@
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // The app's tables. `pnpm db:generate` turns changes here into a migration
 // under drizzle/, which runs when the server boots.
@@ -108,4 +108,35 @@ export const manoeuvres = sqliteTable(
     toRadius: real("to_radius").notNull(),
   },
   (t) => [index("manoeuvres_object").on(t.object)],
+);
+
+// Every time a beacon was heard (ADR 0016): it passed over a ground station
+// while someone had the sky open. How many were listening (its owner not
+// counted), and where and when. A pass with nobody listening isn't heard,
+// and isn't kept.
+export const transmissions = sqliteTable(
+  "transmissions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    object: integer("object").notNull(),
+    // a station's id (src/lib/stations.ts)
+    station: text("station").notNull(),
+    at: integer("at").notNull(),
+    listeners: integer("listeners").notNull(),
+  },
+  (t) => [index("transmissions_at").on(t.at), index("transmissions_object").on(t.object)],
+);
+
+// Who has heard each beacon, once each (ADR 0016): "heard by" is how many
+// rows an object has. A listener is an operator ("o:12"), or a one-way hash
+// of a person's cookie ("p:…"), never the cookie itself.
+export const listens = sqliteTable(
+  "listens",
+  {
+    object: integer("object").notNull(),
+    listener: text("listener").notNull(),
+    // when they first heard it
+    at: integer("at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.object, t.listener] }), index("listens_listener").on(t.listener)],
 );

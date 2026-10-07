@@ -104,6 +104,28 @@ describe("the sky page", () => {
     for (const row of rows) expect(row.querySelector("[aria-live]")).not.toBeNull();
   });
 
+  it("says who's listening, and lists what the stations have heard, without JavaScript", async () => {
+    const { page } = await skyPage();
+    const rail = page.querySelector("aside.rail")!;
+    expect(rail, "no beacons column").not.toBeNull();
+    // the stations live, and how many people are here (this viewer among them)
+    expect(rail.querySelector(".station [data-station]")).not.toBeNull();
+    const listening = rail.querySelector("#listening")!;
+    expect(Number(listening.getAttribute("data-listening"))).toBeGreaterThanOrEqual(1);
+    expect(listening.textContent).toMatch(/listening/i);
+    // what's been heard (ADR 0016): a feed, or a line saying nothing has been yet
+    const heard = rail.querySelector("section.heard")!;
+    expect(heard.querySelector("h2")?.textContent).toBe("Heard");
+    expect(heard.querySelector("ol#feed")).not.toBeNull();
+    const items = [...heard.querySelectorAll("#feed > li")];
+    if (items.length === 0) expect(heard.querySelector("#feed-empty")?.hasAttribute("hidden")).toBe(false);
+    for (const item of items) {
+      expect(item.querySelector(".heard-line")?.textContent).not.toBe("");
+      expect(item.querySelector(".heard-meta")?.textContent).toMatch(/^Over (Canberra|Goldstone|Madrid) · Heard by /);
+      expect(item.querySelector('a[href^="/object/"]')).not.toBeNull();
+    }
+  });
+
   it("opens on the whole sky, with the horizon over each station a button away", async () => {
     const { page } = await skyPage();
     const views = [...page.querySelectorAll<HTMLButtonElement>(".views button")];

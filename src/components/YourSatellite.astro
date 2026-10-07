@@ -3,6 +3,7 @@ import ManoeuvreControls from "./ManoeuvreControls.astro";
 import { falling, km, until } from "../lib/format.ts";
 import { BANDS, bandAt, climbing, fallRate, heightKm, radiusAt, reentryAt, type Band, type Orbit } from "../lib/orbit.ts";
 import { nextStation, stationOver } from "../lib/stations.ts";
+import { heardBy, passes } from "../lib/story.ts";
 import { countdown } from "../scripts/countdown.ts";
 
 // One of your satellites in orbit, in Yours (ADR 0015): its beacon, which
@@ -18,9 +19,11 @@ interface Props {
     deorbitedAt: number | null;
     boosts: number;
   };
+  // how many people have heard it, over how many passes (ADR 0016)
+  heard: { by: number; passes: number };
   now: number;
 }
-const { object: o, now } = Astro.props;
+const { object: o, heard, now } = Astro.props;
 const radius = radiusAt(o, now);
 const over = stationOver(o, now);
 const pass = over ? null : nextStation(o, now);
@@ -39,6 +42,9 @@ const orbit = { radius: o.radius, phase: o.phase, period: o.period, epoch: o.epo
     <span class="your-sat-doing">{doing}</span>
   </p>
   {o.beacon && <blockquote class="your-sat-beacon"><q>{o.beacon}</q></blockquote>}
+  <p class="your-sat-heard">
+    {heard.passes === 0 ? "Not heard yet: it hasn't passed over a station while anyone was listening." : `${heardBy(heard.by, true)}, over ${passes(heard.passes)}.`}
+  </p>
   <p class="your-sat-now">
     <span data-height>{km(heightKm(radius))}, {falling(fallRate(o, now))}</span>.{" "}
     <span data-pass>{over ? `It's over ${over.name} now.` : pass === null ? "It burns up before it next gets to one." : `Next over ${pass.station.name} in ${countdown(pass.in)}.`}</span>{" "}

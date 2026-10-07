@@ -1,11 +1,14 @@
 import type { APIRoute } from "astro";
-import { subscribe } from "../../lib/events.ts";
+import { audience, subscribe } from "../../lib/events.ts";
 import type { SkyEvent } from "../../lib/events.ts";
-import { conjunctions, liveSky, recentCollisions, toPublic, watcherArrived } from "../../lib/sky.ts";
+import { HEARD_FEED, heardCounts, listenerKey, recentlyHeard, startListening } from "../../lib/heard.ts";
+import { conjunctions, isOwnedBy, liveSky, recentCollisions, toPublic, watcherArrived } from "../../lib/sky.ts";
 
 // One stream per open page (ADR 0004). It opens with the server's time, a
-// snapshot of the live sky and the collisions coming (ADR 0008), then sends
-// each event as it happens.
+// snapshot of the live sky and the collisions coming (ADR 0008), what the
+// stations have heard and how many are listening (ADR 0016), then sends
+// each event as it happens. An open stream is someone listening: the
+// server's ear starts with the first.
 export const GET: APIRoute = ({ request, locals }) => {
   const viewer = { person: locals.person, operator: locals.operator?.id ?? null };
   // what this viewer may see of an event: objects lose their owner
@@ -24,6 +27,10 @@ export const GET: APIRoute = ({ request, locals }) => {
           objects: event.collision.objects.map((object) => toPublic(object, viewer)),
           fragments: event.collision.fragments.map((object) => toPublic(object, viewer)),
         };
+      case "heard":
+        return { ...event.heard, mine: isOwnedBy(event, viewer) };
+      case "audience":
+        return { listening: event.listening };
     }
   };
   const encoder = new TextEncoder();
@@ -36,14 +43,22 @@ export const GET: APIRoute = ({ request, locals }) => {
       // hold what the snapshot itself sets off (a burn-up it catches up on, a
       // collision staged for this viewer) until after it: hello comes first
       let held: SkyEvent[] | null = [];
-      const unsubscribe = subscribe((event) => (held ? held.push(event) : send(event.type, visible(event))));
+      const unsubscribe = subscribe(
+        (event) => (held ? held.push(event) : send(event.type, visible(event))),
+        listenerKey(viewer),
+      );
       watcherArrived();
+      startListening();
+      const sky = liveSky();
       send("hello", {
         serverTime: Date.now(),
-        sky: liveSky().map((object) => toPublic(object, viewer)),
+        sky: sky.map((object) => toPublic(object, viewer)),
         conjunctions: conjunctions(),
         // what a page that was away (asleep, offline) missed
         collisions: recentCollisions(5),
+        heard: recentlyHeard(HEARD_FEED, viewer),
+        heardBy: heardCounts(sky.map((object) => object.id)),
+        listening: audience().size,
       });
       for (const event of held) send(event.type, visible(event));
       held = null;
