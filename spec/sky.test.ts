@@ -104,6 +104,24 @@ describe("the sky page", () => {
     for (const row of rows) expect(row.querySelector("[aria-live]")).not.toBeNull();
   });
 
+  // the user's review, 2026-10-08: the page got crowded, so its boxes fold
+  it("serves its three boxes open, each with a hidden button to fold it", async () => {
+    const { page } = await skyPage();
+    const boxes = [...page.querySelectorAll("[data-collapsible]")];
+    expect(boxes.map((b) => b.querySelector("h2")?.textContent)).toEqual(["Sky now", "Beacons", "Heard"]);
+    for (const box of boxes) {
+      const button = box.querySelector(".box-toggle")!;
+      expect(button, "no button").not.toBeNull();
+      expect(button.hasAttribute("hidden"), "button shown without the script").toBe(true);
+      expect(button.getAttribute("aria-expanded")).toBe("true");
+      const body = page.getElementById(button.getAttribute("aria-controls") ?? "")!;
+      expect(box.contains(body), "it folds something outside its box").toBe(true);
+      expect(body.hasAttribute("hidden")).toBe(false);
+      // the heading stays when it's folded
+      expect(body.contains(box.querySelector("h2"))).toBe(false);
+    }
+  });
+
   it("says who's listening, and lists what the stations have heard, without JavaScript", async () => {
     const { page } = await skyPage();
     const rail = page.querySelector(".rail")!;

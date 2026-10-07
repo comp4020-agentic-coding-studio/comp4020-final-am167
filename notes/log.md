@@ -2465,3 +2465,27 @@ build).
 
 `pnpm check` green (300 tests, 0 errors, 0 warnings) against a fresh
 build. Commit `a3a6af2`.
+
+## 2026-10-08 — The sky's boxes fold
+
+Advay found the sky crowded: the Sky now panel over the scene, and
+Beacons and Heard down the right. Each now folds to its heading row (so
+"Live" and "Just you, listening" stay in view) with a chevron button at
+the end of the row: down while open, right once folded. Folding Beacons
+gives Heard the column, and folding Sky now clears the scene.
+
+- `src/scripts/collapsible.ts` wires any `[data-collapsible]` box: the
+  button (`aria-expanded`, `aria-controls` its body, named by the box's
+  heading) shows or hides the body, and the state is kept per browser in
+  `localStorage`, read and written inside try/catch, so a browser that
+  keeps nothing just starts open.
+- Without JavaScript the boxes are served open and the buttons hidden,
+  so nothing is ever out of reach.
+
+Tests first: `spec/collapsible.test.ts` (JSDOM: starts open, folds and
+unfolds one box alone, remembered, works with storage that throws) and a
+spec test that the sky serves its three boxes open with hidden buttons
+whose bodies are inside the box and exclude the heading. Both failed
+first. `pnpm check` green (305 tests, 0 errors, 0 warnings) against a
+fresh build. Checked in Chrome at 1920x1080 (all three folded, still
+folded after a reload) and on an iPhone 14 (390 wide, no overflow).

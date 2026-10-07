@@ -111,11 +111,15 @@ const view = launched ? "canberra" : null;
       )}
 
       <div class="panels">
-        <section class="summary" aria-labelledby="summary-title" data-recent={RECENT}>
+        <!-- each box folds to its heading (the user's review, 2026-10-08):
+             src/scripts/collapsible.ts shows the button and remembers -->
+        <section class="summary" aria-labelledby="summary-title" data-recent={RECENT} data-collapsible="summary">
           <div class="summary-head">
             <h2 id="summary-title">Sky now</h2>
             <span id="connection" class="connection" data-state="offline">Not live</span>
+            <button type="button" class="box-toggle" aria-controls="summary-body" aria-labelledby="summary-title" aria-expanded="true" hidden></button>
           </div>
+          <div id="summary-body">
           <p class="count" id="count">{skyCount(sky)}</p>
           <p class="pick-hint" id="pick-hint" hidden><span>Click anything in the sky to see its history</span>, or find it in the <a href="/catalogue/">catalogue</a>.</p>
           <dl class="band-counts">
@@ -145,16 +149,19 @@ const view = launched ? "canberra" : null;
             <a href="/kessler/">What's Kessler syndrome?</a>
             <a href="/">{mine ? "Launch another" : "Launch a satellite"}</a>
           </p>
+          </div>
         </section>
       </div>
     </div>
 
     <aside class="rail" aria-label="Beacons">
-      <section class="station" aria-labelledby="station-title">
+      <section class="station" aria-labelledby="station-title" data-collapsible="beacons">
         <div class="rail-head">
           <h2 id="station-title">Beacons</h2>
           <span class="listening" id="listening" data-listening={listening}>{listeningNow(listening)}</span>
+          <button type="button" class="box-toggle" aria-controls="station-body" aria-labelledby="station-title" aria-expanded="true" hidden></button>
         </div>
+        <div id="station-body">
         <p class="station-note">What the three ground stations hear now. Everyone listening hears it at the same moment.</p>
         <p class="today">
           <span class="today-kicker">Today the stations ask</span>
@@ -180,12 +187,17 @@ const view = launched ? "canberra" : null;
              moves on to whichever of yours passes next -->
         {mine && <p id="your-pass" class="your-pass" data-id={mine.id}>Yours: {mine.callsign}.</p>}
         {mine && <p class="your-manage"><a href="/catalogue/?show=mine">Boost or bring down yours</a></p>}
+        </div>
       </section>
 
       <!-- what the stations have heard while someone was listening, each
            beacon once, the latest pass first (ADR 0016) -->
-      <section class="heard" aria-labelledby="heard-title">
-        <h2 id="heard-title">Heard</h2>
+      <section class="heard" aria-labelledby="heard-title" data-collapsible="heard">
+        <div class="rail-head">
+          <h2 id="heard-title">Heard</h2>
+          <button type="button" class="box-toggle" aria-controls="heard-body" aria-labelledby="heard-title" aria-expanded="true" hidden></button>
+        </div>
+        <div id="heard-body">
         <p class="heard-note">Each beacon the stations picked up while someone was listening, the latest first.</p>
         <ol class="feed" id="feed" data-size={HEARD_FEED}>
           {heard.map((item) => <HeardCard item={item} now={now} />)}
@@ -194,6 +206,7 @@ const view = launched ? "canberra" : null;
           Nothing heard yet. A beacon is heard when its satellite comes over a
           station while someone is listening, as you are now.
         </p>
+        </div>
       </section>
     </aside>
 
@@ -207,6 +220,9 @@ const view = launched ? "canberra" : null;
   <script type="application/json" id="sky-data" set:html={embed({ serverTime: now, sky, launched: launched?.id ?? null, view, conjunctions: coming, collisions: collided, heard, heardBy, listening })} />
   <script>
     import "../../scripts/sky.ts";
+    import { collapsible } from "../../scripts/collapsible.ts";
+
+    collapsible();
   </script>
 </Base>
 
@@ -570,6 +586,65 @@ const view = launched ? "canberra" : null;
     justify-content: space-between;
     align-items: baseline;
     gap: 1rem;
+  }
+
+  /* a box's heading, then what's beside it, and its fold button last */
+  .sky-page .rail-head h2,
+  .sky-page .summary-head h2 {
+    margin-right: auto;
+  }
+
+  /* folds a box to its heading (src/scripts/collapsible.ts): a chevron,
+     down while it's open, right once it's folded */
+  .sky-page .box-toggle {
+    flex: none;
+    align-self: center;
+    display: inline-grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    margin: -0.3rem -0.4rem -0.3rem -0.5rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: none;
+    color: var(--ink-dim);
+    cursor: pointer;
+  }
+
+  .sky-page .box-toggle[hidden] {
+    display: none;
+  }
+
+  .sky-page .box-toggle::before {
+    content: "";
+    width: 0.45rem;
+    height: 0.45rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: translateY(-20%) rotate(45deg);
+    transition: transform 0.15s ease;
+  }
+
+  .sky-page .box-toggle[aria-expanded="false"]::before {
+    transform: translateX(-15%) rotate(-45deg);
+  }
+
+  .sky-page .box-toggle:hover,
+  .sky-page .box-toggle:focus-visible {
+    border-color: var(--grid-strong);
+    color: var(--amber);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sky-page .box-toggle::before {
+      transition: none;
+    }
+  }
+
+  /* folded, a box is its heading alone */
+  .sky-page .folded h2 {
+    margin-bottom: 0;
   }
 
   .sky-page .station h2 {
