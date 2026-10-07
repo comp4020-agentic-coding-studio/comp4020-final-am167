@@ -781,7 +781,7 @@ async function runRuntimeProfile(
     let offscreen: (PhaseResult & { canvasLeftViewport: boolean }) | null = null;
     if (skyReady !== null) {
       // it opens on the whole planet, where every satellite is in view and
-      // every one wants a label (ADR 0013)
+      // every one wants a label (ADR 0014)
       wholeSky = await collectPhase(sky, 3_000, refreshIntervalMilliseconds);
       // then the zoom in to the horizon over a station
       await sky.locator('.views button[data-view="canberra"]').click();

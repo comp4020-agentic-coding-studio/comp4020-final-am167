@@ -211,6 +211,56 @@ describe("who a collision names (ADR 0010)", async () => {
       ["BRAVO", "bravo_ops"],
     ]);
   });
+
+  // ADR 0012: where an object came from, and what followed it
+  it("keeps each object's history: what it met, and what its debris went on to destroy", () => {
+    const now = at + 6 * HOUR;
+    const charlie = collisions().find((c) => c.parties.some((p) => p.callsign === "CHARLIE"))!;
+    const charlieId = charlie.parties.find((p) => p.callsign === "CHARLIE")!.id;
+    // every fragment downstream of ALPHA: its roots include it
+    const descended = sky
+      .catalogue("all", undefined)
+      .filter((o) => o.kind === "debris" && o.from!.some((root) => root.id === alpha.id));
+
+    const history = sky.historyOf(alpha.id, "someone else", now)!;
+    expect(history).toMatchObject({ callsign: "ALPHA", fate: "destroyed", fateAt: at, handle: null, mine: false });
+    // gone, so its beacon is read in full
+    expect(history.beacon).toBe("hello from alpha");
+    expect(history.end).toMatchObject({ at, with: { id: bravo.id, callsign: "BRAVO" } });
+    expect(history.origin).toBeNull();
+    expect(history.followed.left).toBe(collisions()[0].fragments.length);
+    expect(history.followed.fragments).toBe(descended.length);
+    expect(history.followed.up).toBe(descended.filter((o) => o.fate === "live").length);
+    expect(history.followed.collisions).toBeGreaterThanOrEqual(1);
+    expect(history.followed.destroyed.map((o) => o.callsign)).toContain("CHARLIE");
+
+    // the fragment that hit CHARLIE came from ALPHA and BRAVO's collision
+    const debris = charlie.parties.find((p) => p.id !== charlieId)!;
+    const fragment = sky.historyOf(debris.id, undefined, now)!;
+    expect(fragment.kind).toBe("debris");
+    expect(fragment.origin!.parties.map((p) => p.id)).toEqual([alpha.id, bravo.id]);
+    expect(fragment.origin!.roots.map((r) => r.callsign)).toEqual(["ALPHA", "BRAVO"]);
+    expect(fragment.end!.with.id).toBe(charlieId);
+
+    // CHARLIE was destroyed by debris, not by anything it did
+    const victim = sky.historyOf(charlieId, undefined, now)!;
+    expect(victim.end!.with.from!.map((r) => r.callsign)).toEqual(["ALPHA", "BRAVO"]);
+    expect(victim.followed.destroyed.map((o) => o.callsign)).not.toContain("ALPHA");
+    expect(sky.historyOf(999_999, undefined, now)).toBeNull();
+  });
+
+  it("withholds a flying satellite's beacon from everyone but its owner", () => {
+    const now = at + 6 * HOUR;
+    const delta = put({ owner: "dave", callsign: "DELTA", beacon: "still up here", ...orbit(2.4, 0, 1, now) });
+    const theirs = sky.historyOf(delta.id, "someone else", now)!;
+    expect(theirs).toMatchObject({ fate: "live", beacon: null, withheld: true, end: null });
+    // the next of the three ground stations it reaches (ADR 0014)
+    expect(theirs.nextPass!.at).toBeGreaterThan(now);
+    expect(["Canberra", "Goldstone", "Madrid"]).toContain(theirs.nextPass!.station);
+    expect(theirs.reentryAt).toBeGreaterThan(theirs.nextPass!.at);
+    expect(theirs.followed).toEqual({ left: 0, collisions: 0, fragments: 0, up: 0, destroyed: [] });
+    expect(sky.historyOf(delta.id, "dave", now)).toMatchObject({ beacon: "still up here", withheld: false, mine: true });
+  });
 });
 
 describe("a collision staged over a station", async () => {
@@ -241,7 +291,7 @@ describe("a collision staged over another station", async () => {
   const { sky } = await freshServer();
   const { STATIONS } = await import("../src/lib/stations.ts");
 
-  it("can meet over Goldstone or Madrid, not only Canberra (ADR 0013)", () => {
+  it("can meet over Goldstone or Madrid, not only Canberra (ADR 0014)", () => {
     // the first draw picks the way round, the second the station
     const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
     try {

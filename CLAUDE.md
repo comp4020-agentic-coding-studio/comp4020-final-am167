@@ -54,6 +54,14 @@ which starts its own server and database and writes reports to the ignored
   servers you started when you're done. Read the port from the server's own
   output and confirm with `lsof -nP -iTCP:<port> -sTCP:LISTEN`, since a
   "stopped" server can still hold its port.
+- **Other agents run their own servers** (often from `.claude/worktrees/`),
+  so a busy port isn't yours to free. Only kill a process you started this
+  session, and check it before you do: `ps -o pid,etime,command -p <pid>`
+  (how long it's been up) and `lsof -a -p <pid> -d cwd` (which checkout
+  it's serving). If it's been up longer than you started it, or runs from
+  another directory, leave it alone and use another port (`PORT=8091`, with
+  `APP_URL` pointing at it and a scratch `DATABASE_PATH`). Note the PID when
+  you start a server, so you stop that one and nothing else.
 - Keep `spec/invariants.test.ts` green; don't delete it.
 - **Never commit without my approval.** Get the checks green, then show me what
   changed and wait for me to say commit. Green checks aren't the go-ahead, a red

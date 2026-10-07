@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-07 (slower orbits and three ground stations built, ADRs 0012 and 0013 accepted, PR #4; C9 write-ups outstanding)._
+_Last updated 2026-10-07 (slower orbits and three ground stations built, ADRs 0013 and 0014 accepted, PR #4; C9 write-ups outstanding)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -39,7 +39,8 @@ _Last updated 2026-10-07 (slower orbits and three ground stations built, ADRs 00
     bright collision the view turns to follow (`90dfab9`); the "in orbit"
     notice dropped once that satellite is gone (`811236f`); a nudge towards
     claiming a handle at launch (`487f0a4`), then as a pop-up on arriving
-    at the launchpad (once a visit, closable, never a gate; PR #2).
+    at the launchpad (once a visit, closable, never a gate; PR #2), since
+    moved to open on the first Launch of a visit instead of on arrival.
   - Not built, though once listed for C9: conjunction alerts and dodging
     (moved to C10).
 - **Next, for C9:**
@@ -53,19 +54,24 @@ _Last updated 2026-10-07 (slower orbits and three ground stations built, ADRs 00
      the sky's station panel only (not the launchpad: too cluttered). On
      branch `claude/c9-outstanding-work-17iuus` (with PR #2's handle
      pop-up), as PR #3.
-  4. **Slower orbits and three ground stations: built** (Advay,
-     2026-10-07; ADRs 0012 and 0013, accepted). Every period three times
+  4. **Click a satellite or fragment to see its history** (Advay,
+     2026-10-07; ADR 0012, accepted; built, `93f8735`): in the sky, clicking an
+     object opens its record, also at `/object/<id>/` and linked from the
+     catalogue. Framed as "the sky remembers" (Ostrom: seeing what each
+     takes): who launched it, when, any manoeuvre, for debris the collision
+     it came from and its roots, how it ended, and **what followed** (its
+     fragments, how many are still up, what they destroyed). A live
+     satellite's beacon stays hidden (heard only overhead, with a countdown
+     to the next pass); once it's gone the beacon is shown as its epitaph;
+     its owner always sees their own.
+  5. **Slower orbits and three ground stations: built** (Advay,
+     2026-10-07; ADRs 0013 and 0014, accepted). Every period three times
      longer, so a beacon is up long enough to read; three stations at the
      Deep Space Network's sites (Canberra, Goldstone, Madrid), all heard
      by everyone, to give the passes back; the sky opens on the whole
      planet with a beacon panel per station, and the horizon over any
      station one click away. On branch
      `claude/stations-globe-view-design-fd3851`, as PR #4.
-  5. **Click a satellite or fragment to see its history** (Advay,
-     2026-10-07, for C9 but not yet): in the sky, clicking an object shows
-     its record: who launched it, when, its beacon, and for debris the
-     collision it came from and the satellites at its root (the lineage the
-     catalogue already keeps).
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or
@@ -106,7 +112,7 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Dimension | **2D** orbital chart: clearer, lighter on mobile, easier to make accessible than 3D. |
 | Deorbiting | **Allowed** for your own satellite. Debris can't be cleaned up by anyone. |
 | C8 scope (2026-10-04) | **Proof of life + SSE:** launch, persist, orbits drawn, launches appear live in other sessions. Collisions, debris, decay and deorbiting move to C9. The C8 brief only asks for proof of life ("the real-time layer and the polish can all wait"); SSE is kept to build the event plumbing early. |
-| Overhead (2026-10-07, ADR 0013, accepted) | **Three ground stations** at the Deep Space Network's sites (Canberra, Goldstone, Madrid), all heard by everyone, so everyone still reads the same line at the same moment. The sky opens on the whole planet; the horizon over any station is a click away. Replaces the row below. |
+| Overhead (2026-10-07, ADR 0014, accepted) | **Three ground stations** at the Deep Space Network's sites (Canberra, Goldstone, Madrid), all heard by everyone, so everyone still reads the same line at the same moment. The sky opens on the whole planet; the horizon over any station is a click away. Replaces the row below. |
 | ~~Overhead (2026-10-04)~~ | ~~**One shared ground station**~~, a fixed point on the planet. A beacon shows to everyone when its satellite crosses that arc, so everyone reads the same line at the same moment. The station is the launchpad. |
 | Launch flow (2026-10-04) | The landing page is the **launchpad** with the launch form. Launching plays a rocket rising, then the camera **pans up** into the orbit view and the new satellite appears. C8 gets a simple version of the pan; the cinematic version is week 12 polish. Without JS the form still posts and redirects to the orbit view. |
 | Beacon rules (2026-10-04) | **At most 60 characters, plain text, no URLs, a small word blocklist.** Shown in the sky while the satellite is live; the catalogue keeps it after. |
@@ -118,8 +124,8 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Catalogue page (2026-10-05) | **The sky page keeps a short "Sky now" card; the full table moves to `/catalogue/`.** The card has counts per band and the latest launches, live; the catalogue lists what's in orbit or everything ever launched (a plain link), and is where debris and its lineage go. The table under the sky made the page scroll too far, and debris would make it far longer. The card is also where collisions out of view will be announced. |
 | Bands (2026-10-04) | **Three bands (low, mid, high) with jitter:** you pick a band, the server picks a random radius and phase inside it, so orbits aren't identical. |
 | Decay (2026-10-06, ADR 0007) | **Closed form, then a burn-up.** radius³ falls at one steady rate, so an orbit falls slowly, then faster; from the low band's middle it lasts 4 hours, the mid's about 17 hours, the high's about 2 days (across each band's reach: 1–8 h, 9–27 h, 31 h–3 days). Shortened from a day / a week / two months on 2026-10-06: the high band has to clear within a few days. At 1.06 planet radii it plunges for 30 seconds and burns up, drawn as a real re-entry. Positions stay a pure function of orbit and clock, so nothing new is stored or sent. |
-| Slower orbits (2026-10-07, ADR 0012, accepted) | **Every period three times longer**: low middle every 3 minutes, mid about 8, high 24, so a low beacon is up about 12 seconds, not 4. Head-on collision chance tripled to keep collisions per hour; decay unchanged; orbits already up retimed once, in place. |
-| Bands as ranges (2026-10-06, ADR 0007) | **One period for each height** (low middle once a minute, high middle every eight; mid now 2.7 min; all three times longer since ADR 0012), and the bands meet at 1.5 and 2.05, so every height is in one band. Counts on the sky page are by where objects are now. |
+| Slower orbits (2026-10-07, ADR 0013, accepted) | **Every period three times longer**: low middle every 3 minutes, mid about 8, high 24, so a low beacon is up about 12 seconds, not 4. Head-on collision chance tripled to keep collisions per hour; decay unchanged; orbits already up retimed once, in place. |
+| Bands as ranges (2026-10-06, ADR 0007) | **One period for each height** (low middle once a minute, high middle every eight; mid now 2.7 min; all three times longer since ADR 0013), and the bands meet at 1.5 and 2.05, so every height is in one band. Counts on the sky page are by where objects are now. |
 | Collision geometry (2026-10-06) | **Mixed directions, plus near misses.** Orbits are flat and the period depends only on height, so two objects going the same way at the same height never close in, and decay keeps the gap in radius³ fixed. So each object gets a direction (prograde or retrograde): opposite-direction objects at similar heights cross head-on twice a lap. Same-direction objects can still collide when one creeps up on another within a (larger) hit distance. Rejected: hidden 3D inclinations (rewrites the rendering). Needs a decision record. |
 | Collision mechanics (2026-10-06, draft) | **Predicted by the server, broadcast ahead.** Positions are closed-form, so the server solves each pair's next crossing, keeps a queue of upcoming hits and sets a timer for the next (as decay does for burn-ups). A `conjunction` event gives every screen the impact time in advance, so all screens draw it at the same moment. At impact both objects are `destroyed` and seeded fragments spawn near the point, mostly keeping their parent's direction, so a head-on hit leaves debris going both ways. Catch-up after a restart runs the queue forward in time order (decays and collisions, new debris colliding inside the gap). New `collisions` table; `objects` gains direction and source collision (the lineage of ADR 0003). |
 | Seeding (2026-10-06) | **The server keeps a baseline of derelicts**: dead, ownerless satellites and old debris, as real orbit has, so collisions can happen when only the marker's two sessions are open. |

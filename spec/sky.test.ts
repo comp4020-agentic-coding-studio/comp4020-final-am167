@@ -60,7 +60,7 @@ describe("the sky page", () => {
     expect(page.querySelector('a[href="/catalogue/"]')).not.toBeNull();
   });
 
-  // ADR 0013: three ground stations, all heard by everyone
+  // ADR 0014: three ground stations, all heard by everyone
   it("has a beacon panel with a row for each of the three ground stations", async () => {
     const { page } = await skyPage();
     const panel = page.querySelector(".station")!;

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DECAY, MANOEUVRE, angleAt, burnAt, climb, descend, periodAt, radiusAt, reentryAt, type Orbit } from "../src/lib/orbit.ts";
 
-// Slower orbits (ADR 0012): orbits launched under the old, three-times-faster
+// Slower orbits (ADR 0013): orbits launched under the old, three-times-faster
 // period law are retimed once, in place, the first time the server settles
 // the sky. Nothing jumps, and a second settle changes nothing. Drives the
 // server's own code against a throwaway database, with the clock passed in.

@@ -19,7 +19,7 @@ const TAU = 2 * Math.PI;
 // be watched, not to be physical): the middle of the high band takes eight
 // times as long as the low band's. The middle of the low band comes round
 // every LOW_PERIOD: slow enough that a beacon is up long enough to read as
-// it crosses a station (ADR 0012; it was once a minute).
+// it crosses a station (ADR 0013; it was once a minute).
 const LOW_MIDDLE = 1.3;
 const HIGH_MIDDLE = 2.4;
 const LOW_PERIOD = 3 * 60_000;

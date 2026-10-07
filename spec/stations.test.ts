@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { burnAt, periodAt, type Orbit } from "../src/lib/orbit.ts";
 import { OVERHEAD_HALF_WIDTH, STATIONS, isOverhead, nextStation, stationOver, untilStation } from "../src/lib/stations.ts";
 
-// The ground stations (ADR 0013): three, at the Deep Space Network's sites,
+// The ground stations (ADR 0014): three, at the Deep Space Network's sites,
 // all heard by everyone. A satellite in any station's window is overhead.
 // Pure maths, so it runs without the app.
 

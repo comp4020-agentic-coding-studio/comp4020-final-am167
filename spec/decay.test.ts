@@ -165,7 +165,7 @@ describe("bands are ranges of height", () => {
     expect(periodAt(middle("high"))).toBeCloseTo(BANDS.high.period, -3);
   });
 
-  it("comes round slowly enough to read a beacon: low every 3 minutes, high every 24 (ADR 0012)", () => {
+  it("comes round slowly enough to read a beacon: low every 3 minutes, high every 24 (ADR 0013)", () => {
     const MINUTE = 60_000;
     expect(periodAt(middle("low"))).toBeCloseTo(3 * MINUTE, -2);
     expect(periodAt(middle("high"))).toBeCloseTo(24 * MINUTE, -2);

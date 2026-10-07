@@ -3,7 +3,7 @@
 // `pnpm coastline` after changing the stations or the visible region.
 //
 // The chart's plane is the great circle closest to the three ground
-// stations (src/lib/stations.ts, ADR 0013), and the coastlines are baked in
+// stations (src/lib/stations.ts, ADR 0014), and the coastlines are baked in
 // its frame, so each station sits on its own coast. Only the hemisphere
 // facing the camera is ever on screen, and up close only the part around a
 // station. Coordinates are in the scene's frame, in planet radii: +y is up

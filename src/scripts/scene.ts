@@ -38,7 +38,7 @@ import { createReentry } from "./reentry.ts";
 import { PLANET_COLOURS, STAR_COLOURS, seeded } from "./starfield.ts";
 
 // The whole planet, with every orbit in view and the three ground stations'
-// windows on it (ADR 0013); or the sky as seen from just above one station:
+// windows on it (ADR 0014); or the sky as seen from just above one station:
 // the planet's limb along the bottom, the three bands stacked over it, and
 // satellites rising in on the left, crossing the station's window and
 // setting on the right. One continuous zoom between the two.
@@ -69,6 +69,9 @@ export interface SceneImpact {
 export interface SceneControls {
   // the horizon over a station, or null for the whole planet
   view(station: StationId | null): void;
+  // the object drawn nearest a point on the page (a click), if one is close
+  // enough to mean it
+  pick(clientX: number, clientY: number, reach: number): number | null;
 }
 
 export interface SceneOptions {
@@ -86,6 +89,8 @@ export interface SceneOptions {
   obstacles: HTMLElement[];
   // collisions coming and just past, drawn at their moment on every screen
   impacts?: () => Iterable<SceneImpact>;
+  // the object whose history is open (ADR 0012): it wears a wider ring
+  selected?: () => number | null;
 }
 
 const TAU = Math.PI * 2;
@@ -1149,6 +1154,7 @@ export function createScene(options: SceneOptions): SceneControls | null {
 
     // the points
     const { position, colour, size, core, halo } = pointBuffers;
+    const chosen = options.selected?.() ?? null;
     for (let i = 0; i < flying.length; i++) {
       const p = flying[i];
       const kind = kindOf(p.sat);
@@ -1162,8 +1168,8 @@ export function createScene(options: SceneOptions): SceneControls | null {
       // debris is small, a derelict a little smaller than a working satellite
       const small = kind === "debris" ? 0.5 : kind === "derelict" ? 0.8 : 1;
       core[i] = ((p.sat.mine ? 3.6 : p.overhead ? 3.2 : 2.4) + heat) * small;
-      halo[i] = p.sat.mine ? 10 : 0;
-      size[i] = ((p.sat.mine ? 26 : 22) + heat * 8) * small;
+      halo[i] = p.sat.id === chosen ? 13 : p.sat.mine ? 10 : 0;
+      size[i] = p.sat.id === chosen ? 32 + heat * 8 : ((p.sat.mine ? 26 : 22) + heat * 8) * small;
     }
     const g = satellites.geometry;
     for (const name of ["position", "colour", "size", "core", "halo"]) g.getAttribute(name).needsUpdate = true;
@@ -1348,6 +1354,18 @@ export function createScene(options: SceneOptions): SceneControls | null {
       zoomFrom = zoom;
       zoomTo = station ? 0 : 1;
       zoomStart = performance.now();
+    },
+    pick(clientX, clientY, reach) {
+      const rect = canvas.getBoundingClientRect();
+      let best: { id: number; d: number } | null = null;
+      // what the last frame drew, burning ones included
+      for (const p of placed) {
+        if (!inView(p)) continue;
+        const [x, y] = screen(p.x, p.y);
+        const d = Math.hypot(x - (clientX - rect.left), y - (clientY - rect.top));
+        if (d <= reach && (!best || d < best.d)) best = { id: p.sat.id, d };
+      }
+      return best?.id ?? null;
     },
   };
 }

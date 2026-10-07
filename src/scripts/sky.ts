@@ -4,6 +4,7 @@ import { BANDS, bandAt, climbing, plungeAt, radiusAt, reentryAt, type Band } fro
 import { STATIONS, nextStation, stationOver, untilStation, type StationId } from "../lib/stations.ts";
 import { blame, couplet, headline, skyCount, type StoryParty } from "../lib/story.ts";
 import { countdown } from "./countdown.ts";
+import { keepCounting } from "./history.ts";
 import { wireManoeuvres } from "./manoeuvres.ts";
 
 // Keeps the shared sky live, and starts the scene that draws it. Positions
@@ -54,7 +55,7 @@ const initial = JSON.parse(document.getElementById("sky-data")!.textContent!) as
   serverTime: number;
   sky: Satellite[];
   launched: number | null;
-  // the view it opens on (ADR 0013): a station's horizon, or the whole sky
+  // the view it opens on (ADR 0014): a station's horizon, or the whole sky
   view: StationId | null;
   conjunctions: Conjunction[];
   collisions: Story[];
@@ -163,7 +164,9 @@ import("./scene.ts")
         document.getElementById("views")!,
         ...(document.getElementById("launched-notice") ? [document.getElementById("launched-notice")!] : []),
         document.getElementById("collision-card")!,
+        historyPanel,
       ],
+      selected: () => showing,
     });
     if (!started) return noScene();
     requestAnimationFrame(() => requestAnimationFrame(() => canvas.classList.add("drawn")));
@@ -180,12 +183,108 @@ import("./scene.ts")
         describe(id);
       });
     }
+    // click (or tap, with a wider reach) an object to open its history
+    const reach = (event: MouseEvent) => ((event as PointerEvent).pointerType === "touch" ? 32 : 22);
+    canvas.addEventListener("click", (event) => {
+      const id = started.pick(event.clientX, event.clientY, reach(event));
+      if (id !== null) openHistory(id);
+    });
+    canvas.addEventListener("mousemove", (event) => {
+      canvas.style.cursor = started.pick(event.clientX, event.clientY, reach(event)) === null ? "" : "pointer";
+    });
+    const hint = document.getElementById("pick-hint")!;
+    if (matchMedia("(pointer: coarse)").matches) hint.querySelector("span")!.textContent = "Tap anything in the sky to see its history";
+    hint.hidden = false;
   })
   // the chunk didn't load (offline, or a deploy replaced it), or the scene
   // failed to start
   .catch(noScene);
 
-// ── what the stations hear (ADR 0013) ─────────────────────────────────────
+// ── an object's history (ADR 0012) ───────────────────────────────────────
+
+// The panel over the scene (under it on a phone), filled with the history
+// the server tells; it works out nothing itself. A collision anywhere can
+// add to what followed an object, so the open one is asked for again.
+const historyPanel = document.getElementById("history-panel")!;
+const historyBody = historyPanel.querySelector<HTMLElement>(".history-body")!;
+const historyStatus = document.getElementById("history-status")!;
+// the object the panel is for: set on the click, so an event arriving
+// while it loads refreshes the new one, not the last
+let showing: number | null = null;
+let stopCounting = () => {};
+// where focus was when the panel opened, to go back to on close
+let opener: HTMLElement | null = null;
+// the latest ask: a slow answer to an earlier one is dropped
+let asked = 0;
+async function openHistory(id: number, refresh = false) {
+  const ask = ++asked;
+  const opening = historyPanel.hidden;
+  if (!refresh) {
+    showing = id;
+    if (opening) opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
+  let html: string | null = null;
+  try {
+    const res = await fetch(`/object/${id}/panel`);
+    if (res.ok) html = await res.text();
+  } catch {
+    // offline: said below, unless it was only a refresh
+  }
+  if (ask !== asked || showing !== id) return;
+  if (html === null && refresh) return;
+  // a refresh mustn't drop focus from a link in the panel
+  const hadFocus = historyPanel.contains(document.activeElement);
+  stopCounting();
+  if (html === null) {
+    historyBody.innerHTML = '<p class="history-error">Its history couldn\'t be loaded. Try again in a moment.</p>';
+    stopCounting = () => {};
+  } else {
+    historyBody.innerHTML = html;
+    const article = historyBody.querySelector<HTMLElement>(".history");
+    stopCounting = article ? keepCounting(article, serverNow) : () => {};
+  }
+  historyPanel.hidden = false;
+  if (hadFocus) historyPanel.focus({ preventScroll: true });
+  if (refresh) return;
+  historyStatus.textContent = `History of ${historyBody.querySelector("h2")?.textContent ?? "the object"} opened.`;
+  historyPanel.focus({ preventScroll: true });
+  // on a phone it's under the scene
+  if (opening && getComputedStyle(historyPanel).position === "static") {
+    historyPanel.scrollIntoView({ block: "nearest", behavior: reduced ? "auto" : "smooth" });
+  }
+}
+function closeHistory() {
+  asked++;
+  stopCounting();
+  showing = null;
+  historyPanel.hidden = true;
+  historyStatus.textContent = "";
+  // the latest launches are rebuilt as the sky changes: the same link, then
+  const href = opener?.getAttribute("href");
+  const back = opener?.isConnected ? opener : href ? document.querySelector<HTMLElement>(`#recent a[href="${href}"]`) : null;
+  back?.focus({ preventScroll: true });
+  opener = null;
+}
+const refreshHistory = (id?: number) => {
+  if (showing !== null && (id === undefined || id === showing)) openHistory(showing, true);
+};
+historyPanel.querySelector(".history-close")!.addEventListener("click", closeHistory);
+document.addEventListener("keydown", (event) => {
+  // a manoeuvre's dialog closes first
+  if (event.key === "Escape" && !historyPanel.hidden && !document.querySelector("dialog[open]")) closeHistory();
+});
+// a name in the latest launches, or another object named in a history,
+// opens in the panel; "Its own page" and modified clicks go to the page
+document.addEventListener("click", (event) => {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const link = (event.target as Element).closest<HTMLAnchorElement>("#recent a, .history-body .history a");
+  const id = link?.getAttribute("href")?.match(/^\/object\/(\d+)\/$/)?.[1];
+  if (!id) return;
+  event.preventDefault();
+  openHistory(Number(id));
+});
+
+// ── what the stations hear (ADR 0014) ─────────────────────────────────────
 
 // A row for each station: what it hears now, or what it hears next.
 const posts = STATIONS.map((station) => {
@@ -390,9 +489,13 @@ function recentItem(sat: Satellite): HTMLLIElement {
   swatch.className = "swatch";
   swatch.style.setProperty("--hue", String(hue(sat.id)));
   const what = document.createElement("span");
+  const link = document.createElement("a");
+  link.href = `/object/${sat.id}/`;
+  link.dataset.history = String(sat.id);
   const name = document.createElement("strong");
   name.textContent = sat.callsign;
-  what.append(name, `${sat.mine ? " (yours)" : ""} to ${BANDS[sat.band].label}`);
+  link.append(name);
+  what.append(link, `${sat.mine ? " (yours)" : ""} to ${BANDS[sat.band].label}`);
   const time = document.createElement("time");
   time.dateTime = new Date(sat.launchedAt).toISOString();
   time.textContent = ago(serverNow() - sat.launchedAt);
@@ -583,12 +686,14 @@ function connect() {
     const sat = JSON.parse(event.data) as Satellite;
     burned(sat);
     if (sky.has(sat.id)) renderSummary();
+    refreshHistory(sat.id);
   });
 
   // an owner brought one down or boosted it: its new orbit
   stream.addEventListener("manoeuvre", (event) => {
     const told = JSON.parse(event.data) as { manoeuvre: "deorbit" | "boost"; object: Satellite };
     manoeuvred(told.object);
+    refreshHistory(told.object.id);
   });
 
   // a collision coming: every screen draws it at the same moment
@@ -607,6 +712,7 @@ function connect() {
     for (const fragment of story.fragments) sky.set(fragment.id, fragment);
     if (remember({ id: story.id, at: story.at, angle: story.angle, radius: story.radius, parties: story.parties })) tell(story);
     renderSummary();
+    refreshHistory();
   });
 
   stream.addEventListener("error", () => {

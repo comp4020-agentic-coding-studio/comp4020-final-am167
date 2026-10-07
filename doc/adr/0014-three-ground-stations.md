@@ -1,4 +1,4 @@
-# 0013. Three ground stations, and the whole sky first
+# 0014. Three ground stations, and the whole sky first
 
 **Status:** accepted (2026-10-07; proposed 2026-10-07). Supersedes `PLAN.md`'s "one shared
 ground station" (2026-10-04); of 0005, the horizon over the station as the
@@ -13,7 +13,7 @@ fixed point on the planet, and everyone reads the same line at the same
 moment (`PLAN.md`, "Overhead"). The sky page opened on the horizon over
 that station (ADR 0005), with a button out to the whole planet.
 
-Two things pushed on that. Slowing the orbits (ADR 0012) makes passes
+Two things pushed on that. Slowing the orbits (ADR 0013) makes passes
 three times rarer, so one station would hear a low satellite every three
 minutes instead of every minute. And Advay wanted the beacons to be the
 focus of the page, not the scene; the horizon view put most of the sky,

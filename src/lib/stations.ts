@@ -1,4 +1,4 @@
-// The ground stations (ADR 0013): where beacons are heard. Three, at the
+// The ground stations (ADR 0014): where beacons are heard. Three, at the
 // Deep Space Network's sites, and all heard by everyone, so everyone still
 // reads the same line at the same moment.
 //

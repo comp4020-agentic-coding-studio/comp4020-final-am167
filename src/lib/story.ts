@@ -76,6 +76,11 @@ export function blame(parties: readonly [StoryParty, StoryParty]): string {
   return [...people, ...nobody].join(" ");
 }
 
+// "ALPHA", "Derelict no. 12", "Fragment no. 40": what an object's history
+// is called (ADR 0012). Only people's satellites have names.
+export const titleOf = (o: { id: number; kind: Kind; callsign: string | null }) =>
+  o.kind === "satellite" && o.callsign ? o.callsign : `${o.kind === "debris" ? "Fragment" : "Derelict"} no. ${o.id}`;
+
 // The two beacons that met, side by side (debris and derelicts are silent).
 export function couplet(parties: readonly [StoryParty, StoryParty]): { callsign: string; beacon: string }[] {
   return parties.flatMap((p) => (p.kind === "satellite" && p.callsign && p.beacon ? [{ callsign: p.callsign, beacon: p.beacon }] : []));

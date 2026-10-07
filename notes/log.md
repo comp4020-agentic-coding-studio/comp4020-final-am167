@@ -1260,6 +1260,101 @@ I accepted ADR 0011 (bringing your satellite down, or boosting it up a
 band) as it stands after the launchpad change. The manoeuvre commits so
 far: `948998e`, `e010756`, `f35f752`.
 
+## 2026-10-07: the handle pop-up opens on Launch, not on arrival
+
+The pop-up asking whether to launch under a handle opened as soon as the
+launchpad loaded, before anyone had decided to launch anything. It now
+opens on the first Launch of a visit instead: the submit is held, and
+"Launch without a handle" carries the same launch on (Escape or the
+backdrop just closes it, so you can change your mind). Once shown it isn't
+shown again that visit. Without JavaScript it never opens, as before, and
+the line under the Launch button still makes the offer. Checked in Chrome:
+closed on load, open on Launch, skip launches, Escape doesn't, second
+Launch goes straight through. `pnpm check` green (190 tests); the timing is
+client-side, so the HTTP spec suite can't see it. Commit `6f78d9a`.
+
+## 2026-10-07: every object's history, and what the project is for
+
+Advay's last C9 item was "click a satellite or fragment to see its
+history". Before building it we talked about what it's *for*. The framing
+we settled on is "the sky remembers": the README already leans on Ostrom (a
+commons survives when its users can see the resource and what each of them
+takes), and the sky only showed the first half. A history is where anyone
+can see what one launch took. Kessler syndrome is a cascade, so most of a
+launch's cost is downstream of it; the plan's first sketch only looked
+back (who launched it, where debris came from). Advay agreed to three
+things, now ADR 0012 (accepted):
+
+- a history tells **what followed** as well as where it came from: the
+  fragments that trace back to it, how many are still up, and what they
+  went on to destroy (the blame of ADR 0010, read forwards);
+- a flying satellite's **beacon stays withheld** (heard only over the
+  station, with a countdown to its next pass), so "be seen" still means
+  flying over the station; once it's gone the beacon is shown in full as
+  its epitaph ("What it said" on the page; "epitaph" needed explaining, so
+  the UI doesn't use the word); its owner always sees their own;
+- for live objects, when it next passes and when it burns up.
+
+Built: `historyOf` in `src/lib/sky.ts` walks the lineage forwards (no data
+model change); `/object/<id>/` renders it without JavaScript, and
+`/object/<id>/panel` is the same as a fragment for the sky. Clicking an
+object in the scene (nearest drawn point within 22 px, 32 px for touch)
+opens it in a panel down the right of the scene (under it on a phone),
+with a wider ring on the chosen object; it refreshes on any collision,
+since a cascade can add to what followed. Catalogue names and the sky's
+latest launches link to it. `untilOverhead` moved from the sky script to
+`orbit.ts` so the server can say when the next pass is.
+
+TDD: two server-side tests on a staged collision and cascade (what ALPHA's
+debris destroyed, a fragment's roots, CHARLIE destroyed by debris, a live
+beacon withheld from all but its owner) and four HTTP tests (the page, the
+owner's view, 404s, links), red first for the expected reasons. `pnpm
+check` green (196 tests). Checked in Chrome at 1920x1080 and iPhone 14
+against a scratch database with a staged cascade: the panel opens from a
+click in the scene and from the latest launches, and the fragment and
+victim histories read right.
+
+Adversarial review (fresh Sonnet agent, against ADR 0012 and the spec).
+What it found, and what changed:
+
+- **The beacon rule is a presentation rule, not a secret.** `/sky/` and the
+  event stream already send every live beacon so the station can show it,
+  so "withheld" in a history doesn't stop anyone reading page source. Kept
+  the rule (it's about the game: you hear a beacon by watching the
+  station), and made ADR 0012 and the test comments say honestly what it
+  is. Edited ADR 0012 in place because it hadn't been committed yet.
+- **Screen readers would hear the countdown every second.** The panel body
+  was an `aria-live` region and the countdown ticks inside it. Removed;
+  a separate status line announces "History of X opened" once.
+- **A refresh could overwrite a click.** A collision arriving while a new
+  history loaded re-asked for the old one and dropped the new answer. The
+  panel's object is now set on the click.
+- **Focus.** A refresh kept focus in the panel, and closing went back to
+  the link that opened it (found again by address, since the latest
+  launches are rebuilt). A failed load now says so.
+- **Misleading wording.** A victim's history read "3 fragments trace back
+  to it", which is blame language for something debris destroyed (ADR
+  0010). It now reads "The collision left 3 fragments. That wreckage went
+  on to N more collisions, destroying …", with each loss linked to its own
+  history (eight at most).
+- **The walk did a full scan of collisions per lineage member.** It now
+  reads every collision and fragment once and walks in memory (two queries
+  in all).
+- `/object/0117/`, `/object/117.0/`, `/object/0x75/` all rendered object
+  117; ids must now be plain digits (tested).
+- New tests: the panel route for a stranger vs the owner, and the
+  non-canonical ids. Not acted on: pinning the cascade's exact collision
+  count in the server test (it depends on seeded fragment orbits, so it
+  would be brittle), and checking picking in the zoomed-out view (it uses
+  the same view bounds as the labels).
+
+`pnpm check` green (197 tests), against a fresh build. Commit `93f8735`.
+
+Advay asked for a CLAUDE.md rule after I found port 8080 held by a server
+from another worktree: only kill servers you started, checking uptime
+(`ps -o etime`) and working directory (`lsof -d cwd`) first, and use
+another port otherwise.
+
 ## 2026-10-07 — C9: slower orbits and three ground stations
 
 I thought the satellites went round too fast, and wanted the beacons to be
@@ -1270,7 +1365,7 @@ wondered about dropping the globe view; we kept it, because with more than
 one station the globe is the only view that shows them all, and it's where
 most collisions and cascades are seen.
 
-Decided, and written up as ADRs 0012 and 0013 (proposed):
+Decided, and written up as ADRs 0013 and 0014 (proposed):
 - **Every period three times longer** (low 3 min, mid ~8, high 24): a low
   beacon is up ~12 s. Head-on collision chance tripled (2% → 6%) so
   collisions per hour stay about the same; decay untouched; trails drawn
@@ -1334,7 +1429,7 @@ fewer live-region announcements when several take turns, and pulling the
 panel's logic out of the page script for unit tests. `pnpm check` green
 (206 tests).
 
-I reviewed it on the dev server and accepted ADRs 0012 and 0013. One
+I reviewed it on the dev server and accepted ADRs 0013 and 0014. One
 problem I found: on my laptop (about 1512×757) "Sky now" ran off the
 bottom of the first screen and needed a scroll. The Beacons panel is
 taller than the old station panel, so the breakpoints that drop parts of
@@ -1345,3 +1440,19 @@ summary drops its latest launches below 800 px and its counts below 720,
 the beacons drop their note below 656, and below 608 the beacon type is a
 step smaller and the count line goes. The beacons themselves always
 stay. Fits at every height measured.
+
+Merged `main` (object history, ADR 0012, `93f8735`) into this branch.
+Both had written an ADR 0012, so ours moved up: **0013 slower orbits, 0014
+three ground stations**, every reference renumbered by hand (main's 0012
+references left alone). Main's history code still used the one station's
+`isOverhead`/`untilOverhead`, which this branch removed: it now uses the
+three stations, so a flying satellite's history says "It's over Goldstone
+now" or "Next over Madrid in 42 s", and `History.nextPassAt` became
+`nextPass` (when, and which station). Kept both sides of the sky page:
+the view buttons and the Beacons panel with click-to-pick and the history
+panel (which sits under the view buttons). Main's "click anything" hint
+adds two lines to Sky now, so the short-screen breakpoints were measured
+again with a three-line news item: the latest launches drop to three below
+960 px and go below 864, and the hint goes with the beacons' note below
+656. Fits at every height from 544 to 1080. `pnpm check` green (213
+tests).

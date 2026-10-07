@@ -1,4 +1,4 @@
-# 0012. Slower orbits, so a beacon can be read
+# 0013. Slower orbits, so a beacon can be read
 
 **Status:** accepted (2026-10-07; proposed 2026-10-07). Supersedes the period law in 0007 and
 the head-on chance in 0008; the rest of both stands.
@@ -40,7 +40,7 @@ already up.
   the high's every 24. A low beacon is on screen for about 12 seconds, a
   mid one for about 32.
 - Three times fewer passes over a station would make a beacon heard three
-  times less often. Three ground stations (ADR 0013) give that back: a
+  times less often. Three ground stations (ADR 0014) give that back: a
   satellite now passes one of them about as often as it passed the one
   station before.
 - **Head-on collisions per hour stay about the same.** Head-on meetings
@@ -69,7 +69,7 @@ already up.
 - Copy that quoted periods changes with them: the launchpad's bands, the
   Kessler page, the README.
 - A sparse sky has fewer passes to watch; three stations and the whole-sky
-  view (ADR 0013) are what keep it from looking empty.
+  view (ADR 0014) are what keep it from looking empty.
 - The staged collision (ADR 0008) keeps its 25-second lead; at a third of
   the speed each derelict starts 50° from the meeting point, not 150°.
 - The retiming is code, not a migration: it needs the closed-form orbit to

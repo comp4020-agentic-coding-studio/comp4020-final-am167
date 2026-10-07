@@ -210,8 +210,8 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       )}
     </section>
 
-    <!-- the same offer as a pop-up on arrival, once a visit; closing it is
-         launching without one, as before (ADR 0009) -->
+    <!-- the same offer as a pop-up on the first Launch of a visit; skipping
+         it launches without one, as before (ADR 0009) -->
     {!operator && !form && (
       <dialog class="handle-prompt" id="handle-prompt" aria-labelledby="handle-prompt-title">
         <div class="handle-prompt-body">
@@ -226,7 +226,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
             <a href="/operator/#sign-in-title">I have one: sign in</a>
           </div>
           <form method="dialog">
-            <button type="submit" class="handle-prompt-skip">Launch without a handle</button>
+            <button type="submit" class="handle-prompt-skip" value="launch">Launch without a handle</button>
           </form>
         </div>
       </dialog>
@@ -234,24 +234,42 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   </main>
 
   <script>
-    // Opens the handle pop-up on arrival, once a visit. Without this script
-    // it stays closed, and the line under the Launch button makes the offer.
+    // Opens the handle pop-up on the first Launch of a visit, before the
+    // launch goes anywhere. "Launch without a handle" carries the launch on;
+    // Escape or the backdrop just closes it. Without this script it never
+    // opens, and the line under the Launch button makes the offer.
     const prompt = document.getElementById("handle-prompt") as HTMLDialogElement | null;
     const SEEN = "kessler:handle-prompt";
+    const launch = document.querySelector<HTMLFormElement>("form[data-launch]");
     let seen = false;
     try {
       seen = sessionStorage.getItem(SEEN) !== null;
     } catch {
       // no storage: show it, as for a first visit
     }
-    if (prompt && !seen) {
-      prompt.showModal();
-      // seen, however it's left: closed, or followed to the operator page
-      try {
-        sessionStorage.setItem(SEEN, "1");
-      } catch {
-        // shown again next time, which is fine
-      }
+    if (prompt && launch && !seen) {
+      // captured on the document, so it runs before the launch's own handler
+      document.addEventListener(
+        "submit",
+        (e) => {
+          if (seen || e.target !== launch) return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          seen = true;
+          // seen, however it's left: launched, closed, or followed to the operator page
+          try {
+            sessionStorage.setItem(SEEN, "1");
+          } catch {
+            // shown again next visit, which is fine
+          }
+          prompt.returnValue = "";
+          prompt.showModal();
+        },
+        { capture: true },
+      );
+      prompt.addEventListener("close", () => {
+        if (prompt.returnValue === "launch") launch.requestSubmit();
+      });
       // a click on the backdrop closes it too (the content fills the box)
       prompt.addEventListener("click", (e) => {
         if (e.target === prompt) prompt.close();
