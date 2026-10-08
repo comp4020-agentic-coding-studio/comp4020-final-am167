@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-08 (the object card retold plainly, after Advay found it unreadable; the overnight round merged from PR #7; ADRs 0015–0018 still proposed)._
+_Last updated 2026-10-08 (the object card retold plainly; the launchpad fits a desktop, so `pnpm test:layout` passes; ADRs 0015–0018 still proposed)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -127,13 +127,12 @@ _Last updated 2026-10-08 (the object card retold plainly, after Advay found it u
      change (a correction Claude kept needing, made a check).
   2. `reflections/crit-9.md` (Advay's).
   3. Before the cutoff: `pnpm check` against a fresh build, then preflight.
-- **Known failure, to fix (Advay, 2026-10-08):** the launchpad scrolls
-  vertically on a desktop, so the Launch button can be below the fold.
-  `pnpm test:layout` fails 5 of 12: the launchpad for a new visitor at
-  1512x860 (59px over) and 1440x790 (43px), and for someone who has just
-  launched at all three viewports (24px at 1920x1080, up to 235px at
-  1512x860; the "yours in orbit" and wait notices push it down). The sky
-  fits at all three. Left red on purpose until Advay asks for the fix.
+- **The launchpad fits a desktop (fixed 2026-10-08, at Advay's request):**
+  `pnpm test:layout` passes 12 of 12. The notices are one compact box, the
+  wait between launches is on the Launch button, the three bands sit side
+  by side wherever the form is wide enough, and each field's rule sits
+  beside its name. The tightest case (1440x790, just launched) has 28px to
+  spare. Run it after any change to the launchpad or the sky.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or

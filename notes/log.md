@@ -2659,3 +2659,46 @@ happened in order.](screenshots/2026-10-08-object-card-after.png)
 on a scratch database; `pnpm check:evidence` green. Checked in Chrome at
 1920x1080 (the catalogue's card and the sky's side card) and on an iPhone
 14 (390 wide, no overflow).
+
+## 2026-10-08 — The launchpad fits a desktop
+
+Advay asked for the layout test (`pnpm test:layout`, from main) to pass
+before pushing. It failed 5 of 12, as recorded: the launchpad was taller
+than the window on both laptops for a new visitor, and at every viewport
+for someone who had just launched (up to 235px over at 1512x860). The sky
+already fit. Measured part by part, the form column was the problem: two
+notices stacked above the form (96px and 48px), three bands of two or three
+lines each, and each field's help on a line of its own.
+
+Fixed without hiding anything (the test also fails a control pushed off
+screen, so clipping can't pass it):
+
+- **One compact notice box** for "Yours in orbit" and a full sky, in the
+  small type.
+- **The wait between launches is on the Launch button** ("Launch again in
+  4 min 59 s", counting down, then "Launch"), where you'd click anyway,
+  not a notice above a form it disables. The spec's wait checks still hold
+  (they read the page's text).
+- **The three bands side by side** wherever the form is at least 30rem
+  wide (a container query on the console, so phones and narrow windows
+  keep the stacked list): name, "Laps every 3 minutes" (was "round the
+  planet every 3 minutes"), and the note and lifetime flowing together.
+  The trade-off now reads in one row. This replaces the short-screen rule
+  that hid each band's note on a laptop.
+- **Each field's rule beside its name** in the same wide form; the
+  beacon's count shares a row with "My beacon answers it".
+- The console a little wider (38rem beside the intro) and the spacing a
+  little tighter on short screens.
+
+`pnpm test:layout` 12 of 12, before and after the spec suite had filled
+the database. The tightest case, 1440x790 just after a launch, has 28px to
+spare, so a longer "Yours in orbit" list still fits. Checked by eye at
+1920x1080, 1440x790 (just launched), a 1000px window (stacked bands) and a
+390px phone (no horizontal overflow; the countdown kept on one line).
+
+![The launchpad at 1440x790 just after a launch, the tightest case: the
+whole form and the line under the Launch button in view, the bands side by
+side, the wait on the button.](screenshots/2026-10-08-launchpad-fits-1440x790.png)
+
+`pnpm check` green (325 tests, 0 errors, 0 warnings) against a fresh build;
+`pnpm check:evidence` green.

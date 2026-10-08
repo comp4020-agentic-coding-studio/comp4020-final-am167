@@ -4,7 +4,7 @@ import { every, lasting } from "../lib/format.ts";
 import { BEACON_MAX, CALLSIGN_MAX, readLaunch, type LaunchErrors, type LaunchValues } from "../lib/launch.ts";
 import { BANDS, lifetimeRange, type Band } from "../lib/orbit.ts";
 import { dayOf, questionOn } from "../lib/questions.ts";
-import { SKY_CAP, launch, nextLaunchAt, satellitesOf, skyIsFull, waitMessage } from "../lib/sky.ts";
+import { SKY_CAP, launch, nextLaunchAt, satellitesOf, skyIsFull, waitFor } from "../lib/sky.ts";
 
 // The launchpad. The form posts here and works without JavaScript: a launch
 // redirects to the sky, a refusal re-renders the form with the reasons. The
@@ -135,24 +135,26 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     <section class="console" aria-labelledby="launch-title">
       <h2 id="launch-title">Launch a satellite</h2>
 
-      {mine.length > 0 && (
-        <p class="notice">
-          {mine.length === 1 ? "Yours in orbit: " : `Yours in orbit (${mine.length}): `}
-          <strong>{names(mine.map((o) => o.callsign ?? "unnamed"))}</strong>. Another
-          launch is another beacon heard, and one more thing for everyone to share the
-          sky with. <a href="/sky/">Watch the sky</a>
-        </p>
-      )}
+      <!-- what's yours and a full sky: one quiet box, so the form still fits
+           a laptop's window (pnpm test:layout); the wait is on the button -->
+      {(mine.length > 0 || full) && (
+        <div class="notices">
+          {mine.length > 0 && (
+            <p class="notice">
+              {mine.length === 1 ? "Yours in orbit: " : `Yours in orbit (${mine.length}): `}
+              <strong>{names(mine.map((o) => o.callsign ?? "unnamed"))}</strong>. Another
+              launch is another beacon heard, and one more thing for everyone to share the
+              sky with. <a href="/sky/">Watch the sky</a>
+            </p>
+          )}
 
-      {wait > 0 && !errors.form && (
-        <p class="notice" id="launch-wait" data-wait={wait}>{waitMessage(wait)}</p>
-      )}
-
-      {full && (
-        <p class="notice full">
-          The sky is full: {SKY_CAP} satellites in orbit, the most it holds.
-          <a href="/sky/">Watch the sky</a>
-        </p>
+          {full && (
+            <p class="notice full">
+              The sky is full: {SKY_CAP} satellites in orbit, the most it holds.
+              <a href="/sky/">Watch the sky</a>
+            </p>
+          )}
+        </div>
       )}
 
       <div class="form-error" role="alert" id="form-error">{errors.form}</div>
@@ -165,7 +167,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
               <label class="band">
                 <input type="radio" name="band" value={band} checked={values.band === band} />
                 <span class="band-name">{b.label}</span>
-                <span class="band-period">round the planet every {every(b.period)}</span>
+                <span class="band-period">Laps every {every(b.period)}</span>
                 <span class="band-hint">{hint[band]} <span class="band-life">{life(band)}</span></span>
               </label>
             ))}
@@ -208,20 +210,24 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
               aria-invalid={errors.beacon ? "true" : undefined}
               aria-describedby={describe("beacon", "question beacon-help")}
             >{values.beacon}</textarea>
-            <label class="answering">
-              <input type="checkbox" name="answering" value="1" checked={values.answering === "1"} />
-              <span>My beacon answers it</span>
-            </label>
+            <div class="beacon-foot">
+              <label class="answering">
+                <input type="checkbox" name="answering" value="1" checked={values.answering === "1"} />
+                <span>My beacon answers it</span>
+              </label>
+              <span class="count" id="beacon-count" aria-hidden="true" hidden></span>
+            </div>
             <input type="hidden" name="asked" value={today} />
             <p class="help" id="beacon-help">
-              <span>Up to {BEACON_MAX} characters, no links. Kept on record after
-              it's gone.</span>
-              <span class="count" id="beacon-count" aria-hidden="true" hidden></span>
+              Up to {BEACON_MAX} characters, no links. Kept on record after it's gone.
             </p>
             <p class="field-error" id="beacon-error" data-error="beacon">{errors.beacon}</p>
           </div>
 
-          <button type="submit">Launch</button>
+          <!-- while the gap between launches runs, the button says how long -->
+          <button type="submit">
+            {wait > 0 && !errors.form ? <span id="launch-wait" data-wait={wait}>Launch again in {waitFor(wait)}</span> : "Launch"}
+          </button>
         </fieldset>
       </form>
 
@@ -394,24 +400,25 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   </script>
 
   <script>
-    // Counts down the gap between your launches, and opens the form when
-    // it's over. Without this script, reloading the page does the same.
+    // Counts down the gap between your launches on the Launch button, and
+    // opens the form when it's over. Without this script, reloading the page
+    // does the same.
     const notice = document.getElementById("launch-wait");
     if (notice) {
       const ready = Date.now() + Number(notice.dataset.wait);
       const tick = setInterval(() => {
         const left = ready - Date.now();
         if (left > 0) {
-          // as waitMessage in src/lib/sky.ts
+          // as waitFor in src/lib/sky.ts
           const seconds = Math.ceil(left / 1000);
           const minutes = Math.floor(seconds / 60);
           const rest = seconds % 60;
           const when = minutes > 0 ? `${minutes} min ${String(rest).padStart(2, "0")} s` : `${rest} s`;
-          notice.textContent = `You can launch again in ${when}.`;
+          notice.textContent = `Launch again in ${when}`;
           return;
         }
         clearInterval(tick);
-        notice.remove();
+        notice.replaceWith("Launch");
         document.querySelector<HTMLFieldSetElement>("form[data-launch] > fieldset")!.disabled =
           document.querySelector(".notice.full") !== null;
       }, 250);
@@ -921,7 +928,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin: 0.45rem 0 0;
+    margin: 0;
     font-size: var(--step--1);
     font-weight: 400;
     color: var(--ink);
@@ -934,19 +941,23 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     accent-color: var(--amber);
   }
 
-  /* how much of the beacon is left, beside its rules */
-  #beacon-help {
+  /* whether it answers the question, and how much of it is left */
+  .beacon-foot {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     gap: 1rem;
+    margin-top: 0.45rem;
   }
 
-  #beacon-help .count {
+  .beacon-foot .count {
     flex: none;
+    font-size: var(--step--1);
+    color: var(--ink-dim);
     font-variant-numeric: tabular-nums;
   }
 
-  #beacon-help .count.near {
+  .beacon-foot .count.near {
     color: var(--amber);
   }
 
@@ -981,11 +992,22 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     color: var(--amber);
   }
 
-  .notice {
+  /* what's yours, the wait, a full sky: one quiet box above the form */
+  .notices {
     margin: 0 0 1rem;
-    padding: 0.75rem;
+    padding: 0.5rem 0.75rem;
     border-left: 3px solid var(--amber);
     background: rgb(242 165 65 / 0.08);
+    font-size: var(--step--1);
+    line-height: 1.4;
+  }
+
+  .notice {
+    margin: 0;
+  }
+
+  .notice + .notice {
+    margin-top: 0.3rem;
   }
 
   button {
@@ -1004,6 +1026,12 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
 
   button:hover {
     background: #ffbb5c;
+  }
+
+  /* the wait, on the button: quieter than "Launch", and on one line */
+  #launch-wait {
+    font-size: var(--step-0);
+    white-space: nowrap;
   }
 
   fieldset:disabled .band,
@@ -1181,20 +1209,99 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     }
   }
 
-  /* On a short laptop screen the form fits, or nearly: each band keeps how
-     often it passes and gives up its note, and the spacing tightens. */
-  @media (min-width: 52.01rem) and (max-height: 50rem) {
-    .band-hint {
-      display: none;
+  /* Beside the intro, the form fits one window (pnpm test:layout): a little
+     wider, and, wherever the form is wide enough, the three bands side by
+     side (which also puts the trade-off in one row to compare) and each
+     field's rule beside its name. */
+  @media (min-width: 52.01rem) {
+    .console {
+      max-width: 38rem;
+    }
+  }
+
+  .console {
+    container-type: inline-size;
+  }
+
+  @container (min-width: 30rem) {
+    .bands {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
-    .bands,
+    .band {
+      grid-template-columns: auto minmax(0, 1fr);
+      align-content: start;
+      row-gap: 0.15rem;
+      padding: 0.5rem 0.6rem;
+    }
+
+    .band input {
+      grid-row: auto;
+    }
+
+    .band-period,
+    .band-hint {
+      grid-column: 1 / -1;
+      text-align: left;
+    }
+
+    .bands .field-error {
+      grid-column: 1 / -1;
+    }
+
+    /* each field's rule beside its name, not under the box (the beacon's
+       name comes after the stations' question) */
     .field {
-      margin-bottom: 0.75rem;
+      --name-row: 1;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      column-gap: 0.75rem;
+      align-items: baseline;
+    }
+
+    .field:has(> .today) {
+      --name-row: 2;
+    }
+
+    .field > * {
+      grid-column: 1 / -1;
+    }
+
+    .field > label[for] {
+      grid-row: var(--name-row);
+      grid-column: 1;
+    }
+
+    .field > .help {
+      grid-row: var(--name-row);
+      grid-column: 2;
+      margin: 0;
+      text-align: right;
+    }
+  }
+
+  /* and on a short laptop screen, the spacing tightens */
+  @media (min-width: 52.01rem) and (max-height: 56rem) {
+    .console button[type="submit"] {
+      padding: 0.6rem 1rem;
+    }
+
+    .pad {
+      padding-top: 1rem;
     }
 
     .console {
       margin-bottom: 1rem;
+      padding: 1rem 1.25rem;
+    }
+
+    .console h2 {
+      margin-bottom: 0.6rem;
+    }
+
+    .bands,
+    .field {
+      margin-bottom: 0.7rem;
     }
   }
 

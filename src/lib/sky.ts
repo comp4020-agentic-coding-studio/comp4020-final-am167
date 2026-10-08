@@ -1212,13 +1212,16 @@ export function nextLaunchAt(who: Who, now = Date.now()): number {
   return Math.max(now, (last?.at ?? -Infinity) + LAUNCH_GAP);
 }
 
-// "You can launch again in 4 min 05 s."
-export function waitMessage(ms: number): string {
+// "4 min 05 s", "9 s": how long until the next launch
+export function waitFor(ms: number): string {
   const seconds = Math.ceil(ms / 1000);
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
-  return `You can launch again in ${minutes > 0 ? `${minutes} min ${String(rest).padStart(2, "0")} s` : `${rest} s`}.`;
+  return minutes > 0 ? `${minutes} min ${String(rest).padStart(2, "0")} s` : `${rest} s`;
 }
+
+// "You can launch again in 4 min 05 s."
+export const waitMessage = (ms: number): string => `You can launch again in ${waitFor(ms)}.`;
 
 export function launch(who: Viewer | string, input: LaunchInput, now = Date.now(), random = Math.random): LaunchResult {
   settle(now);
