@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-07, overnight (Advay's feedback round on branch `claude/nifty-thompson-s7cine`, in a PR for review; ADRs 0015–0018 proposed)._
+_Last updated 2026-10-08 (the object card retold plainly, after Advay found it unreadable; the overnight round merged from PR #7; ADRs 0015–0018 still proposed)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -112,6 +112,14 @@ _Last updated 2026-10-07, overnight (Advay's feedback round on branch `claude/ni
     (`src/lib/questions.ts`) and the Why page's wording into his own; the
     README is now further out of date (it says 60 characters and "one live
     satellite each", and nothing of being heard, static or the question).
+- **The object card, retold (2026-10-08, Advay: "very hard to read and
+  understand … detracts from the whole purpose"):** what it is in a line,
+  its state as chips, a fragment's words inside the lines they were torn
+  from, what happened as a dated timeline (a cascade step by step, never one
+  made-up collision), what it led to, and who a chain traces back to
+  (`src/lib/chronicle.ts`). Cascades elsewhere (catalogue, Heard feed, sky)
+  now read "a chain of collisions involving A, B and C". Opus adversarial
+  review acted on. See `notes/log.md`.
 - **C9 cutoff:** Mon 12 Oct 2026, 12:00.
 - **Next, for C9 (write-ups only; nothing left to build):**
   1. `PROCESS.md`: the C9 part (it stops at the C8 slice), from

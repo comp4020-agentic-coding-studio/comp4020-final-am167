@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blame, couplet, headline, skyCount, type StoryParty } from "../src/lib/story.ts";
+import { blame, couplet, headline, skyCount, staticFrom, type StoryParty } from "../src/lib/story.ts";
 
 // How a collision is told on every screen and in the catalogue (ADR 0010):
 // both sides named, neither singled out, debris passing the blame back to
@@ -45,24 +45,30 @@ describe("telling a collision", () => {
     );
   });
 
-  it("names at most three in a cascade's lineage", () => {
+  // 2026-10-08: three or more roots means a chain of collisions (debris that
+  // hits debris leaves nothing, so each step adds a satellite or derelict).
+  // Calling that "A, B and C's collision" told of a collision that never
+  // happened; it's told as the chain it was.
+  it("tells a cascade as a chain of collisions, naming at most three", () => {
     const many = ["A1", "B2", "C3", "D4", "E5"].map((c) => satellite(c, "x"));
     expect(headline([debrisOf(...many), charlie])).toBe(
-      "Debris from A1, B2, C3 and 2 others' collision destroyed CHARLIE",
+      "Debris from a chain of collisions involving A1, B2, C3 and two others destroyed CHARLIE",
     );
     expect(headline([debrisOf(...many.slice(0, 4)), charlie])).toBe(
-      "Debris from A1, B2, C3 and 1 other's collision destroyed CHARLIE",
+      "Debris from a chain of collisions involving A1, B2, C3 and one other destroyed CHARLIE",
     );
+    expect(staticFrom(debrisOf(alpha, bravo, charlie).from)).toBe("from a chain of collisions involving ALPHA, BRAVO and CHARLIE");
   });
 
   it("counts a lineage's derelicts together, after the people", () => {
     const dead = { ...derelict, id: 51 };
     expect(headline([debrisOf(derelict, dead, alpha), charlie])).toBe(
-      "Debris from ALPHA and 2 derelicts' collision destroyed CHARLIE",
+      "Debris from a chain of collisions involving ALPHA and two derelicts destroyed CHARLIE",
     );
+    expect(headline([debrisOf(derelict, dead), charlie])).toBe("Debris from two derelicts' collision destroyed CHARLIE");
     const many = ["A1", "B2", "C3", "D4", "E5"].map((c) => satellite(c, "x"));
     expect(headline([debrisOf(derelict, ...many, dead), charlie])).toBe(
-      "Debris from A1, B2, C3, 2 others and 2 derelicts' collision destroyed CHARLIE",
+      "Debris from a chain of collisions involving A1, B2, C3, two others and two derelicts destroyed CHARLIE",
     );
   });
 

@@ -34,21 +34,29 @@ const nameOf = (o: { kind: Kind; callsign: string | null }) =>
 const listed = (names: string[]) =>
   names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 
-// "ALPHA and BRAVO's collision": where debris came from. A cascade can trace
-// back to many: three people are named, then "2 others", and the derelicts
-// counted together at the end ("and 2 derelicts'"), never one by one.
+// "two", "nine", "12": small counts spelled out, as a sentence says them
+export const spelled = (n: number) =>
+  ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"][n] ?? String(n);
+
+// "ALPHA and BRAVO's collision": where debris came from. Two roots are one
+// collision. Three or more are a chain of collisions (debris that hits
+// debris leaves nothing, so each step adds a satellite or derelict), told
+// as one ("a chain of collisions involving ALPHA, BRAVO and CHARLIE"), never
+// as a collision of all three, which didn't happen (2026-10-08). Three
+// people are named, then "two others", and the derelicts counted together
+// at the end ("and two derelicts"), never one by one.
 export function collisionOf(roots: readonly StoryRoot[]): string {
   const people = roots.filter((root) => root.kind !== "derelict" && root.callsign).map((root) => root.callsign!);
   const dead = roots.length - people.length;
   const rest = people.length - 3;
   const parts = [
     ...people.slice(0, 3),
-    ...(rest > 0 ? [`${rest} ${rest === 1 ? "other" : "others"}`] : []),
-    ...(dead > 0 ? [dead === 1 ? "a derelict" : `${dead} derelicts`] : []),
+    ...(rest > 0 ? [`${spelled(rest)} ${rest === 1 ? "other" : "others"}`] : []),
+    ...(dead > 0 ? [dead === 1 ? "a derelict" : `${spelled(dead)} derelicts`] : []),
   ];
-  // "2 others'", "2 derelicts'", but "ATLAS's"
-  const plural = (rest > 1 && dead === 0) || dead > 1;
-  return `${listed(parts)}${plural ? "'" : "'s"} collision`;
+  if (roots.length > 2) return `a chain of collisions involving ${listed(parts)}`;
+  // "two derelicts'", but "ATLAS's"
+  return `${listed(parts)}${dead > 1 ? "'" : "'s"} collision`;
 }
 
 // "debris from ALPHA and BRAVO's collision"

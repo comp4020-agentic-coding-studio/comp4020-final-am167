@@ -31,6 +31,13 @@ async function three() {
 }
 
 describe("the catalogue as a table", () => {
+  // Astro drops the space where a line breaks before a tag: "beside thesky"
+  // (seen behind an object's card, 2026-10-08)
+  it("keeps the space before the links in its introduction", async () => {
+    const intro = (await view("")).querySelector("main p")!.textContent!.replace(/\s+/g, " ");
+    expect(intro).toContain("beside the sky");
+  });
+
   it("filters and sorts with a plain form and links", async () => {
     // everything ever launched, where the status filter means something
     const page = await view("?show=all");

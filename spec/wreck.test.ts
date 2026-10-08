@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { blocked } from "../src/lib/launch.ts";
-import { JOIN, shardsOf, wordsOf } from "../src/lib/wreck.ts";
+import { JOIN, shardsOf, tornFrom, wordsOf } from "../src/lib/wreck.ts";
 
 // What a collision's fragments carry (ADR 0017): a run of words from each
 // side, so every word of both lines survives once, scattered, each piece of
@@ -78,5 +78,61 @@ describe("a collision's shards", () => {
         }
       }
     }
+  });
+});
+
+// The card's "torn from" (2026-10-08): a fragment's words shown inside the
+// lines they came from, so "bruh" reads as a piece of "idk bruh", not as a
+// word from nowhere. Worked out from how the pair dealt its words (seeded,
+// so it's exact), not by searching, which marked the wrong copy of a
+// repeated word and could put both runs in one line (the review).
+describe("where a fragment's words were torn from", () => {
+  const carried = (tokens: { word: string; carried: boolean }[]) => tokens.filter((t) => t.carried).map((t) => t.word);
+  const repeats = { id: 3, text: "would, a line long enough, a line long enough, would" };
+  const echoes = { id: 9, text: "up for a while, up for a while" };
+
+  it("marks every word of both lines exactly once across the whole wreck, repeated words too", () => {
+    for (const n of [1, 3, 6]) {
+      const counts = [repeats, echoes].map((side) => side.text.split(/\s+/).map(() => 0));
+      shardsOf(repeats, echoes, n).forEach((shard, i) => {
+        if (!shard) return;
+        for (const line of tornFrom(repeats, echoes, n, i, shard)) {
+          line.tokens.forEach((token, k) => token.carried && counts[line.side][k]++);
+        }
+      });
+      expect(counts.flat(), `${n} fragments`).toEqual(counts.flat().map(() => 1));
+    }
+  });
+
+  it("gives each of a shard's two runs its own line, in the order the shard says them", () => {
+    shardsOf(alpha, bravo, 6).forEach((shard, i) => {
+      const lines = tornFrom(alpha, bravo, 6, i, shard!);
+      expect(lines.map((line) => line.side).sort()).toEqual([0, 1]);
+      expect(lines.flatMap((line) => carried(line.tokens))).toEqual(wordsOf(shard!));
+    });
+  });
+
+  it("keeps a cascade's joins in the line but never marks them", () => {
+    const debris = { id: 300, text: `to${JOIN}nominal` };
+    const third = { id: 99, text: "back to the sky" };
+    shardsOf(debris, third, 3).forEach((shard, i) => {
+      if (!shard) return;
+      for (const line of tornFrom(debris, third, 3, i, shard)) {
+        expect(line.tokens.filter((t) => t.word === JOIN.trim()).every((t) => !t.carried)).toBe(true);
+      }
+    });
+    const line = shardsOf(debris, third, 3)
+      .flatMap((shard, i) => (shard ? tornFrom(debris, third, 3, i, shard) : []))
+      .find((l) => l.side === 0)!;
+    expect(line.tokens.map((t) => t.word)).toEqual(["to", JOIN.trim(), "nominal"]);
+  });
+
+  it("still finds the words, each run in its own line, in a shard cut another way", () => {
+    // not what the pair deals now (an older wreck): found by searching
+    expect(tornFrom({ id: 1, text: "idk bruh" }, { id: 2, text: null }, 3, 0, "bruh")).toEqual([
+      { side: 0, tokens: [{ word: "idk", carried: false }, { word: "bruh", carried: true }] },
+    ]);
+    const lines = tornFrom({ id: 1, text: "up for a while" }, { id: 2, text: "up for it" }, 3, 0, `for${JOIN}up`);
+    expect(lines.map((line) => line.side).sort()).toEqual([0, 1]);
   });
 });

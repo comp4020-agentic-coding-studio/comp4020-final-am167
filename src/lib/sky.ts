@@ -328,7 +328,7 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
     toObject(db.select(columns).from(objects).where(eq(objects.id, object.id)).get() ?? object);
   const both: [SkyObject, SkyObject] = [fresh(a), fresh(b)];
   const parties: [Party, Party] = [partyOf(both[0]), partyOf(both[1])];
-  const wreck = report.fragments.flatMap((f) => (f.words ? [{ words: f.words, up: true }] : []));
+  const wreck = report.fragments.flatMap((f) => (f.words ? [{ id: f.id, words: f.words, up: true }] : []));
   const named = { ...report, objects: both, parties, wreck };
   publish({ type: "collision", collision: named });
   return named;
@@ -395,13 +395,13 @@ function wrecksOf(ids: number[]): Map<number, WreckPiece[]> {
   const wrecks = new Map(ids.map((id) => [id, [] as WreckPiece[]]));
   if (ids.length === 0) return wrecks;
   const pieces = db
-    .select({ source: objects.sourceCollision, words: objects.words, fate: objects.fate })
+    .select({ id: objects.id, source: objects.sourceCollision, words: objects.words, fate: objects.fate })
     .from(objects)
     .where(inArray(objects.sourceCollision, ids))
     .orderBy(objects.id)
     .all();
   for (const piece of pieces) {
-    if (piece.words && piece.source !== null) wrecks.get(piece.source)?.push({ words: piece.words, up: piece.fate === "live" });
+    if (piece.words && piece.source !== null) wrecks.get(piece.source)?.push({ id: piece.id, words: piece.words, up: piece.fate === "live" });
   }
   return wrecks;
 }
@@ -1011,8 +1011,13 @@ export interface History {
   echoOf: { id: number; callsign: string | null } | null;
   // the stations' question it answered (ADR 0018)
   question: string | null;
-  // for debris: the collision it came from, what met, and who that traces to
-  origin: { collision: number; at: number; parties: [Party, Party]; roots: Root[] } | null;
+  // for debris: the collision it came from, what met, who that traces to,
+  // how many fragments it left, and which of them this is (in the order
+  // they were made, as their shards were dealt: ADR 0017)
+  origin: { collision: number; at: number; parties: [Party, Party]; roots: Root[]; left: number; index: number } | null;
+  // for debris: every collision that led to it, oldest first, the last its
+  // origin; for each, which collision any debris in it came from
+  ancestry: Step[];
   // for anything destroyed: its collision, what it met, and what the wreck
   // says now (ADR 0017)
   end: { collision: number; at: number; with: Party; wreck: WreckPiece[] } | null;
@@ -1021,6 +1026,15 @@ export interface History {
   // destroyed, every fragment in all, and how many of those are still up.
   // The blame, read forwards.
   followed: { left: number; collisions: number; fragments: number; up: number; destroyed: Root[] };
+}
+
+// A collision in a fragment's lineage: what met, and the collision each
+// side came from if it was debris (null for a satellite or a derelict).
+export interface Step {
+  collision: number;
+  at: number;
+  parties: [Party, Party];
+  sources: [number | null, number | null];
 }
 
 export const objectById = (id: number): SkyObject | null => {
@@ -1051,7 +1065,9 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
   // queries however long the cascade (the sky holds a few hundred objects,
   // and the record grows by a few collisions an hour).
   const byObject = new Map<number, CollisionRow[]>();
+  const byId = new Map<number, CollisionRow>();
   for (const c of db.select().from(collisions).all()) {
+    byId.set(c.id, c);
     for (const member of [c.a, c.b]) byObject.set(member, [...(byObject.get(member) ?? []), c]);
   }
   const leftBy = new Map<number, { id: number; fate: Fate }[]>();
@@ -1059,6 +1075,7 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
     .select({ id: objects.id, fate: objects.fate, source: objects.sourceCollision })
     .from(objects)
     .where(sql`${objects.sourceCollision} IS NOT NULL`)
+    .orderBy(objects.id)
     .all();
   for (const d of debris) leftBy.set(d.source!, [...(leftBy.get(d.source!) ?? []), d]);
 
@@ -1077,6 +1094,23 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
       : meeting(db.select().from(collisions).where(eq(collisions.id, object.sourceCollision)).get());
   // an object collides once: it's destroyed
   const own = object.fate === "destroyed" ? meeting(byObject.get(id)?.[0]) : null;
+
+  // walk back: the collision it came from, the ones its debris came from,
+  // and so on to satellites and derelicts, told oldest first
+  const steps = new Map<number, Step>();
+  const back = (collision: number | null) => {
+    if (collision === null || steps.has(collision)) return;
+    const found = meeting(byId.get(collision));
+    if (!found) return;
+    const sources = [found.c.a, found.c.b].map((member) => {
+      const o = objectById(member);
+      return o?.kind === "debris" ? o.sourceCollision : null;
+    }) as [number | null, number | null];
+    steps.set(collision, { collision, at: found.c.at, parties: found.parties, sources });
+    for (const source of sources) back(source);
+  };
+  back(object.sourceCollision);
+  const ancestry = [...steps.values()].sort((x, y) => x.at - y.at || x.collision - y.collision);
 
   // walk forwards: each collision a member of its lineage had, and the
   // fragments each left, which join the lineage. What it hit is worked out
@@ -1137,7 +1171,15 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
     echoOf: object.echo === null ? null : { id: object.echo, callsign: objectById(object.echo)?.callsign ?? null },
     question: object.question,
     manoeuvres: manoeuvresOf(id).map((m) => ({ kind: m.kind, at: m.at, to: bandAt(m.toRadius) })),
-    origin: source && { collision: source.c.id, at: source.c.at, parties: source.parties, roots: rootsOf(source.c.id) },
+    origin: source && {
+      collision: source.c.id,
+      at: source.c.at,
+      parties: source.parties,
+      roots: rootsOf(source.c.id),
+      left: leftBy.get(source.c.id)?.length ?? 0,
+      index: leftBy.get(source.c.id)?.findIndex((d) => d.id === id) ?? 0,
+    },
+    ancestry,
     end: own && {
       collision: own.c.id,
       at: own.c.at,

@@ -23,7 +23,7 @@ const { side = false, history = null, now = Date.now(), pageTitle } = Astro.prop
     <form method="dialog" class="object-card-close-form">
       <button type="submit" class="object-card-close" aria-label="Close">×</button>
     </form>
-    <div class="object-card-body history-body">
+    <div class="object-card-body">
       {history && <ObjectCardBody history={history} now={now} />}
     </div>
   </div>
@@ -33,7 +33,7 @@ const { side = false, history = null, now = Date.now(), pageTitle } = Astro.prop
 
 <style is:global>
   .object-card {
-    width: min(48rem, calc(100vw - 2rem));
+    width: min(40rem, calc(100vw - 2rem));
     max-height: min(52rem, calc(100svh - 2rem));
     padding: 0;
     border: 1px solid var(--grid-strong);

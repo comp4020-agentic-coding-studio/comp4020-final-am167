@@ -8,6 +8,7 @@ import { FRAGMENTS, HIT, fatalMeeting, nextMeeting } from "../src/lib/collide.ts
 import { angleAt, periodAt, radiusAt, type Elements } from "../src/lib/orbit.ts";
 import { wordsOf } from "../src/lib/wreck.ts";
 import { sharedQuestion } from "../src/lib/story.ts";
+import { momentsOf, plain, summaryOf, tornFromOf, tracedTo } from "../src/lib/chronicle.ts";
 import type { SkyEvent } from "../src/lib/events.ts";
 
 // The server's side of collisions (ADR 0008): a collision is predicted and
@@ -286,6 +287,75 @@ describe("who a collision names (ADR 0010)", async () => {
     expect(sky.historyOf(999_999, undefined, now)).toBeNull();
   });
 
+  // 2026-10-08: Advay found the card unreadable. It flattened a cascade into
+  // one made-up collision ("ALPHA, BRAVO and CHARLIE's collision"), told the
+  // same lineage three ways and never said whose a handle was. Now it's told
+  // in order, a step at a time, in plain sentences.
+  const lines = (moments: ReturnType<typeof momentsOf>, now: number) => moments.map((m) => m.lines.map((line) => plain(line, now)));
+
+  it("tells a fragment's story a step at a time, oldest first, never as one made-up collision", () => {
+    const [first] = collisions();
+    const charlie = collisions().find((c) => c.parties.some((p) => p.callsign === "CHARLIE"))!;
+    const now = at + 6 * HOUR;
+    const piece = charlie.fragments.find((f) => f.words)!;
+    const h = sky.historyOf(piece.id, undefined, now)!;
+    // the collisions that led to it, oldest first
+    expect(h.ancestry.map((step) => step.collision)).toEqual([first.id, charlie.id]);
+    // by now it may have burned up
+    expect(plain(summaryOf(h), now)).toMatch(
+      /^A piece of CHARLIE, broken off when debris destroyed it \d+ (min|h) ago\.( Burned up (just now|\d+ (min|h) ago)\.)?$/,
+    );
+    const told = lines(momentsOf(h), now);
+    expect(told[0][0]).toBe("ALPHA and BRAVO collided.");
+    expect(told[0]).toContain("ALPHA was launched without a handle. Its beacon said “hello from alpha”.");
+    expect(told[0]).toContain("BRAVO was launched by bravo_ops. Its beacon said “bravo here”.");
+    expect(told[1][0]).toBe("Debris from that collision hit CHARLIE and destroyed it.");
+    expect(told[1]).toContain("CHARLIE was launched without a handle. Its beacon said “minding my own business”.");
+    expect(told[2][0]).toBe(`This fragment broke off, one of ${charlie.fragments.length}.`);
+    expect(momentsOf(h).at(-1)).toMatchObject(
+      h.fate === "live"
+        ? { kind: "now", at: null, lines: [["Still in orbit."]] }
+        : { at: h.fateAt, lines: [["Its orbit decayed and it burned up on re-entry."]] },
+    );
+    // never one collision of all three
+    expect(JSON.stringify(told)).not.toMatch(/CHARLIE's collision|and CHARLIE's/);
+    // its words, found in the lines they were torn from
+    const torn = tornFromOf(h);
+    expect(torn.flatMap((t) => t.tokens.filter((x) => x.carried).map((x) => x.word)).sort()).toEqual(wordsOf(piece.words!).sort());
+    expect(torn.map((t) => plain(t.label, now))).toContain("CHARLIE's beacon");
+    // and who it traces back to, oldest first, each said plainly
+    const traced = tracedTo(h);
+    expect(traced.slice(0, 2).sort((x, y) => x.name.localeCompare(y.name))).toEqual([
+      { name: "ALPHA", whose: "launched without a handle" },
+      { name: "BRAVO", whose: "launched by bravo_ops" },
+    ]);
+    expect(traced[2]).toEqual({ name: "CHARLIE", whose: "launched without a handle" });
+  });
+
+  it("tells a satellite's story: launched, what it met, and the pieces its wreck left", () => {
+    const now = at + 6 * HOUR;
+    const h = sky.historyOf(alpha.id, "someone else", now)!;
+    expect(plain(summaryOf(h), now)).toMatch(/^Launched without a handle \d+ h ago\. Destroyed when it collided with BRAVO \d+ h ago\.$/);
+    const moments = momentsOf(h);
+    const told = lines(moments, now);
+    expect(told[0][0]).toBe("Launched into the low band, without a handle.");
+    expect(told[1][0]).toBe("It collided with BRAVO. Both were destroyed.");
+    expect(told[1]).toContain("BRAVO was launched by bravo_ops. Its beacon said “bravo here”.");
+    // every piece of the wreck, each one a fragment you can open
+    expect(moments[1].wreck.map((p) => p.words)).toEqual(h.end!.wreck.map((p) => p.words));
+    expect(moments[1].wreck.every((p) => p.id > 0)).toBe(true);
+    // it's gone, so there's no "now"
+    expect(moments.map((moment) => moment.kind)).not.toContain("now");
+
+    // CHARLIE, from its side: hit by debris, which traces back to two others
+    const victim = collisions().find((c) => c.parties.some((p) => p.callsign === "CHARLIE"))!;
+    const v = sky.historyOf(victim.parties.find((p) => p.callsign === "CHARLIE")!.id, undefined, now)!;
+    expect(plain(summaryOf(v), now)).toMatch(/Destroyed by debris (just now|\d+ (min|h) ago)\.$/);
+    const vt = lines(momentsOf(v), now);
+    expect(vt[1][0]).toBe("Hit by debris and destroyed.");
+    expect(vt[1]).toContain("The debris traces back to ALPHA and BRAVO.");
+  });
+
   it("leaves each owner an encounter: who they met, what that side said, and what the wreck says", () => {
     const now = at + 6 * HOUR;
     const [met] = sky.encountersOf("alice", now);
@@ -343,6 +413,7 @@ describe("a wreck in a nearly full sky", async () => {
 
 describe("a derelict's echo", async () => {
   const { sky, db, schema } = await freshServer();
+  const lines = (moments: ReturnType<typeof momentsOf>, now: number) => moments.map((m) => m.lines.map((line) => plain(line, now)));
   it("is nothing while nothing has gone", () => {
     expect(sky.addDerelict(orbit(2.3, 1, 1), T)).toMatchObject({ words: null, echo: null });
   });
@@ -362,6 +433,15 @@ describe("a derelict's echo", async () => {
     expect(hit.parties.find((p) => p.kind === "derelict")).toMatchObject({ words: gone.beacon, echoOf: "LANTERN" });
     const carried = hit.fragments.flatMap((f) => (f.words ? wordsOf(f.words) : []));
     expect(carried.sort()).toEqual([...wordsOf(gone.beacon!), ...wordsOf(moth.beacon!)].sort());
+    // its card says what a derelict is, and whose words it was carrying
+    const piece = hit.fragments.find((f) => f.words)!;
+    const h = sky.historyOf(piece.id, undefined, at + 1)!;
+    expect(plain(summaryOf(h), at + 1)).toMatch(/^A piece of MOTH and a derelict, broken off when they collided (just now|\d+ min ago)\./);
+    const told = lines(momentsOf(h), at + 1);
+    expect(told[0][0]).toBe("MOTH and a derelict collided.");
+    expect(told[0]).toContain("A derelict is a dead satellite nobody owns. This one was carrying LANTERN's last words: “I was here for a while and it was good”.");
+    expect(tornFromOf(h).map((t) => plain(t.label, at + 1))).toEqual(expect.arrayContaining([expect.stringMatching(/^(MOTH's beacon|LANTERN's last words)$/)]));
+    expect(tracedTo(h)).toContainEqual({ name: "A derelict", whose: "nobody's" });
     // and MOTH's owner meets the echo
     expect(sky.encountersOf("mo", at + 1)[0].other).toMatchObject({ kind: "derelict", echoOf: "LANTERN" });
     expect(sky.newsSince("mo", T, at + 1).encounters).toHaveLength(1);

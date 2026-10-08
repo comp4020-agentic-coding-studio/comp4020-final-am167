@@ -39,6 +39,24 @@ describe("an object's history", () => {
     expect(history.textContent).toMatch(/not heard yet/i);
   });
 
+  // 2026-10-08: the card was a wall of prose. Now it says what the object
+  // is in a line, its state at a glance, and what happened to it in order.
+  it("opens with what it is in a line, its state at a glance, and what happened, in order", async () => {
+    const { id } = await launched(new Session(baseUrl));
+    const card = doc(await (await new Session(baseUrl).get(`/object/${id}/panel`)).text()).querySelector(".history")!;
+    const text = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g, " ").trim();
+    expect(text(card.querySelector(".history-summary"))).toMatch(/^Launched without a handle (just now|\d+ min ago)\.$/);
+    const status = text(card.querySelector(".history-status"));
+    expect(status).toMatch(/In orbit/);
+    expect(status).toMatch(/Low band/);
+    expect(status).toMatch(/burns up in about/i);
+    const moments = [...card.querySelectorAll(".timeline > li")].map(text);
+    expect(moments[0]).toMatch(/Launched into the low band, without a handle\./);
+    expect(moments.at(-1)).toMatch(/^Now Still in orbit\./);
+    // headings to scan by
+    expect([...card.querySelectorAll("h3")].map(text)).toEqual(["Its beacon", "What happened", "What it led to"]);
+  });
+
   it("is the same in the sky's panel, beacon withheld from a stranger and shown to its owner", async () => {
     const owner = new Session(baseUrl);
     const { id, name, beacon } = await launched(owner);

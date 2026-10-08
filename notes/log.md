@@ -2503,3 +2503,124 @@ honestly). The comments don't render on `/readme/`; the headings do, so
 the invariant test still passes. The old text is at `d8fb66a`.
 `pnpm check` green (305 tests, 0 errors, 0 warnings) against a fresh
 build. Commit `cce5e32`.
+
+## 2026-10-08 — An object's card, told plainly
+
+Advay, on a fragment's card: "very hard to read and understand. It's not
+clear what's happening at all, and detracts from the whole purpose of the
+final project." A highly critical issue, in his words.
+
+![Before: Fragment no. 341's card, as Advay saw it. One cascade told three
+ways ("Broken off in BOOM67 and 2 derelicts' collision", "Debris from 2
+derelicts' collision destroyed BOOM67", "BOOM67: TESTACC."), the words as
+flickering static, nothing saying what a derelict or TESTACC
+is.](screenshots/2026-10-08-object-card-before.png)
+
+What was wrong, looking at ~10 real cards, not only his:
+
+- **It told a made-up collision.** `collisionOf` flattens a lineage's
+  roots, so a fragment from a two-step cascade (two derelicts collide; their
+  debris destroys BOOM67) was "broken off in BOOM67 and 2 derelicts'
+  collision", which never happened.
+- **The same lineage three ways**, in prose, out of order (birth, words,
+  ancestry, now, what followed), and none of it labelled: "BOOM67:
+  TESTACC." for "launched by TESTACC"; "“idk bruh” BOOM67" for "BOOM67's
+  beacon said".
+- **Jargon left bare** (derelict, static, passes), and the fragment's words
+  ("bruh") with no way to see they were a piece of "idk bruh".
+
+The card now (`src/lib/chronicle.ts` for the wording, the new `Said.astro`
+for its markup, `ObjectHistory.astro` rewritten, one column):
+
+1. **What it is in a line**: "A piece of BOOM67, broken off when debris
+   destroyed it 6 h ago." Under the name, what the thing is ("A dead
+   satellite nobody owns", "Debris from a collision").
+2. **Its state as chips** while it's up: in orbit, the band it's in now,
+   height and fall, when it burns up (the live counters kept).
+3. **Its words, readably**, and for a fragment **where they were torn
+   from**: each source line with the carried words marked ("From BOOM67's
+   beacon: idk [bruh]"). Worked out from how the pair dealt its words
+   (`tornFrom` in `wreck.ts` shares `dealt` with `shardsOf`, so it's exact),
+   not by searching.
+4. **What happened, as a timeline**, oldest first, a step at a time:
+   "Two derelicts collided. Derelicts are dead satellites nobody owns." /
+   "Debris from that collision hit BOOM67 and destroyed it. BOOM67 was
+   launched by TESTACC. Its beacon said “idk bruh”." / "This fragment broke
+   off, one of 3." / "Now: still in orbit." A destroyed satellite's wreck
+   shows as chips, each a link to that fragment's card. Every name links to
+   its card. A long cascade shows where it began, folds the middle and keeps
+   the last three steps (never folding one step alone).
+5. **What it led to**, counted and scoped: fragments from its collision,
+   collisions they caused, how many of the whole chain are still up, and
+   what they destroyed.
+6. **Traced back to**, for a fragment from a chain of collisions: everyone
+   in the chain, oldest first, and whose each was (ADR 0010's blame, said
+   once).
+
+`historyOf` gains the fragment's whole **ancestry** (every collision that
+led to it, with which collision each piece of debris came from) and its
+place among its siblings (for the exact torn-from). No data model change.
+
+**The same made-up collision on other screens.** The catalogue, the Heard
+feed and the sky's notices said "debris from A, B and C's collision" for a
+cascade too. `collisionOf` now says "a chain of collisions involving A, B
+and C" when there are three or more roots (a single collision always has
+two, since debris that hits debris leaves nothing), and keeps "A and B's
+collision" for one collision, as ADR 0010 words it. Small counts are
+spelled ("two derelicts").
+
+Tests first, each failing first: the cascade told step by step and the
+satellite's story against the staged collisions in
+`spec/collision-server.test.ts`; the derelict echo's card; torn-from in
+`spec/wreck.test.ts`; the card's shape over HTTP in `spec/history.test.ts`;
+and `spec/chronicle.test.ts`, new, with made-up histories for the cases a
+staged sky rarely reaches. A one-off check confirmed the refactored
+`shardsOf` deals byte-identical shards to the old one over 6,000 random
+pairs, since stored fragments depend on it.
+
+**Adversarial review** (a fresh Opus reviewer, at Advay's request instead of
+Sonnet; ~25 real cards, 390 px and 1920 px). Its must-fixes, all fixed:
+
+- The band chip showed the stored band, not the band now (a boosted
+  satellite said "Low band" in mid). Now `bandNow`.
+- "Hit by debris and destroyed … It was carrying “nominal”" read as the
+  satellite carrying it. Now "The debris was carrying".
+- Two derelicts: "This one was carrying" with no "one". Now "One was
+  carrying … The other was carrying". On a derelict's own card, "the
+  derelict" could mean itself: now "another derelict", "the other
+  derelict"; a derelict met before is "another derelict".
+- "Faded: the 1 that have burned up". Now "1 has burned up and fallen
+  silent".
+- "The collision left 6 fragments. The words they carry:" over one piece.
+  Now "6 fragments; 1 carries words:".
+- Torn-from marked the wrong copy of a repeated word, and could put both of
+  a shard's runs in one line. Now exact (above), with a test that every
+  word of both lines is marked exactly once across a wreck.
+- Double full stops after a beacon ending in its own. Fixed.
+
+Its should-fixes, fixed: the rest of the app's flattened wording (above); a
+cut-short cascade that hid where it began; "Traced back to" out of order and
+repeating the timeline (now oldest first, and only for a chain); "2
+derelicts nobody's"; counts in "What it led to" that didn't agree; the "…"
+join unexplained (now said once); torn-from out of the shard's order; faded
+chips below 4.5:1 contrast (now dashed and dimmer, no opacity); and the
+nits (spaces swallowed by highlights, ordering, a satellite with no callsign
+named "debris", screen readers hearing bare words on wreck chips, a false
+"went to its other fragments"). Left: "Not heard yet … It's over Goldstone
+now" (reworded to "shows here once someone has heard it", since a pass
+over a station with nobody listening isn't heard), and the page can't be
+tested over HTTP with a staged fragment, so the wording is tested in
+`chronicle.ts`. Re-review not run: the fixes each have a test or were
+checked on the cards the reviewer cited.
+
+Also fixed in passing, seen behind the card: the catalogue's introduction
+said "beside thesky" (Astro's dropped space again), with a test.
+
+![After: a fragment from a two-step cascade. What it is in a line, its
+state as chips, its words inside the lines they were torn from, then what
+happened in order.](screenshots/2026-10-08-object-card-after.png)
+
+`pnpm check` green (325 tests, 0 errors, 0 warnings) against a fresh build
+on a scratch database; `pnpm check:evidence` green. Checked in Chrome at
+1920x1080 (the catalogue's card and the sky's side card) and on an iPhone
+14 (390 wide, no overflow).
