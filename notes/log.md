@@ -2658,7 +2658,7 @@ happened in order.](screenshots/2026-10-08-object-card-after.png)
 `pnpm check` green (325 tests, 0 errors, 0 warnings) against a fresh build
 on a scratch database; `pnpm check:evidence` green. Checked in Chrome at
 1920x1080 (the catalogue's card and the sky's side card) and on an iPhone
-14 (390 wide, no overflow).
+14 (390 wide, no overflow). Commit `d409ccf`.
 
 ## 2026-10-08 — The launchpad fits a desktop
 
@@ -2701,4 +2701,4 @@ whole form and the line under the Launch button in view, the bands side by
 side, the wait on the button.](screenshots/2026-10-08-launchpad-fits-1440x790.png)
 
 `pnpm check` green (325 tests, 0 errors, 0 warnings) against a fresh build;
-`pnpm check:evidence` green.
+`pnpm check:evidence` green. Commit `ade7d43`.
