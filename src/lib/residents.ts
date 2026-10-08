@@ -1,7 +1,7 @@
 import { seeded } from "./collide.ts";
 import type { Band } from "./orbit.ts";
 
-// Resident operators (ADR 0015). A sky only people launch into is empty most
+// Resident operators (ADR 0019). A sky only people launch into is empty most
 // of the hours nobody's on, so the station launches for a cast of resident
 // operators too: an imaging company, a comms constellation, a weather
 // service, a student CubeSat lab, a radio club, a school, an advertiser, a

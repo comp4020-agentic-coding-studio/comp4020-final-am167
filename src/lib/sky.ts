@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, gte, inArray, isNull, lt, lte, max, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, count, countDistinct, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, max, ne, or, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { fatalMeeting, fragmentsOf, impactOf, nextMeeting, seeded } from "./collide.ts";
 import { listening, publish } from "./events.ts";
@@ -7,6 +7,7 @@ import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
 import { HOUR, RESIDENTS, nextSlotAfter, slotsBetween, type Slot } from "./residents.ts";
 import { STATIONS, nextStation } from "./stations.ts";
+import { lineOf, shardsOf, type WreckPiece } from "./wreck.ts";
 import {
   BANDS,
   DECAY,
@@ -23,7 +24,7 @@ import {
   type Orbit,
 } from "./orbit.ts";
 
-const { objects, collisions, operators, manoeuvres } = schema;
+const { objects, collisions, operators, manoeuvres, transmissions, listens } = schema;
 
 // How long between one person's launches (PLAN.md, "Launch limits"). There's
 // no limit on how many you have up: each launch is another beacon heard, and
@@ -52,7 +53,7 @@ export const DERELICT_GAP = 10 * 60_000;
 // baseline), the sky keeps at least this many derelicts.
 export const DERELICT_MIN = Math.min(5, DERELICT_BASELINE);
 
-// The resident operators (ADR 0015, src/lib/residents.ts): about this many
+// The resident operators (ADR 0019, src/lib/residents.ts): about this many
 // launches an hour, so the sky is never quiet for long, but no more than
 // RESIDENT_CAP of theirs up at once (as many as the derelict floor, which
 // counts them: in a quiet sky they take most of the derelicts' place, so
@@ -85,8 +86,14 @@ export interface SkyObject extends Orbit {
   band: Band;
   launchedAt: number;
   direction: 1 | -1;
-  // for debris, the collision it came from
+  // for debris, the collision it came from, and the words it carries (ADR
+  // 0017)
   sourceCollision: number | null;
+  words: string | null;
+  // the stations' question its beacon answered, if any (ADR 0018)
+  question: string | null;
+  // for a derelict, the gone satellite whose last words it carries
+  echo: number | null;
   // a manoeuvre's rate and the end of a climb (ADR 0011), part of the orbit
   rate: number;
   until: number | null;
@@ -106,6 +113,7 @@ const viewerOf = (who: Who): Viewer => (typeof who === "object" ? who : { person
 
 // Whether an object is the viewer's: its operator's, once it has one,
 // otherwise the cookie's that launched it.
+export const isOwnedBy = (object: { owner: string | null; operator: number | null }, who: Who) => ownedBy(object, who);
 const ownedBy = (object: { owner: string | null; operator: number | null }, who: Who) => {
   const viewer = viewerOf(who);
   if (object.operator !== null) return object.operator === viewer.operator;
@@ -141,6 +149,9 @@ const columns = {
   epoch: objects.epoch,
   direction: objects.direction,
   sourceCollision: objects.sourceCollision,
+  words: objects.words,
+  question: objects.question,
+  echo: objects.echo,
   rate: objects.rate,
   until: objects.until,
   deorbitedAt: objects.deorbitedAt,
@@ -186,15 +197,23 @@ export interface Party {
   kind: Kind;
   callsign: string | null;
   beacon: string | null;
+  // for debris, what it was carrying (ADR 0017)
+  words: string | null;
+  // the stations' question it was answering (ADR 0018)
+  question: string | null;
+  // for a derelict carrying an echo (in `words`), whose last words they are
+  echoOf: string | null;
   operator: string | null;
   from: Root[] | null;
 }
 
-// A collision that has happened: what met, who it names, and what it left.
+// A collision that has happened: what met, who it names, what it left, and
+// what the wreck says (ADR 0017).
 export interface CollisionReport extends CollisionRow {
   objects: [SkyObject, SkyObject];
   parties: [Party, Party];
   fragments: SkyObject[];
+  wreck: WreckPiece[];
 }
 
 interface Hit {
@@ -295,6 +314,9 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
   // whether or not it has been marked yet), less the two that met
   const up = sky.filter((object) => object.launchedAt <= at && reentryAt(object) > at).length - 2;
   const pieces = fragmentsOf(a, b, at).slice(0, Math.max(0, LIVE_CAP - up));
+  // each fragment carries a piece of both lines (ADR 0017), cut for the
+  // fragments there's room for, so a crowded sky loses no words
+  const shards = shardsOf({ id: a.id, text: lineOf(a) }, { id: b.id, text: lineOf(b) }, pieces.length);
   const report = db.transaction((tx) => {
     const row = tx
       .insert(collisions)
@@ -305,7 +327,7 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
       .set({ fate: "destroyed", fateAt: at })
       .where(inArray(objects.id, [a.id, b.id]))
       .run();
-    const fragments = pieces.map((orbit) =>
+    const fragments = pieces.map((orbit, i) =>
       toObject(
         tx
           .insert(objects)
@@ -314,6 +336,7 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
             band: bandAt(orbit.radius),
             launchedAt: at,
             sourceCollision: row.id,
+            words: shards[i],
             ...orbit,
           })
           .returning(columns)
@@ -328,7 +351,8 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
     toObject(db.select(columns).from(objects).where(eq(objects.id, object.id)).get() ?? object);
   const both: [SkyObject, SkyObject] = [fresh(a), fresh(b)];
   const parties: [Party, Party] = [partyOf(both[0]), partyOf(both[1])];
-  const named = { ...report, objects: both, parties };
+  const wreck = report.fragments.flatMap((f) => (f.words ? [{ id: f.id, words: f.words, up: true }] : []));
+  const named = { ...report, objects: both, parties, wreck };
   publish({ type: "collision", collision: named });
   return named;
 }
@@ -374,24 +398,107 @@ const partyOf = (object: SkyObject): Party => ({
   kind: object.kind,
   callsign: object.callsign,
   beacon: object.beacon,
+  words: object.words,
+  question: object.question,
+  echoOf: object.echo === null ? null : (db.select({ callsign: objects.callsign }).from(objects).where(eq(objects.id, object.echo)).get()?.callsign ?? null),
   operator: object.operator === null ? null : (handles([object.operator]).get(object.operator) ?? null),
   from: object.kind === "debris" && object.sourceCollision !== null ? rootsOf(object.sourceCollision) : null,
 });
 
-// A collision as the page tells it: when, where, and who it names.
+// A collision as the page tells it: when, where, who it names, and what
+// its wreck says now (ADR 0017).
 export interface CollisionStory extends CollisionRow {
   parties: [Party, Party];
+  wreck: WreckPiece[];
 }
 
-// The latest collisions, newest first.
-export function recentCollisions(n: number): CollisionStory[] {
-  settle();
-  const rows = db.select().from(collisions).orderBy(desc(collisions.at), desc(collisions.id)).limit(n).all();
+// What each of these collisions' wrecks says: every fragment's words, in
+// order, and whether that fragment is still up to say them.
+function wrecksOf(ids: number[]): Map<number, WreckPiece[]> {
+  const wrecks = new Map(ids.map((id) => [id, [] as WreckPiece[]]));
+  if (ids.length === 0) return wrecks;
+  const pieces = db
+    .select({ id: objects.id, source: objects.sourceCollision, words: objects.words, fate: objects.fate })
+    .from(objects)
+    .where(inArray(objects.sourceCollision, ids))
+    .orderBy(objects.id)
+    .all();
+  for (const piece of pieces) {
+    if (piece.words && piece.source !== null) wrecks.get(piece.source)?.push({ id: piece.id, words: piece.words, up: piece.fate === "live" });
+  }
+  return wrecks;
+}
+
+const storiesOf = (rows: CollisionRow[]): CollisionStory[] => {
+  const wrecks = wrecksOf(rows.map((row) => row.id));
   return rows.map((row) => {
     const [a, b] = [row.a, row.b].map((id) =>
       toObject(db.select(columns).from(objects).where(eq(objects.id, id)).get()!),
     );
-    return { ...row, parties: [partyOf(a), partyOf(b)] };
+    return { ...row, parties: [partyOf(a), partyOf(b)], wreck: wrecks.get(row.id) ?? [] };
+  });
+};
+
+// The latest collisions, newest first.
+export function recentCollisions(n: number): CollisionStory[] {
+  settle();
+  return storiesOf(db.select().from(collisions).orderBy(desc(collisions.at), desc(collisions.id)).limit(n).all());
+}
+
+// An encounter (ADR 0017): a collision one of the viewer's satellites was
+// in, told from their side: which of theirs, what it met, and the wreck.
+export interface Encounter extends CollisionStory {
+  yours: Party;
+  other: Party;
+}
+
+// What happened to the viewer's satellites since `since` (their last look
+// at Yours): encounters, and how many people heard them (each once, however
+// many of theirs they heard). `known`: all their encounters, if the caller
+// already has them.
+export function newsSince(
+  who: Who,
+  since: number,
+  now = Date.now(),
+  known?: Encounter[],
+): { encounters: Encounter[]; heardBy: number } {
+  const encounters = (known ?? encountersOf(who, now, { since })).filter((e) => e.at > since);
+  const ids = viewerOf(who).person
+    ? db.select({ id: objects.id }).from(objects).where(ownerIs(who)).all().map((row) => row.id)
+    : [];
+  const heardBy =
+    ids.length === 0
+      ? 0
+      : (db
+          .select({ n: countDistinct(listens.listener) })
+          .from(listens)
+          .where(and(inArray(listens.object, ids), gt(listens.at, since)))
+          .get()?.n ?? 0);
+  return { encounters, heardBy };
+}
+
+// Every collision a satellite of the viewer's was in, newest first: those
+// after `since`, and only the latest `limit`, if asked.
+export function encountersOf(who: Who, now = Date.now(), { since = 0, limit }: { since?: number; limit?: number } = {}): Encounter[] {
+  if (!viewerOf(who).person && viewerOf(who).operator === null) return [];
+  settle(now);
+  const ids = db
+    .select({ id: objects.id })
+    .from(objects)
+    .where(and(ownerIs(who), eq(objects.kind, "satellite"), eq(objects.fate, "destroyed")))
+    .all()
+    .map((row) => row.id);
+  if (ids.length === 0) return [];
+  const query = db
+    .select()
+    .from(collisions)
+    .where(and(gt(collisions.at, since), or(inArray(collisions.a, ids), inArray(collisions.b, ids))))
+    .orderBy(desc(collisions.at), desc(collisions.id));
+  const rows = limit === undefined ? query.all() : query.limit(limit).all();
+  const mine = new Set(ids);
+  return storiesOf(rows).map((story) => {
+    const [a, b] = story.parties;
+    return mine.has(a.id) ? { ...story, yours: a, other: b } : { ...story, yours: b, other: a };
   });
 }
 
@@ -422,12 +529,27 @@ function markDecayed(now: number): SkyObject[] {
 
 // ── derelicts (ADR 0008) ──────────────────────────────────────────────────
 
-// A dead satellite, owned by nobody, put into the sky by the server.
+// A dead satellite, owned by nobody, put into the sky by the server. It
+// carries an echo: the last words of a satellite gone from the sky (the
+// record keeps it), picked at random, so a collision with a derelict still breaks someone's
+// words into someone else's (the review, 2026-10-07). None until something
+// has gone.
+// Up to `n` lines of satellites gone by `now`, at random, to echo.
+const echoes = (n: number, now: number) =>
+  db
+    .select({ id: objects.id, beacon: objects.beacon })
+    .from(objects)
+    .where(and(eq(objects.kind, "satellite"), ne(objects.fate, "live"), isNotNull(objects.beacon), lt(objects.launchedAt, now)))
+    .orderBy(sql`random()`)
+    .limit(n)
+    .all();
+
 export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
+  const [echo] = echoes(1, now);
   const object = toObject(
     db
       .insert(objects)
-      .values({ kind: "derelict", band: bandAt(orbit.radius), launchedAt: now, ...orbit })
+      .values({ kind: "derelict", band: bandAt(orbit.radius), launchedAt: now, ...orbit, words: echo?.beacon ?? null, echo: echo?.id ?? null })
       .returning(columns)
       .get(),
   );
@@ -438,7 +560,7 @@ export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
   return object;
 }
 
-// ── resident operators (ADR 0015) ─────────────────────────────────────────
+// ── resident operators (ADR 0019) ─────────────────────────────────────────
 
 // The residents' operator rows, by handle, made the first time they're
 // needed. A resident has no passphrase, so nobody can sign in as one, and
@@ -535,6 +657,29 @@ function launchResident(slot: Slot, now: number): SkyObject | null {
   return object;
 }
 
+// Derelicts still up from before they carried echoes (or put up while
+// nothing had gone) get one, once, as the server starts: otherwise the
+// sky's derelicts stay silent for days after a deploy (the second review,
+// 2026-10-07). Only once, before anything moves, so a sky that kept
+// running and one replayed after a stop break the same words.
+let echoed = false;
+function echoTheSilent(now: number): void {
+  const silent = db
+    .select({ id: objects.id })
+    .from(objects)
+    .where(and(eq(objects.kind, "derelict"), eq(objects.fate, "live"), isNull(objects.echo)))
+    .all();
+  if (silent.length === 0) return;
+  const lines = echoes(silent.length, now);
+  if (lines.length === 0) return;
+  db.transaction((tx) => {
+    silent.forEach((derelict, i) => {
+      const line = lines[i % lines.length];
+      tx.update(objects).set({ words: line.beacon, echo: line.id }).where(eq(objects.id, derelict.id)).run();
+    });
+  });
+}
+
 // ── a collision to watch (ADR 0008) ───────────────────────────────────────
 
 // When nothing is coming, a visitor could watch for an hour and see no
@@ -578,7 +723,7 @@ export function stageCollision(now = Date.now()): Conjunction | null {
 
 // Tops the sky up with derelicts, each in a random band, towards `baseline`
 // satellites and derelicts, and to at least `least` derelicts however many
-// satellites are up (the residents' fill most of the baseline, ADR 0015):
+// satellites are up (the residents' fill most of the baseline, ADR 0019):
 // one for every DERELICT_GAP since the last one went up, so an empty sky (or
 // one the server slept through) fills at once and a busy one only slowly.
 export function keepDerelicts(
@@ -600,7 +745,7 @@ export function keepDerelicts(
 // ── keeping the sky up to date ────────────────────────────────────────────
 
 // Brings the sky up to `now`: every collision and resident's launch (ADR
-// 0015) that has come, in order (each one's fragments, or a new satellite,
+// 0019) that has come, in order (each one's fragments, or a new satellite,
 // can hit something sooner, so the schedule is worked out again after each),
 // then every burn-up, then the derelicts topped up.
 // Every read of the sky runs this first, so a server that was stopped catches
@@ -661,6 +806,10 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
   if (!retimed) {
     retime(now);
     retimed = true;
+  }
+  if (!echoed) {
+    echoTheSilent(now);
+    echoed = true;
   }
   if (now >= quietFrom && now < quietUntil) return { decayed: [], collisions: [] };
   const applied: CollisionReport[] = [];
@@ -780,14 +929,14 @@ export type Fate = CatalogueEntry["fate"];
 export const SORTS = ["launched", "name", "kind", "band", "height", "status", "operator"] as const;
 export type Sort = (typeof SORTS)[number];
 export interface CatalogueQuery {
-  show: "live" | "all";
+  // what's up now, everything ever, or everything of yours (ADR 0015)
+  show: "live" | "all" | "mine";
   kind: Kind | null;
   band: Band | null;
-  // only with show "all": live is what "In orbit" shows
+  // only with show "all" or "mine": live is what "In orbit" shows
   fate: Fate | null;
   // a callsign or an operator's handle, or part of one
   q: string;
-  mine: boolean;
   sort: Sort;
   dir: "asc" | "desc";
   page: number;
@@ -811,7 +960,9 @@ const oneOf = <T extends string>(value: string | null, options: readonly T[]): T
   value !== null && (options as readonly string[]).includes(value) ? (value as T) : null;
 
 export function readCatalogueQuery(params: URLSearchParams): CatalogueQuery {
-  const show = params.get("show") === "all" ? "all" : "live";
+  // (`mine=1` was the "Only yours" box before Yours was a view of its own:
+  // an old link to it opens Yours)
+  const show = params.get("mine") === "1" ? "mine" : (oneOf(params.get("show"), ["all", "mine"] as const) ?? "live");
   const sort = oneOf(params.get("sort"), SORTS) ?? "launched";
   const whole = (value: string | null, fallback: number, min: number, max: number) => {
     const n = Math.floor(Number(value));
@@ -821,9 +972,8 @@ export function readCatalogueQuery(params: URLSearchParams): CatalogueQuery {
     show,
     kind: oneOf(params.get("kind"), ["satellite", "derelict", "debris"] as const),
     band: oneOf(params.get("band"), Object.keys(BANDS) as Band[]),
-    fate: show === "all" ? oneOf(params.get("fate"), ["live", "decayed", "deorbited", "destroyed"] as const) : null,
+    fate: show !== "live" ? oneOf(params.get("fate"), ["live", "decayed", "deorbited", "destroyed"] as const) : null,
     q: (params.get("q") ?? "").trim().slice(0, 40),
-    mine: params.get("mine") === "1",
     sort,
     dir: oneOf(params.get("dir"), ["asc", "desc"] as const) ?? FIRST_DIR[sort],
     page: whole(params.get("page"), 1, 1, 1_000_000),
@@ -878,7 +1028,7 @@ export function browse(query: CatalogueQuery, who: Who, now = Date.now()): Catal
         fate ? eq(objects.fate, fate) : undefined,
         query.kind ? eq(objects.kind, query.kind) : undefined,
         query.band ? eq(objects.band, query.band) : undefined,
-        query.mine ? ownerIs(who) : undefined,
+        query.show === "mine" ? ownerIs(who) : undefined,
         query.q
           ? sql`(${objects.callsign} LIKE ${pattern} ESCAPE '\\' OR ${operators.handle} LIKE ${pattern} ESCAPE '\\')`
           : undefined,
@@ -988,27 +1138,44 @@ export interface History {
   band: Band;
   launchedAt: number;
   handle: string | null;
-  // launched by a resident operator (ADR 0015), not a person
+  // launched by a resident operator (ADR 0019), not a person
   resident: boolean;
   mine: boolean;
   fate: Fate;
   fateAt: number | null;
-  // its beacon, once it's gone (or to its owner, always); while it flies,
-  // everyone else hears it only over a ground station, and it's withheld here
+  // its beacon, once it's been heard or it's gone (or to its owner,
+  // always: ADR 0012, 0016); until then it's withheld here
   beacon: string | null;
   withheld: boolean;
+  // how many people have heard it, over how many passes (ADR 0016)
+  heard: { by: number; passes: number };
   // while it's up: when it next passes over a ground station, and which
   // (null if it burns up first), and when it burns up
   nextPass: { at: number; station: string } | null;
   reentryAt: number | null;
   // and its orbit, so a page can keep those counting down
   orbit: Required<Orbit> | null;
+  // what its owner has done with it (ADR 0011), for its controls (ADR 0015)
+  deorbitedAt: number | null;
+  boosts: number;
   // boosts and deorbits (ADR 0011), oldest first, with the band each aimed for
   manoeuvres: { kind: ManoeuvreKind; at: number; to: Band }[];
-  // for debris: the collision it came from, what met, and who that traces to
-  origin: { collision: number; at: number; parties: [Party, Party]; roots: Root[] } | null;
-  // for anything destroyed: its collision, and what it met
-  end: { collision: number; at: number; with: Party } | null;
+  // for debris, the words it carries (ADR 0017); for a derelict, the echo
+  // it carries, and whose last words they were
+  words: string | null;
+  echoOf: { id: number; callsign: string | null } | null;
+  // the stations' question it answered (ADR 0018)
+  question: string | null;
+  // for debris: the collision it came from, what met, who that traces to,
+  // how many fragments it left, and which of them this is (in the order
+  // they were made, as their shards were dealt: ADR 0017)
+  origin: { collision: number; at: number; parties: [Party, Party]; roots: Root[]; left: number; index: number } | null;
+  // for debris: every collision that led to it, oldest first, the last its
+  // origin; for each, which collision any debris in it came from
+  ancestry: Step[];
+  // for anything destroyed: its collision, what it met, and what the wreck
+  // says now (ADR 0017)
+  end: { collision: number; at: number; with: Party; wreck: WreckPiece[] } | null;
   // everything downstream of it: the fragments its own collision left;
   // everything those (and theirs) went on to: the collisions, what they
   // destroyed, every fragment in all, and how many of those are still up.
@@ -1016,7 +1183,16 @@ export interface History {
   followed: { left: number; collisions: number; fragments: number; up: number; destroyed: Root[] };
 }
 
-const objectById = (id: number): SkyObject | null => {
+// A collision in a fragment's lineage: what met, and the collision each
+// side came from if it was debris (null for a satellite or a derelict).
+export interface Step {
+  collision: number;
+  at: number;
+  parties: [Party, Party];
+  sources: [number | null, number | null];
+}
+
+export const objectById = (id: number): SkyObject | null => {
   const row = db.select(columns).from(objects).where(eq(objects.id, id)).get();
   return row ? toObject(row) : null;
 };
@@ -1033,14 +1209,20 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
   const object = toObject(row);
   const mine = ownedBy(object, who);
   const flying = object.fate === "live";
-  const shown = !flying || mine;
+  const heard = {
+    by: db.select({ n: count() }).from(listens).where(eq(listens.object, id)).get()?.n ?? 0,
+    passes: db.select({ n: count() }).from(transmissions).where(eq(transmissions.object, id)).get()?.n ?? 0,
+  };
+  const shown = !flying || mine || heard.passes > 0;
   const pass = flying ? nextStation(object, now) : null;
 
   // Every collision and every fragment, read once and walked in memory: two
   // queries however long the cascade (the sky holds a few hundred objects,
   // and the record grows by a few collisions an hour).
   const byObject = new Map<number, CollisionRow[]>();
+  const byId = new Map<number, CollisionRow>();
   for (const c of db.select().from(collisions).all()) {
+    byId.set(c.id, c);
     for (const member of [c.a, c.b]) byObject.set(member, [...(byObject.get(member) ?? []), c]);
   }
   const leftBy = new Map<number, { id: number; fate: Fate }[]>();
@@ -1048,6 +1230,7 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
     .select({ id: objects.id, fate: objects.fate, source: objects.sourceCollision })
     .from(objects)
     .where(sql`${objects.sourceCollision} IS NOT NULL`)
+    .orderBy(objects.id)
     .all();
   for (const d of debris) leftBy.set(d.source!, [...(leftBy.get(d.source!) ?? []), d]);
 
@@ -1066,6 +1249,23 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
       : meeting(db.select().from(collisions).where(eq(collisions.id, object.sourceCollision)).get());
   // an object collides once: it's destroyed
   const own = object.fate === "destroyed" ? meeting(byObject.get(id)?.[0]) : null;
+
+  // walk back: the collision it came from, the ones its debris came from,
+  // and so on to satellites and derelicts, told oldest first
+  const steps = new Map<number, Step>();
+  const back = (collision: number | null) => {
+    if (collision === null || steps.has(collision)) return;
+    const found = meeting(byId.get(collision));
+    if (!found) return;
+    const sources = [found.c.a, found.c.b].map((member) => {
+      const o = objectById(member);
+      return o?.kind === "debris" ? o.sourceCollision : null;
+    }) as [number | null, number | null];
+    steps.set(collision, { collision, at: found.c.at, parties: found.parties, sources });
+    for (const source of sources) back(source);
+  };
+  back(object.sourceCollision);
+  const ancestry = [...steps.values()].sort((x, y) => x.at - y.at || x.collision - y.collision);
 
   // walk forwards: each collision a member of its lineage had, and the
   // fragments each left, which join the lineage. What it hit is worked out
@@ -1107,6 +1307,7 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
     fateAt: row.fateAt,
     beacon: shown ? object.beacon : null,
     withheld: !shown && object.beacon !== null,
+    heard,
     nextPass: pass === null ? null : { at: now + pass.in, station: pass.station.name },
     reentryAt: flying ? reentryAt(object) : null,
     orbit: flying
@@ -1120,9 +1321,27 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
           until: object.until,
         }
       : null,
+    deorbitedAt: object.deorbitedAt,
+    boosts: object.boosts,
+    words: object.words,
+    echoOf: object.echo === null ? null : { id: object.echo, callsign: objectById(object.echo)?.callsign ?? null },
+    question: object.question,
     manoeuvres: manoeuvresOf(id).map((m) => ({ kind: m.kind, at: m.at, to: bandAt(m.toRadius) })),
-    origin: source && { collision: source.c.id, at: source.c.at, parties: source.parties, roots: rootsOf(source.c.id) },
-    end: own && { collision: own.c.id, at: own.c.at, with: own.parties[own.c.a === id ? 1 : 0] },
+    origin: source && {
+      collision: source.c.id,
+      at: source.c.at,
+      parties: source.parties,
+      roots: rootsOf(source.c.id),
+      left: leftBy.get(source.c.id)?.length ?? 0,
+      index: leftBy.get(source.c.id)?.findIndex((d) => d.id === id) ?? 0,
+    },
+    ancestry,
+    end: own && {
+      collision: own.c.id,
+      at: own.c.at,
+      with: own.parties[own.c.a === id ? 1 : 0],
+      wreck: wrecksOf([own.c.id]).get(own.c.id) ?? [],
+    },
     followed: {
       left: own ? (leftBy.get(own.c.id)?.length ?? 0) : 0,
       collisions: walked.size - (own ? 1 : 0),
@@ -1149,13 +1368,16 @@ export function nextLaunchAt(who: Who, now = Date.now()): number {
   return Math.max(now, (last?.at ?? -Infinity) + LAUNCH_GAP);
 }
 
-// "You can launch again in 4 min 05 s."
-export function waitMessage(ms: number): string {
+// "4 min 05 s", "9 s": how long until the next launch
+export function waitFor(ms: number): string {
   const seconds = Math.ceil(ms / 1000);
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
-  return `You can launch again in ${minutes > 0 ? `${minutes} min ${String(rest).padStart(2, "0")} s` : `${rest} s`}.`;
+  return minutes > 0 ? `${minutes} min ${String(rest).padStart(2, "0")} s` : `${rest} s`;
 }
+
+// "You can launch again in 4 min 05 s."
+export const waitMessage = (ms: number): string => `You can launch again in ${waitFor(ms)}.`;
 
 export function launch(who: Viewer | string, input: LaunchInput, now = Date.now(), random = Math.random): LaunchResult {
   settle(now);
@@ -1194,6 +1416,7 @@ function checkAndInsert(viewer: Viewer, input: LaunchInput, now: number, random:
         operator: viewer.operator,
         callsign: input.callsign,
         beacon: input.beacon,
+        question: input.question,
         band: input.band,
         launchedAt: now,
         ...placeInBand(input.band, now, random),

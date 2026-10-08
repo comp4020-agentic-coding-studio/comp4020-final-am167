@@ -1,0 +1,21 @@
+---
+import ObjectHistory from "./ObjectHistory.astro";
+import type { History } from "../lib/sky.ts";
+import { titleOf } from "../lib/story.ts";
+
+// What an object's card holds (ADR 0012, 0015): its name and its history,
+// and ways on. Rendered into the card by the server (an object's own
+// address) or fetched into it (/object/<id>/panel).
+interface Props {
+  history: History;
+  now: number;
+}
+const { history, now } = Astro.props;
+---
+<h2 id="object-card-title" tabindex="-1">{titleOf(history)}</h2>
+<ObjectHistory history={history} now={now} level={3} />
+<p class="history-links">
+  <a href={`/object/${history.id}/`} data-page>A link to it</a>
+  {history.mine && <a href="/catalogue/?show=mine" data-page>All of yours</a>}
+  <a href="/sky/" data-page>See the sky</a>
+</p>

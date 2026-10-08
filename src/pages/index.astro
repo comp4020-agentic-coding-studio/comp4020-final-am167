@@ -3,7 +3,8 @@ import Base from "../layouts/Base.astro";
 import { every, lasting } from "../lib/format.ts";
 import { BEACON_MAX, CALLSIGN_MAX, readLaunch, type LaunchErrors, type LaunchValues } from "../lib/launch.ts";
 import { BANDS, lifetimeRange, type Band } from "../lib/orbit.ts";
-import { SKY_CAP, launch, nextLaunchAt, satellitesOf, skyIsFull, waitMessage } from "../lib/sky.ts";
+import { dayOf, questionOn } from "../lib/questions.ts";
+import { SKY_CAP, launch, nextLaunchAt, satellitesOf, skyIsFull, waitFor } from "../lib/sky.ts";
 
 // The launchpad. The form posts here and works without JavaScript: a launch
 // redirects to the sky, a refusal re-renders the form with the reasons. The
@@ -13,7 +14,9 @@ const viewer = { person, operator: operator?.id ?? null };
 const wantsJson = Astro.request.headers.get("accept")?.includes("application/json");
 
 let errors: LaunchErrors = {};
-let values: LaunchValues = { band: "low", callsign: "", beacon: "" };
+// answering the question is a choice, not the default (the review: a
+// default tick tagged every line as an answer)
+let values: LaunchValues = { band: "low", callsign: "", beacon: "", answering: "" };
 
 let form: FormData | undefined;
 if (Astro.request.method === "POST") {
@@ -37,7 +40,13 @@ if (form) {
   if (wantsJson) return Response.json({ errors: result.errors }, { status: 422 });
   errors = result.errors;
   if (!read.ok) values = read.values;
-  else values = { band: read.input.band, callsign: read.input.callsign, beacon: read.input.beacon };
+  else
+    values = {
+      band: read.input.band,
+      callsign: read.input.callsign,
+      beacon: read.input.beacon,
+      answering: form.get("answering") ? "1" : "",
+    };
   Astro.response.status = 422;
 }
 
@@ -59,6 +68,9 @@ const life = (band: Band) => {
   const { shortest, longest } = lifetimeRange(band);
   return `Burns up in ${lasting(shortest, longest)}.`;
 };
+// the stations' question today (ADR 0018), and which day's this form shows
+const today = dayOf(Date.now());
+const question = questionOn(today);
 // the error is always referenced, even empty, so the script can fill it in
 const describe = (field: keyof LaunchErrors, help?: string) =>
   [`${field}-error`, help].filter(Boolean).join(" ");
@@ -103,41 +115,46 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     <section class="intro">
       <h1>Kessler</h1>
       <p class="lede">
-        One low orbit, shared by everyone who comes here. Launch a satellite and
-        write it a beacon: one line, broadcast to everyone watching each time it
-        passes over one of three ground stations.
+        Say one thing to everyone who's here. Your line goes up on a satellite,
+        and whoever has the sky open hears it each time it passes over a ground
+        station.
       </p>
       <p class="lede">
-        Nobody owns the sky. Every launch makes it more crowded, and in a crowded
-        orbit one collision can set off the next.
+        But the sky is shared, and every launch crowds it. When two satellites
+        collide, their words break into each other and keep broadcasting as
+        static, over everyone else's.
       </p>
-      <a class="explainer" href="/kessler/">
+      <p class="lede ask">What's worth saying, if saying it costs everyone a little?</p>
+      <a class="explainer" href="/why/">
         <span class="explainer-kicker">New here?</span>
-        <span>What is Kessler syndrome? <span aria-hidden="true">→</span></span>
+        <span>What this is, and why <span aria-hidden="true">→</span></span>
       </a>
+      <a class="explainer-more" href="/kessler/">What's Kessler syndrome?</a>
     </section>
 
     <section class="console" aria-labelledby="launch-title">
       <h2 id="launch-title">Launch a satellite</h2>
 
-      {mine.length > 0 && (
-        <p class="notice">
-          {mine.length === 1 ? "Yours in orbit: " : `Yours in orbit (${mine.length}): `}
-          <strong>{names(mine.map((o) => o.callsign ?? "unnamed"))}</strong>. Another
-          launch is another beacon heard, and one more thing for everyone to share the
-          sky with. <a href="/sky/">Watch the sky</a>
-        </p>
-      )}
+      <!-- what's yours and a full sky: one quiet box, so the form still fits
+           a laptop's window (pnpm test:layout); the wait is on the button -->
+      {(mine.length > 0 || full) && (
+        <div class="notices">
+          {mine.length > 0 && (
+            <p class="notice">
+              {mine.length === 1 ? "Yours in orbit: " : `Yours in orbit (${mine.length}): `}
+              <strong>{names(mine.map((o) => o.callsign ?? "unnamed"))}</strong>. Another
+              launch is another beacon heard, and one more thing for everyone to share the
+              sky with. <a href="/sky/">Watch the sky</a>
+            </p>
+          )}
 
-      {wait > 0 && !errors.form && (
-        <p class="notice" id="launch-wait" data-wait={wait}>{waitMessage(wait)}</p>
-      )}
-
-      {full && (
-        <p class="notice full">
-          The sky is full: {SKY_CAP} satellites in orbit, the most it holds.
-          <a href="/sky/">Watch the sky</a>
-        </p>
+          {full && (
+            <p class="notice full">
+              The sky is full: {SKY_CAP} satellites in orbit, the most it holds.
+              <a href="/sky/">Watch the sky</a>
+            </p>
+          )}
+        </div>
       )}
 
       <div class="form-error" role="alert" id="form-error">{errors.form}</div>
@@ -177,25 +194,40 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
           </div>
 
           <div class="field">
+            <!-- the stations' question (ADR 0018): a prompt, never a rule -->
+            <p class="today">
+              <span class="today-kicker">Today the stations ask</span>
+              <span class="today-question" id="question">{question}</span>
+            </p>
             <label for="beacon">Beacon</label>
-            <input
+            <textarea
               id="beacon"
               name="beacon"
+              rows="2"
               required
               maxlength={BEACON_MAX}
               autocomplete="off"
-              value={values.beacon}
               aria-invalid={errors.beacon ? "true" : undefined}
-              aria-describedby={describe("beacon", "beacon-help")}
-            />
+              aria-describedby={describe("beacon", "question beacon-help")}
+            >{values.beacon}</textarea>
+            <div class="beacon-foot">
+              <label class="answering">
+                <input type="checkbox" name="answering" value="1" checked={values.answering === "1"} />
+                <span>My beacon answers it</span>
+              </label>
+              <span class="count" id="beacon-count" aria-hidden="true" hidden></span>
+            </div>
+            <input type="hidden" name="asked" value={today} />
             <p class="help" id="beacon-help">
-              Up to {BEACON_MAX} characters, no links. It stays on record after
-              your satellite is gone.
+              Up to {BEACON_MAX} characters, no links. Kept on record after it's gone.
             </p>
             <p class="field-error" id="beacon-error" data-error="beacon">{errors.beacon}</p>
           </div>
 
-          <button type="submit">Launch</button>
+          <!-- while the gap between launches runs, the button says how long -->
+          <button type="submit">
+            {wait > 0 && !errors.form ? <span id="launch-wait" data-wait={wait}>Launch again in {waitFor(wait)}</span> : "Launch"}
+          </button>
         </fieldset>
       </form>
 
@@ -234,10 +266,17 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   </main>
 
   <script>
+    import { readLaunch } from "../lib/launch.ts";
+
     // Opens the handle pop-up on the first Launch of a visit, before the
     // launch goes anywhere. "Launch without a handle" carries the launch on;
     // Escape or the backdrop just closes it. Without this script it never
     // opens, and the line under the Launch button makes the offer.
+    //
+    // Only for a launch that would go ahead: one with a field missing or
+    // refused goes straight on, so the form says what's wrong (the server
+    // has the last word, as ever), and the offer waits for a launch worth
+    // making.
     const prompt = document.getElementById("handle-prompt") as HTMLDialogElement | null;
     const SEEN = "kessler:handle-prompt";
     const launch = document.querySelector<HTMLFormElement>("form[data-launch]");
@@ -252,7 +291,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       document.addEventListener(
         "submit",
         (e) => {
-          if (seen || e.target !== launch) return;
+          if (seen || e.target !== launch || !readLaunch(new FormData(launch)).ok) return;
           e.preventDefault();
           e.stopImmediatePropagation();
           seen = true;
@@ -262,6 +301,9 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
           } catch {
             // shown again next visit, which is fine
           }
+          // what an earlier try said is wrong is fixed now
+          for (const el of launch.querySelectorAll("[data-error]")) el.textContent = "";
+          for (const el of launch.querySelectorAll("[aria-invalid]")) el.removeAttribute("aria-invalid");
           prompt.returnValue = "";
           prompt.showModal();
         },
@@ -278,13 +320,33 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   </script>
 
   <script>
+    // How much of the beacon is left, as it's written (the field stops at
+    // the limit itself).
+    const beacon = document.querySelector<HTMLTextAreaElement>("textarea[name=beacon]");
+    const counter = document.getElementById("beacon-count");
+    if (beacon && counter) {
+      const max = beacon.maxLength;
+      const show = () => {
+        // counted as the field counts to its limit (UTF-16 units, so an
+        // emoji is two), or the count says there's room the field won't give
+        const used = beacon.value.length;
+        counter.textContent = `${used} / ${max}`;
+        counter.classList.toggle("near", used > max - 20);
+      };
+      counter.hidden = false;
+      beacon.addEventListener("input", show);
+      show();
+    }
+  </script>
+
+  <script>
     // Keeps what's been filled in across a detour to claim a handle or sign
     // in: saved on following one of the launchpad's own links to the operator
     // page (they come back here), filled back in only when arriving from that
     // page, and dropped otherwise.
     const DRAFT = "kessler:launch-draft";
     const pad = document.querySelector<HTMLFormElement>("form[data-launch]");
-    const field = (name: string) => pad?.querySelector<HTMLInputElement>(`input[name=${name}]:not([type=radio])`);
+    const field = (name: string) => pad?.querySelector<HTMLInputElement | HTMLTextAreaElement>(`:is(input, textarea)[name=${name}]:not([type=radio])`);
     if (pad) {
       document.addEventListener("click", (e) => {
         if (!(e.target instanceof Element) || !e.target.closest('a[href^="/operator/?back=launchpad"]')) return;
@@ -332,29 +394,31 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
         if (band) band.checked = true;
         field("callsign")!.value = String(draft.callsign ?? "");
         field("beacon")!.value = String(draft.beacon ?? "");
+        field("beacon")!.dispatchEvent(new Event("input"));
       }
     }
   </script>
 
   <script>
-    // Counts down the gap between your launches, and opens the form when
-    // it's over. Without this script, reloading the page does the same.
+    // Counts down the gap between your launches on the Launch button, and
+    // opens the form when it's over. Without this script, reloading the page
+    // does the same.
     const notice = document.getElementById("launch-wait");
     if (notice) {
       const ready = Date.now() + Number(notice.dataset.wait);
       const tick = setInterval(() => {
         const left = ready - Date.now();
         if (left > 0) {
-          // as waitMessage in src/lib/sky.ts
+          // as waitFor in src/lib/sky.ts
           const seconds = Math.ceil(left / 1000);
           const minutes = Math.floor(seconds / 60);
           const rest = seconds % 60;
           const when = minutes > 0 ? `${minutes} min ${String(rest).padStart(2, "0")} s` : `${rest} s`;
-          notice.textContent = `You can launch again in ${when}.`;
+          notice.textContent = `Launch again in ${when}`;
           return;
         }
         clearInterval(tick);
-        notice.remove();
+        notice.replaceWith("Launch");
         document.querySelector<HTMLFieldSetElement>("form[data-launch] > fieldset")!.disabled =
           document.querySelector(".notice.full") !== null;
       }, 250);
@@ -647,6 +711,33 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     color: var(--ink-dim);
   }
 
+  /* the question it leaves you with */
+  .lede.ask {
+    color: var(--amber);
+    font-style: italic;
+  }
+
+  /* the second way in: quieter than the first, but dark behind it like the
+     first, so it reads over the afterglow */
+  .explainer-more {
+    display: block;
+    width: fit-content;
+    margin-top: 0.6rem;
+    padding: 0.3rem 0.65rem;
+    border: 1px solid rgb(242 165 65 / 0.45);
+    border-radius: 4px;
+    background: rgb(6 11 24 / 0.78);
+    color: var(--ink);
+    font-size: var(--step--1);
+    text-decoration-color: rgb(242 165 65 / 0.6);
+    text-underline-offset: 0.2em;
+  }
+
+  .explainer-more:hover {
+    color: var(--amber);
+    text-decoration-color: currentColor;
+  }
+
   /* the way into the explainer, for anyone who doesn't know the name */
   .explainer {
     display: inline-grid;
@@ -784,7 +875,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     margin-bottom: 1rem;
   }
 
-  .field input {
+  .field :is(input, textarea) {
     width: 100%;
     padding: 0.6rem 0.7rem;
     font: inherit;
@@ -794,8 +885,80 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     border-radius: 3px;
   }
 
-  .field input[aria-invalid="true"] {
+  .field textarea {
+    display: block;
+    resize: vertical;
+    line-height: 1.4;
+  }
+
+  .field :is(input, textarea)[aria-invalid="true"] {
     border-color: var(--danger);
+  }
+
+  /* the stations' question, above the beacon */
+  .today {
+    margin: 0 0 0.6rem;
+    padding: 0.45rem 0.75rem 0.5rem;
+    border-left: 3px solid var(--amber);
+    background: rgb(242 165 65 / 0.08);
+    line-height: 1.35;
+  }
+
+  .today-kicker {
+    margin-right: 0.4rem;
+    color: var(--ink-dim);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .today-question {
+    font-style: italic;
+  }
+
+  /* two lines to start, growing with what's written, where it can */
+  .field textarea {
+    field-sizing: content;
+    min-height: calc(2lh + 1.2rem + 2px);
+    max-height: calc(5lh + 1.2rem + 2px);
+  }
+
+  .field .answering {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-size: var(--step--1);
+    font-weight: 400;
+    color: var(--ink);
+  }
+
+  .field .answering input {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    accent-color: var(--amber);
+  }
+
+  /* whether it answers the question, and how much of it is left */
+  .beacon-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 0.45rem;
+  }
+
+  .beacon-foot .count {
+    flex: none;
+    font-size: var(--step--1);
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .beacon-foot .count.near {
+    color: var(--amber);
   }
 
   .help,
@@ -829,11 +992,22 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     color: var(--amber);
   }
 
-  .notice {
+  /* what's yours, the wait, a full sky: one quiet box above the form */
+  .notices {
     margin: 0 0 1rem;
-    padding: 0.75rem;
+    padding: 0.5rem 0.75rem;
     border-left: 3px solid var(--amber);
     background: rgb(242 165 65 / 0.08);
+    font-size: var(--step--1);
+    line-height: 1.4;
+  }
+
+  .notice {
+    margin: 0;
+  }
+
+  .notice + .notice {
+    margin-top: 0.3rem;
   }
 
   button {
@@ -852,6 +1026,12 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
 
   button:hover {
     background: #ffbb5c;
+  }
+
+  /* the wait, on the button: quieter than "Launch", and on one line */
+  #launch-wait {
+    font-size: var(--step-0);
+    white-space: nowrap;
   }
 
   fieldset:disabled .band,
@@ -1029,20 +1209,114 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     }
   }
 
-  /* On a short laptop screen the form still fits without scrolling: each band
-     keeps how often it passes and gives up its note, and the spacing tightens. */
-  @media (min-width: 52.01rem) and (max-height: 46rem) {
-    .band-hint {
-      display: none;
+  /* Beside the intro, the form fits one window (pnpm test:layout): a little
+     wider, and, wherever the form is wide enough, each field's rule beside
+     its name. */
+  @media (min-width: 52.01rem) {
+    .console {
+      max-width: 38rem;
+    }
+  }
+
+  .console {
+    container-type: inline-size;
+  }
+
+  @container (min-width: 30rem) {
+    /* each field's rule beside its name, not under the box (the beacon's
+       name comes after the stations' question) */
+    .field {
+      --name-row: 1;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      column-gap: 0.75rem;
+      align-items: baseline;
     }
 
-    .bands,
-    .field {
-      margin-bottom: 0.75rem;
+    .field:has(> .today) {
+      --name-row: 2;
+    }
+
+    .field > * {
+      grid-column: 1 / -1;
+    }
+
+    .field > label[for] {
+      grid-row: var(--name-row);
+      grid-column: 1;
+    }
+
+    .field > .help {
+      grid-row: var(--name-row);
+      grid-column: 2;
+      margin: 0;
+      text-align: right;
+    }
+  }
+
+  /* and on a short laptop screen, the spacing tightens (each band keeps
+     both its lines) */
+  @media (min-width: 52.01rem) and (max-height: 56rem) {
+    .console button[type="submit"] {
+      padding: 0.6rem 1rem;
+    }
+
+    .pad {
+      padding-top: 1rem;
     }
 
     .console {
       margin-bottom: 1rem;
+      padding: 0.85rem 1.25rem;
+    }
+
+    .console h2 {
+      margin-bottom: 0.5rem;
+      font-size: var(--step-1);
+    }
+
+    .bands {
+      gap: 0.4rem;
+    }
+
+    .band {
+      padding: 0.3rem 0.75rem;
+      line-height: 1.3;
+    }
+
+    .today {
+      padding: 0.3rem 0.75rem 0.35rem;
+    }
+
+    .bands,
+    .field {
+      margin-bottom: 0.7rem;
+    }
+
+    legend,
+    .field label {
+      margin-bottom: 0.25rem;
+    }
+
+    .field :is(input, textarea) {
+      padding: 0.45rem 0.7rem;
+    }
+
+    .field textarea {
+      min-height: calc(2lh + 0.9rem + 2px);
+    }
+
+    .notices {
+      margin-bottom: 0.75rem;
+      padding: 0.4rem 0.75rem;
+    }
+
+    .beacon-foot {
+      margin-top: 0.3rem;
+    }
+
+    .launch-as {
+      margin-top: 0.5rem;
     }
   }
 

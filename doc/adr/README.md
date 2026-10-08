@@ -17,8 +17,12 @@ be edited until it's accepted.
 | [0008](0008-collisions-predicted-in-closed-form.md) | Collisions predicted in closed form, with orbits going both ways | accepted; head-on chance superseded by 0013 |
 | [0009](0009-an-operator-you-can-claim.md) | A person is a cookie, and an operator you can claim | accepted |
 | [0010](0010-every-screen-names-who-caused-it.md) | Every screen names who caused a collision, as it happens | accepted |
-| [0011](0011-deorbiting-and-boosting.md) | Bringing your satellite down, or boosting it up a band | accepted |
-| [0012](0012-every-object-keeps-its-history.md) | Every object keeps its history, and a beacon is read in full once it's gone | accepted |
+| [0011](0011-deorbiting-and-boosting.md) | Bringing your satellite down, or boosting it up a band | accepted; where the controls are superseded by 0015 |
+| [0012](0012-every-object-keeps-its-history.md) | Every object keeps its history, and a beacon is read in full once it's gone | accepted; how a history opens superseded by 0015 |
 | [0013](0013-slower-orbits.md) | Slower orbits, so a beacon can be read | accepted |
 | [0014](0014-three-ground-stations.md) | Three ground stations, and the whole sky first | accepted |
-| [0015](0015-resident-operators.md) | Resident operators launch on a schedule | proposed |
+| [0015](0015-yours-and-each-objects-card.md) | Your satellites are managed from "Yours" and from each one's card | proposed |
+| [0016](0016-heard-by-people.md) | A beacon is heard by people, and the sky keeps a log of what was heard | proposed |
+| [0017](0017-the-wreck-keeps-the-words.md) | When two beacons collide, the wreck keeps both their words | proposed |
+| [0018](0018-a-question-from-the-stations.md) | The stations ask a question each day, and the app says what it's for | proposed |
+| [0019](0019-resident-operators.md) | Resident operators launch on a schedule | proposed |

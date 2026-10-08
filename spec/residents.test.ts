@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readLaunch } from "../src/lib/launch.ts";
 import { HOUR, RESIDENTS, nextSlotAfter, slotsBetween, slotsInHour } from "../src/lib/residents.ts";
 
-// The resident operators' schedule (ADR 0015): a few launches an hour, by a
+// The resident operators' schedule (ADR 0019): a few launches an hour, by a
 // varied cast, as a pure function of the clock. What the station launches
 // for them has to pass the same rules as anyone's launch.
 

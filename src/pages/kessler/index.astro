@@ -8,8 +8,10 @@ const low = lifetimeRange("low");
 const high = lifetimeRange("high");
 
 // What Kessler syndrome is, in plain words, for visitors who haven't heard of
-// it: the cascade, the real cases, why it's a commons problem, and how this
-// app's mechanics map onto it. Figures are from the sources at the bottom.
+// it: the cascade, the real cases, the rules that reach only part of the
+// sky, and how this sky's physics maps onto the real one. Figures are from
+// the sources at the bottom. What the app is for, and the argument about
+// attention it makes, is the Why page's (ADR 0018), not repeated here.
 
 // The cascade diagram: tilted elliptical orbits around a small Earth, worked
 // out here so the collisions sit exactly where the orbits cross. Fragments
@@ -241,9 +243,8 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
         Low orbit is a commons: it belongs to no one and is open to all. Whoever
         launches a satellite gets all the good of it, but the risk of the debris
         it might one day make is shared by everyone in orbit, including people
-        who haven't launched yet. Garrett Hardin called this the tragedy of the
-        commons (1968): each person acting sensibly for themselves can ruin a
-        shared resource for everyone.
+        who haven't launched yet: what Garrett Hardin called the tragedy of the
+        commons (1968).
       </p>
       <p>
         There are rules, but they reach only part of the sky. In 2022 the US
@@ -251,20 +252,16 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
         low orbit, if launched after September 2024, must be disposed of within
         five years of their mission ending; the guideline before it allowed
         twenty-five. Satellites outside its reach, and debris already up there,
-        aren't covered, and nothing yet removes debris at scale. Elinor Ostrom
-        (1990) studied commons that didn't collapse, and found they last when the
-        people using them set their own limits, can see how the resource and each
-        other are doing, and answer to each other when someone takes too much.
+        aren't covered, and nothing yet removes debris at scale.
       </p>
     </section>
 
     <section aria-labelledby="mapping-title">
       <h2 id="mapping-title">How this sky plays it</h2>
       <p>
-        That's why this app is called Kessler: it's one small sky that everyone
-        shares, built so the same dilemma plays out where you can watch it.
-        Crowding the low band gets your beacon heard more often; the price is
-        a shorter life before it falls, and a crowd to collide with.
+        This app's sky runs the same physics, simplified so you can watch it
+        happen. What it's for, and what it says about the attention we all
+        share, is on <a href="/why/">Why</a>.
       </p>
       <table class="mapping">
         <caption class="visually-hidden">Real orbit compared with this app's sky</caption>
@@ -280,15 +277,11 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
             <td>One sky, open to everyone who visits. Anyone can launch as often as every five minutes, and nobody owns it.</td>
           </tr>
           <tr>
-            <th scope="row">Operators launch for what orbit gives them: coverage, pictures, signal.</th>
-            <td>You launch to be heard: your beacon is shown to everyone watching each time your satellite passes over one of the three ground stations.</td>
-          </tr>
-          <tr>
             <th scope="row">The most useful altitudes are the most crowded.</th>
             <td>
-              The low band comes round past the stations every {every(BANDS.low.period)},
-              the high band every {every(BANDS.high.period)}. To be heard more
-              often, you crowd the low band.
+              The low band comes round past the three ground stations
+              every {every(BANDS.low.period)}, the high band every {every(BANDS.high.period)},
+              so the low band is where everyone crowds.
             </td>
           </tr>
           <tr>
@@ -309,7 +302,7 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
           </tr>
           <tr>
             <th scope="row">An operator can bring a satellite down at the end of its life. Debris can't be steered.</th>
-            <td>You can bring your own satellite down: it leaves orbit in two minutes and burns up, giving up your beacon to leave the sky cleaner. You can also boost one up a band, once, to stay up longer. Nobody can clear debris.</td>
+            <td>You can bring your own satellite down: it leaves orbit in two minutes and burns up. You can also boost one up a band, once, to stay up longer. Nobody can clear debris.</td>
           </tr>
           <tr>
             <th scope="row">Every tracked object has a catalogue entry.</th>
@@ -336,44 +329,39 @@ const dot = (p: Point) => ({ cx: p[0].toFixed(1), cy: p[1].toFixed(1) });
       <ul>
         <li>
           Kessler, D. J. and Cour-Palais, B. G. (1978). Collision frequency of
-          artificial satellites: the creation of a debris belt.
-          <cite>Journal of Geophysical Research</cite> 83(A6), 2637–2646.
+          artificial satellites: the creation of a debris belt.{" "}
+          <cite>Journal of Geophysical Research</cite> 83(A6), 2637–2646.{" "}
           <a href="https://doi.org/10.1029/JA083iA06p02637">doi:10.1029/JA083iA06p02637</a>
         </li>
         <li>
           NASA Orbital Debris Program Office (2007). Chinese anti-satellite test
-          creates most severe orbital debris cloud in history.
-          <cite>Orbital Debris Quarterly News</cite> 11(2), 2–3.
+          creates most severe orbital debris cloud in history.{" "}
+          <cite>Orbital Debris Quarterly News</cite> 11(2), 2–3.{" "}
           <a href="https://orbitaldebris.jsc.nasa.gov/quarterly-news/pdfs/odqnv11i2.pdf">PDF</a>
         </li>
         <li>
           NASA Orbital Debris Program Office (2009). Satellite collision leaves
-          significant debris clouds. <cite>Orbital Debris Quarterly News</cite> 13(2), 1–2.
+          significant debris clouds. <cite>Orbital Debris Quarterly News</cite> 13(2), 1–2.{" "}
           <a href="https://orbitaldebris.jsc.nasa.gov/quarterly-news/pdfs/odqnv13i2.pdf">PDF</a>
         </li>
         <li>
           NASA Orbital Debris Program Office. Frequently asked questions (how
-          long debris stays in orbit).
+          long debris stays in orbit).{" "}
           <a href="https://orbitaldebris.jsc.nasa.gov/faq/">orbitaldebris.jsc.nasa.gov</a>
         </li>
         <li>
-          European Space Agency (2025). ESA Space Environment Report 2025 (summary).
+          European Space Agency (2025). ESA Space Environment Report 2025 (summary).{" "}
           <a href="https://www.esa.int/Space_Safety/Space_Debris/ESA_Space_Environment_Report_2025">esa.int</a>
         </li>
         <li>
           Federal Communications Commission (2022). Space Innovation; Mitigation
-          of Orbital Debris in the New Space Age. Second Report and Order, FCC 22-74.
+          of Orbital Debris in the New Space Age. Second Report and Order, FCC 22-74.{" "}
           <a href="https://docs.fcc.gov/public/attachments/FCC-22-74A1.pdf">PDF</a>
         </li>
         <li>
-          Hardin, G. (1968). The tragedy of the commons. <cite>Science</cite>
-          162(3859), 1243–1248.
+          Hardin, G. (1968). The tragedy of the commons. <cite>Science</cite>{" "}
+          162(3859), 1243–1248.{" "}
           <a href="https://doi.org/10.1126/science.162.3859.1243">doi:10.1126/science.162.3859.1243</a>
-        </li>
-        <li>
-          Ostrom, E. (1990). <cite>Governing the Commons: The Evolution of
-          Institutions for Collective Action</cite>. Cambridge University Press.
-          <a href="https://doi.org/10.1017/CBO9780511807763">doi:10.1017/CBO9780511807763</a>
         </li>
       </ul>
     </section>

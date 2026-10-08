@@ -104,6 +104,54 @@ describe("the sky page", () => {
     for (const row of rows) expect(row.querySelector("[aria-live]")).not.toBeNull();
   });
 
+  // the user's review, 2026-10-08: the page got crowded, so its boxes fold
+  it("serves its three boxes open, each with a hidden button to fold it", async () => {
+    const { page } = await skyPage();
+    const boxes = [...page.querySelectorAll("[data-collapsible]")];
+    expect(boxes.map((b) => b.querySelector("h2")?.textContent)).toEqual(["Sky now", "Beacons", "Heard"]);
+    for (const box of boxes) {
+      const button = box.querySelector(".box-toggle")!;
+      expect(button, "no button").not.toBeNull();
+      expect(button.hasAttribute("hidden"), "button shown without the script").toBe(true);
+      expect(button.getAttribute("aria-expanded")).toBe("true");
+      const body = page.getElementById(button.getAttribute("aria-controls") ?? "")!;
+      expect(box.contains(body), "it folds something outside its box").toBe(true);
+      expect(body.hasAttribute("hidden")).toBe(false);
+      // the heading stays when it's folded
+      expect(body.contains(box.querySelector("h2"))).toBe(false);
+    }
+  });
+
+  it("says who's listening, and lists what the stations have heard, without JavaScript", async () => {
+    const { page } = await skyPage();
+    const rail = page.querySelector(".rail")!;
+    expect(rail, "no beacons column").not.toBeNull();
+    // the stations live, and how many people are here (this viewer among them)
+    expect(rail.querySelector(".station [data-station]")).not.toBeNull();
+    const listening = rail.querySelector("#listening")!;
+    expect(Number(listening.getAttribute("data-listening"))).toBeGreaterThanOrEqual(1);
+    expect(listening.textContent).toMatch(/listening/i);
+    // what's been heard (ADR 0016): a feed, or a line saying nothing has been yet
+    const heard = rail.querySelector("section.heard")!;
+    expect(heard.querySelector("h2")?.textContent).toBe("Heard");
+    expect(heard.querySelector("ol#feed")).not.toBeNull();
+    const items = [...heard.querySelectorAll("#feed > li")];
+    if (items.length === 0) expect(heard.querySelector("#feed-empty")?.hasAttribute("hidden")).toBe(false);
+    for (const item of items) {
+      expect(item.querySelector(".heard-line")?.textContent).not.toBe("");
+      // a beacon says who heard it; a wreck's static (one card for all its
+      // fragments) says how much of it is still up
+      expect(item.querySelector(".heard-meta")?.textContent?.trim()).toMatch(
+        item.classList.contains("static")
+          ? /^Over (Canberra|Goldstone|Madrid) · \d+ pass(es)? · (\d+ of \d+ pieces still up|all fallen silent)$/
+          : /^Over (Canberra|Goldstone|Madrid) · Heard by /,
+      );
+      // nobody's card says "no handle"
+      expect(item.textContent).not.toMatch(/no handle/);
+      expect(item.querySelector('a[href^="/object/"]')).not.toBeNull();
+    }
+  });
+
   it("opens on the whole sky, with the horizon over each station a button away", async () => {
     const { page } = await skyPage();
     const views = [...page.querySelectorAll<HTMLButtonElement>(".views button")];

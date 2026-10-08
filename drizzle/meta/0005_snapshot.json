@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a40fa711-dbe2-43f8-b54e-d6479e2b4312",
+  "id": "2ff05263-5536-415e-9475-9a96cc342ed7",
   "prevId": "fb7c26d1-aa13-475e-91a4-f3a6e636d795",
   "tables": {
     "collisions": {
@@ -69,6 +69,53 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "listens": {
+      "name": "listens",
+      "columns": {
+        "object": {
+          "name": "object",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "listener": {
+          "name": "listener",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "at": {
+          "name": "at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "listens_listener": {
+          "name": "listens_listener",
+          "columns": [
+            "listener"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "listens_object_listener_pk": {
+          "columns": [
+            "object",
+            "listener"
+          ],
+          "name": "listens_object_listener_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
@@ -359,14 +406,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "resident": {
-          "name": "resident",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
         }
       },
       "indexes": {
@@ -402,6 +441,66 @@
         }
       },
       "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "transmissions": {
+      "name": "transmissions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "object": {
+          "name": "object",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "station": {
+          "name": "station",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "at": {
+          "name": "at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "listeners": {
+          "name": "listeners",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "transmissions_at": {
+          "name": "transmissions_at",
+          "columns": [
+            "at"
+          ],
+          "isUnique": false
+        },
+        "transmissions_object": {
+          "name": "transmissions_object",
+          "columns": [
+            "object"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

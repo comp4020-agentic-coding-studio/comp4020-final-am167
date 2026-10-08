@@ -1,47 +1,54 @@
 ---
+import ManoeuvreControls from "./ManoeuvreControls.astro";
+import Said from "./Said.astro";
 import { ago, falling, km, until } from "../lib/format.ts";
-import { BANDS, climbing, fallRate, heightKm, radiusAt } from "../lib/orbit.ts";
+import { BANDS, fallRate, heightKm, radiusAt } from "../lib/orbit.ts";
+import { JOIN } from "../lib/wreck.ts";
 import { stationOver } from "../lib/stations.ts";
 import type { History } from "../lib/sky.ts";
-import { blame, collisionOf, couplet, describe, headline, titleOf, type StoryParty } from "../lib/story.ts";
+import { bandNow, momentsOf, summaryOf, tornFromOf, tracedTo } from "../lib/chronicle.ts";
+import { heardBy, passes, titleOf } from "../lib/story.ts";
 import { countdown } from "../scripts/countdown.ts";
 
-// One object's history (ADR 0012), for its own page and for the panel the
-// sky opens when you click it: where it came from, what it said, how it
-// ended and what followed. The wording is the collision story's (ADR 0010):
-// two objects collide, debris destroys.
+// One object's history (ADR 0012), in the card that pops up when you click
+// it (ADR 0015). Rewritten 2026-10-08, after Advay found the old one
+// unreadable: what it is in a line and its state at a glance; then its
+// words (a fragment's shown inside the lines they were torn from); then
+// what happened, a moment at a time, oldest first; what it led to; and, for
+// a fragment, who it traces back to (ADR 0010). The wording is
+// src/lib/chronicle.ts. Your own satellite, while it's up, carries its
+// controls (ADR 0011).
 interface Props {
   history: History;
   now: number;
-  // the level of its section headings: 2 on its own page, 3 in the panel
+  // the level of its section headings: 3 in the card, under its name
   level: 2 | 3;
 }
 const { history: h, now, level } = Astro.props;
 const Heading = `h${level}` as "h2" | "h3";
 
-const kinds = { satellite: "Satellite", derelict: "Derelict", debris: "Fragment" } as const;
-const band = BANDS[h.band].label;
-const self: StoryParty = {
-  id: h.id,
-  kind: h.kind,
-  callsign: h.callsign,
-  beacon: h.beacon,
-  operator: h.handle,
-  from: h.origin?.roots ?? null,
-};
-// the other side of how it ended, and that side's beacon
-const met = h.end && ([self, h.end.with] as [StoryParty, StoryParty]);
-const theirLine = met ? couplet(met).find((line) => line.callsign !== h.callsign) : undefined;
+// under its name: what it is, said once ("Derelict no. 12" needs saying)
+const kinds = { satellite: "Satellite", derelict: "A dead satellite nobody owns", debris: "Debris from a collision" } as const;
+// where it is now: a boost or the fall moves it between bands
+const band = BANDS[bandNow(h, now)].label;
 const live = h.orbit !== null;
+const comingDown = live && h.deorbitedAt !== null && h.deorbitedAt <= now;
+// yours, and up: boost it or bring it down from here
+const controls =
+  h.mine && h.kind === "satellite" && h.orbit
+    ? { id: h.id, callsign: h.callsign, ...h.orbit, deorbitedAt: h.deorbitedAt, boosts: h.boosts }
+    : null;
 const radius = h.orbit ? radiusAt(h.orbit, now) : null;
 const overhead = h.orbit ? stationOver(h.orbit, now) : null;
+const moments = momentsOf(h);
+const torn = tornFromOf(h);
 const f = h.followed;
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 // what its wreckage destroyed, each linked to its own history; a long
 // cascade names the first few
 const LOSSES = 8;
 const shownLosses = f.destroyed.slice(0, LOSSES);
 const moreLosses = f.destroyed.length - shownLosses.length;
+const heard = h.heard.passes > 0 ? `${heardBy(h.heard.by, h.mine)}, across ${passes(h.heard.passes)} over a station.` : null;
 ---
 <article
   class="history"
@@ -50,31 +57,34 @@ const moreLosses = f.destroyed.length - shownLosses.length;
   data-orbit={h.orbit ? JSON.stringify(h.orbit) : undefined}
 >
   <p class="history-kind">
-    {kinds[h.kind]}{h.mine && <span class="yours"> (yours)</span>}
+    {kinds[h.kind]}{h.mine && <span class="yours">{" · yours"}</span>}
   </p>
+  <p class="history-summary"><Said line={summaryOf(h)} now={now} /></p>
 
-  <p class="history-lede">
-    {h.kind === "satellite" && (
-      <>Launched {h.handle ? <>by <strong>{h.handle}</strong></> : "without a handle"}, into the {band} band,{" "}
-      <time datetime={new Date(h.launchedAt).toISOString()}>{ago(now - h.launchedAt)}</time>.</>
-    )}
-    {h.kind === "derelict" && (
-      <>A dead satellite, nobody's: the sky keeps a few so it's never empty. Put in the {band} band{" "}
-      <time datetime={new Date(h.launchedAt).toISOString()}>{ago(now - h.launchedAt)}</time>.</>
-    )}
-    {h.kind === "debris" && (
-      <>Broken off in {h.origin ? collisionOf(h.origin.roots) : "a collision"}{" "}
-      <time datetime={new Date(h.launchedAt).toISOString()}>{ago(now - h.launchedAt)}</time>.</>
-    )}
-  </p>
+  {live && (
+    <ul class="history-status">
+      <li class="state live">{comingDown ? "Coming down" : "In orbit"}</li>
+      <li>{band} band</li>
+      {radius !== null && h.orbit && <li><span data-height>{km(heightKm(radius))}, {falling(fallRate(h.orbit, now))}</span></li>}
+      {h.reentryAt !== null && <li>Burns up in <span data-reentry={h.reentryAt}>about {until(h.reentryAt - now)}</span></li>}
+    </ul>
+  )}
+  {controls && (
+    <div class="history-controls">
+      <ManoeuvreControls object={controls} back="object" now={now} />
+    </div>
+  )}
 
   {h.kind === "satellite" && (h.beacon !== null || h.withheld) && (
     <section class="history-part">
       <Heading>{live ? "Its beacon" : "What it said"}</Heading>
       {h.beacon !== null && <blockquote class="history-beacon"><q>{h.beacon}</q></blockquote>}
+      {h.question && <p class="history-question">Answering the stations' question <q>{h.question}</q></p>}
       {live && (
         <p>
-          {h.mine && h.beacon !== null ? "Everyone else hears it " : "Heard "}only as it passes over a ground station.{" "}
+          {h.withheld
+            ? "Not heard yet: its line is read out when it's over a ground station, to whoever is listening, and shows here once someone has heard it."
+            : "It's read out to everyone listening each time it passes over a ground station."}{" "}
           <span data-pass>
             {overhead
               ? `It's over ${overhead.name} now.`
@@ -84,91 +94,136 @@ const moreLosses = f.destroyed.length - shownLosses.length;
           </span>
         </p>
       )}
+      {heard && <p class="history-note">{heard}</p>}
     </section>
   )}
 
-  {h.origin && (
+  {h.kind === "derelict" && (
     <section class="history-part">
-      <Heading>Where it came from</Heading>
-      <p>{headline(h.origin.parties)} <time datetime={new Date(h.origin.at).toISOString()}>{ago(now - h.origin.at)}</time>.</p>
-      {couplet(h.origin.parties).map(({ callsign, beacon }) => (
-        <p class="history-couplet"><q>{beacon}</q> {callsign}</p>
-      ))}
-      <p class="history-blame">{blame(h.origin.parties)}</p>
+      <Heading>{live ? "What it carries" : "What it carried"}</Heading>
+      {h.words && h.echoOf ? (
+        <>
+          <blockquote class="history-beacon"><q>{h.words}</q></blockquote>
+          <p>
+            The last words of{" "}
+            {h.echoOf.callsign ? <a class="name" href={`/object/${h.echoOf.id}/`}>{h.echoOf.callsign}</a> : "a satellite"}, which
+            is gone from the sky. A derelict doesn't broadcast them; if something hits it, they break into the wreck.
+          </p>
+        </>
+      ) : (
+        <p>Nothing: no satellite had gone yet to leave it any words.</p>
+      )}
+    </section>
+  )}
+
+  {h.kind === "debris" && (
+    <section class="history-part">
+      <Heading>{live ? "What it carries" : "What it carried"}</Heading>
+      {h.words ? (
+        <>
+          <p class="carried">{h.words}</p>
+          {torn.length > 0 && (
+            <ul class="torn">
+              {torn.map(({ label, tokens }) => (
+                <li>
+                  <span class="torn-whose">From <Said line={label} now={now} /></span>
+                  <q class="torn-line">{tokens.map((t, i) => <>{i > 0 && " "}{t.carried ? <mark>{t.word}</mark> : t.word}</>)}</q>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p class="history-note">
+            {h.words.includes(JOIN.trim()) && "A “…” joins pieces of the two lines. "}
+            {live
+              ? "It repeats these words, broken up, each time it passes over a ground station: the static everyone hears."
+              : "It repeated these words as static while it flew."}
+            {heard && ` ${heard}`}
+          </p>
+        </>
+      ) : (
+        <p>{live ? "Nothing: it carries no words." : "Nothing: it carried no words."}</p>
+      )}
     </section>
   )}
 
   <section class="history-part">
-    <Heading>{live ? "Now" : "How it ended"}</Heading>
-    {h.manoeuvres.length > 0 && (
-      <ul class="history-manoeuvres">
-        {h.manoeuvres.map((m) => (
-          <li>
-            {m.kind === "boost" ? `Boosted to the ${BANDS[m.to].label} band` : "Brought down by its operator, to keep the sky clear"}{" "}
-            <time datetime={new Date(m.at).toISOString()}>{ago(now - m.at)}</time>.
-          </li>
-        ))}
-      </ul>
-    )}
-    {h.orbit && radius !== null && h.reentryAt !== null && (
-      <p>
-        In orbit at {km(heightKm(radius))}, {climbing(h.orbit, now) ? "climbing" : "falling"}{" "}
-        {falling(fallRate(h.orbit, now))}. It burns up in{" "}
-        <span data-reentry={h.reentryAt}>about {until(h.reentryAt - now)}</span>.
-      </p>
-    )}
-    {h.fate === "decayed" && h.fateAt !== null && (
-      <p>Burned up on re-entry <time datetime={new Date(h.fateAt).toISOString()}>{ago(now - h.fateAt)}</time>.</p>
-    )}
-    {h.fate === "deorbited" && h.fateAt !== null && (
-      <p>
-        Brought down by its operator, and burned up{" "}
-        <time datetime={new Date(h.fateAt).toISOString()}>{ago(now - h.fateAt)}</time>. The sky is a little clearer for it.
-      </p>
-    )}
-    {h.end && met && (
-      <>
-        <p>
-          {headline(met)} <time datetime={new Date(h.end.at).toISOString()}>{ago(now - h.end.at)}</time>.
-          {h.end.with.kind !== "debris" && <> <a href={`/object/${h.end.with.id}/`}>See {describe(h.end.with)}</a>.</>}
-        </p>
-        {theirLine && <p class="history-couplet"><q>{theirLine.beacon}</q> {theirLine.callsign}</p>}
-        <p class="history-blame">{blame(met)}</p>
-      </>
-    )}
+    <Heading>What happened</Heading>
+    <ol class="timeline">
+      {moments.map((m) => (
+        <li class:list={["moment", m.kind]}>
+          {m.lines.map((line, i) =>
+            i === 0 ? (
+              <p class="moment-what">
+                <span class="moment-when">{m.kind === "now" ? "Now" : m.at === null ? "Later" : <time datetime={new Date(m.at).toISOString()}>{ago(now - m.at)}</time>}</span>{" "}
+                <Said line={line} now={now} />
+              </p>
+            ) : (
+              <p class="moment-more"><Said line={line} now={now} /></p>
+            ),
+          )}
+          {m.wreck.length > 0 && (
+            <>
+              <ul class="wreck-pieces">
+                {m.wreck.map((piece) => (
+                  <li>
+                    <a href={`/object/${piece.id}/`} class:list={["wreck-chip", { gone: !piece.up }]}>
+                      <span class="visually-hidden">{`Fragment no. ${piece.id}, carrying: `}</span>{piece.words}{!piece.up && <span class="visually-hidden">{" (burned up)"}</span>}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              {m.wreck.some((piece) => !piece.up) && (
+                <p class="moment-more">
+                  {m.wreck.every((piece) => !piece.up)
+                    ? "All of them have burned up: the wreck has fallen silent."
+                    : (() => {
+                        const silent = m.wreck.filter((piece) => !piece.up).length;
+                        return `${silent} ${silent === 1 ? "has" : "have"} burned up and fallen silent (shown dashed).`;
+                      })()}
+                </p>
+              )}
+            </>
+          )}
+        </li>
+      ))}
+    </ol>
   </section>
 
   <section class="history-part">
-    <Heading>What followed</Heading>
+    <Heading>What it led to</Heading>
     {h.end === null ? (
-      <p>{live ? "It hasn't collided with anything." : "It never collided with anything."}</p>
+      <p>{live ? "Nothing yet: it hasn't hit anything." : "Nothing: it never hit anything."}</p>
+    ) : f.left === 0 ? (
+      <p>Nothing: its collision left no fragments.</p>
     ) : (
       <>
-        <p>
-          The collision left {f.left === 0 ? "no fragments" : plural(f.left, "fragment")}.
-          {f.collisions > 0 && (
-            <>
-              {" "}That wreckage went on to {plural(f.collisions, "more collision")}
-              {shownLosses.length > 0 && (
-                <>
-                  , destroying{" "}
-                  {shownLosses.map((o, i) => (
-                    <>{i === 0 ? "" : i === shownLosses.length - 1 && moreLosses === 0 ? " and " : ", "}<a href={`/object/${o.id}/`}>{titleOf(o)}</a></>
-                  ))}
-                  {moreLosses > 0 && <> and {moreLosses} more</>}
-                </>
-              )}
-              .
-            </>
-          )}
-        </p>
-        {f.fragments > 0 && (
+        <dl class="tally">
+          <div><dt>{f.left === 1 ? "fragment" : "fragments"} from its collision</dt><dd>{f.left}</dd></div>
+          <div><dt>{f.collisions === 1 ? "collision" : "collisions"} they went on to cause</dt><dd>{f.collisions}</dd></div>
+          <div><dt>still in orbit, of {f.fragments} in all</dt><dd>{f.up}</dd></div>
+        </dl>
+        {shownLosses.length > 0 && (
           <p>
-            {f.fragments > f.left && <>{plural(f.fragments, "fragment")} in all. </>}
-            {f.up === 0 ? "None are" : f.up === f.fragments && f.up > 1 ? "All are" : `${f.up} ${f.up === 1 ? "is" : "are"}`} still in orbit.
+            Those fragments went on to destroy{" "}
+            {shownLosses.map((o, i) => (
+              <>{i === 0 ? "" : i === shownLosses.length - 1 && moreLosses === 0 ? " and " : ", "}<a class="name" href={`/object/${o.id}/`}>{titleOf(o)}</a></>
+            ))}
+            {moreLosses > 0 && ` and ${moreLosses} more`}.
           </p>
         )}
       </>
     )}
   </section>
+
+  {h.kind === "debris" && h.ancestry.length > 1 && (
+    <section class="history-part">
+      <Heading>Traced back to</Heading>
+      <p class="history-note">Every satellite in the chain of collisions that made it, oldest first, and whose it was.</p>
+      <ul class="traced">
+        {tracedTo(h).map((root) => (
+          <li><strong>{root.name}</strong>{", "}<span>{root.whose}</span></li>
+        ))}
+      </ul>
+    </section>
+  )}
 </article>

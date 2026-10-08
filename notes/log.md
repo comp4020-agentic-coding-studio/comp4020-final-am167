@@ -418,6 +418,8 @@ launchpad and the sky. Not scheduled yet.
 
 ## 2026-10-06 — The launchpad in Three.js, and a launch that becomes the sky
 
+Commit `5c41ccd`.
+
 I liked the launchpad's layout but wanted it more striking, and the launch
 more realistic. The SVG rocket is now a Three.js scene behind the unchanged
 form (ADR 0006, proposed).
@@ -1591,6 +1593,1138 @@ comment now says so). `pnpm check` green (220 tests).
 
 Commit `c83719d`.
 
+## 2026-10-07 — Overnight round: Advay's feedback, and the plan for it
+
+After playing with the app, I left a list for the agent to work through
+overnight (branch `claude/nifty-thompson-s7cine`, in a worktree; a PR for
+me to review in the morning):
+
+- the catalogue should have a section for just me, with my satellites'
+  management (boost, bring down) in it;
+- take boosting and bringing down out of the sky page: with several of
+  mine up, the station panel's controls are for whichever passes next, which
+  makes no sense;
+- longer beacons, shown better, more like a social app. This is the one
+  that worries me: it's starting to feel less like a unique, thought-
+  provoking social thing and more like a web app visualising Kessler
+  syndrome;
+- the purpose, the "why", needs fleshing out a lot more;
+- an object's own page is mostly empty space: make it a pop-up dialog with
+  all its info, and the boost/bring-down buttons if it's mine;
+- "make messages that collide more meaningful, give them a connection":
+  the marker raised it too, and the couplet hasn't met it. Explore it
+  properly and build something meaningful;
+- bug: pressing Launch with nothing filled in opens the sign-up nudge.
+
+The agent's plan, in the order it's building them (each its own commit,
+pushed to the branch as it goes):
+1. the bug;
+2. an object's history as a dialog, with your own satellite's controls in
+   it; a "Yours" section in the catalogue; no controls in the station panel
+   (a new ADR, since ADR 0011 put them there);
+3. longer beacons, and the sky page's beacons as a social feed: what each
+   station is hearing now, and a running list of what's been heard, with how
+   many people heard each one;
+4. colliding beacons that break into each other: the wreck keeps the words
+   of both, and keeps broadcasting them as static;
+5. the purpose: being heard by real people at the same moment, a question
+   from the stations each day, and the "why" said on the launchpad and in
+   the explainer.
+
+Logged with the first fix of the round: commit `3b41406`.
+
+## 2026-10-07 — The handle pop-up waits for a launch worth making
+
+Pressing Launch on an empty form opened "Launch under a handle?", then
+(after "Launch without a handle") came back refused. The pop-up's script
+caught the submit before anything checked the form. It now runs the same
+`readLaunch` the server does (it's shared code, `src/lib/launch.ts`) and
+only steps in when the launch would get through: a missing callsign or a
+linky beacon goes straight on to the server, which says what's wrong, as
+before. The server still has the last word. When the pop-up does open, any
+errors left from an earlier try are cleared first, since they've been
+fixed. Checked in Chromium (agent-browser, 1920x1080): empty form, no
+pop-up and both errors shown; filled in, pop-up, errors gone, and "Launch
+without a handle" landed on the sky; a beacon with a link, no pop-up and
+"No links". No spec test: the suite is HTTP only and this is the page
+script. `pnpm check` green (220 tests). Commit `3b41406`.
+
+## 2026-10-07 — Yours, and every object as a pop-up card (ADR 0015)
+
+Three of my asks in one piece, since they share the controls: a section of
+the catalogue for just me with the management in it; no boosting or
+bringing down on the sky page; an object's own page as a pop-up with its
+info and, if it's mine, the buttons.
+
+Written up as ADR 0015 (proposed, for me to accept). It supersedes where
+ADR 0011 put the controls and how ADR 0012 opened a history. The agent's
+reasoning: the station panel's controls were for "whichever of yours is next
+over a station", which changes under your hand once you have several up;
+putting every control on one named satellite (its card) means there's never
+a question of which.
+
+- **Yours** is a third catalogue view, `/catalogue/?show=mine` ("Yours (3
+  up)"): who you're launching as (handle, or this browser with a claim
+  link), a card for each of yours in orbit (beacon in full, height, next
+  pass and burn-up counting down, Boost to X / Bring it down, or "Highest
+  band" / "Boost used"), then your whole record as the catalogue's table
+  (status filter, no "Only yours" box since it's all yours). The global
+  collisions list stays on the other two views.
+- **Every object's history pops up as a card** (`<dialog>`), on the sky and
+  the catalogue: any link to `/object/<id>/` opens it in place, so does
+  clicking an object in the sky. Your own live satellite's card carries its
+  controls. On the sky it sits down the right with the sky only lightly
+  dimmed (a sheet from the bottom on a phone); elsewhere it's centred, and
+  wide enough that its parts sit in two columns. The old history panel's
+  care moved into the shared script (`src/scripts/object-card.ts`): a slow
+  answer to an earlier click is dropped, a refresh doesn't throw focus out,
+  closing goes back to the link that opened it (found again if the list
+  was rebuilt), a text selection ending on the backdrop doesn't close it.
+- **`/object/<id>/`** stays for a link opened on its own and for no
+  JavaScript, now as the same card centred on the page (two columns when
+  wide) instead of a narrow column down the left.
+- **The station panel** offers no controls; it still says what yours is
+  doing, with a "Boost or bring down yours" link to Yours.
+- **Without JavaScript** each form carries `back` (`yours` or `object`, a
+  fixed token looked up in a `Map`), and the server goes back there with
+  the thank-you or the refusal; anything else goes to Yours. With
+  JavaScript a boost or deorbit happens in place: the card and the Yours
+  list are fetched again from the server, so the page never works out what
+  the server already knows. A refusal is said beside the buttons that
+  asked. The control styles moved to the global sheet, since the card's
+  markup is fetched into pages that don't otherwise render the component.
+
+Tests first (`spec/manoeuvre-http.test.ts`, rewritten around Yours and the
+card): no manoeuvre forms anywhere on the sky page and a link to Yours; a
+"Yours" tab; your card with both forms coming back to `yours`, your
+beacon, "Boost to Mid"; nobody else's satellites in yours; the empty
+state with a launch link; the high band's "Highest band"; the owner's card
+(fragment and page) with the forms, a stranger's with none; deorbit and
+boost without JavaScript landing on Yours (and on the object page with
+`back=object`), thank-you open; `back` values `//evil.example/`,
+`https://…`, `/sky/`, `__proto__`, `constructor` and empty all going to
+Yours; a refusal coming back with its reason. Thirteen failed first for the
+expected reasons. `pnpm check` green (227 tests).
+
+Checked in Chromium at 1920x1080 and iPhone 14 against a busy scratch sky:
+Yours with three of mine (low, mid, high); KESTREL's card from the list,
+"Boost to High" in the card, and both the card and its Yours card switched
+to "climbing to the high band" with "Boost used"; HERON's card from the
+sky's latest launches, down the right; on the phone, the sheet from the
+bottom. Fixed on the way: the card's countdown spans ran into each other
+("115 km/h.Next over"), and the sky's card now covers the view buttons
+rather than half-overlapping them (they're inert behind it anyway).
+
+![Yours in the catalogue: a card for each of mine in orbit with its beacon, countdowns and controls, then my record](screenshots/2026-10-07-yours-in-the-catalogue.png)
+
+Commit `51e1fc0`.
+
+## 2026-10-07 — Beacons heard by people: 140 characters, a feed, who's listening (ADR 0016)
+
+The ask: longer beacons, shown better, more like a social app, because the
+app was turning into a Kessler visualiser. The agent's read of why: the
+beacon was meant to be the point, but it was a line of small type in a
+corner, gone as its satellite left a window, and nothing said whether anyone
+had been there to read it. Everything else on the sky page was physics; the
+people were only in the callsigns. So three things, written up as ADR 0016
+(proposed):
+
+- **140 characters**, not 60: a thought, not a slogan, readable in the
+  dozen seconds a low satellite is over a station (ADR 0013 made that
+  possible). The beacon is a text box now, with a live "52 / 140" count.
+  When several are overhead they take turns sized to the line (4 to 10
+  seconds, `src/lib/airtime.ts`), still by the server's clock.
+- **Heard by people.** Listening is having the sky open (its event stream).
+  The server counts **people, not tabs**: each stream is tagged with its
+  operator, or a one-way hash of its cookie (the cookie isn't stored again).
+  Every second, while anyone is listening, the server works out in closed
+  form what came into a station's window since its last look
+  (`src/lib/heard.ts`); each such pass is a **transmission** (logged with
+  station, time and how many heard it), and each listener who isn't the
+  owner is recorded once per satellite. "Heard by" is how many different
+  people that is; the owner can't raise their own. A pass with nobody
+  listening isn't heard and leaves nothing behind. Everyone is told
+  (`heard`), and how many are listening (`audience`). New tables
+  `transmissions` and `listens` (migration `0005_heard`).
+- **A feed.** The sky page has a column beside the sky (under it on a
+  phone): "Beacons" (the three stations live, as before, plus "You and 2
+  others listening"), then **Heard**: each beacon picked up while someone
+  was listening, latest pass first, as a card with who launched it, the
+  line, the station, when, "Heard by 3 people · 5 passes", and Burned up /
+  Destroyed once it's gone. A new pass moves its card to the top with a
+  flash. It's server-rendered, so it reads without JavaScript. The
+  summary ("Sky now") stays over the sky on the left; the object card
+  became a drawer over the column. Histories and the cards in Yours say how
+  many have heard it.
+
+The bigger shift, said in the ADR: a beacon that's been heard is now
+public in the feed while it still flies (ADR 0012 withheld it until it was
+gone; a history now shows it once it's been heard). So the altitude
+trade-off moves from visibility to audience: a low satellite passes a
+station every minute or so, gets heard by more of the people who come and
+go, and keeps returning to the top of the feed.
+
+Tests: server tests on throwaway databases (`spec/heard-server.test.ts`,
+13: heard by everyone listening and logged; the owner not counted; owner
+alone logged with nobody else; each person once over a whole lap of three
+stations; nobody listening, nothing logged; only from launch; a satellite
+burning up first is never heard; derelicts silent; the feed's order and
+fields; your own marked with nobody's owner leaked; a history's beacon
+withheld until heard; tabs counted once; an operator one listener on any
+device, and no cookie kept). These were written before `heard.ts` existed
+but only run once it did, so their first red was "module not found", not
+each assertion. `spec/airtime.test.ts` for the turns; HTTP tests for the
+140 limit (141 refused and kept in the form, 140 taken), the column and
+feed on the sky page, and `heard`, `heardBy` and `listening` in the
+stream's hello. One run against a crowded scratch sky (about 260
+satellites left by earlier runs) failed "a second boost is refused for
+fuel", most likely because the satellite was destroyed in between; two
+runs against a fresh database were green. `pnpm check` green (245 tests).
+
+Checked in Chromium at 1920x1080 on a fresh database with the test runs'
+satellites up: after 40 seconds listening, the feed had filled with cards
+("Over Madrid · Heard by 1 person · 3 passes"), and the column held the
+three stations and "Just you, listening".
+
+![The sky with the beacons column: the three stations live, how many are listening, and the Heard feed of cards](screenshots/2026-10-07-beacons-column-and-heard-feed.png)
+
+Commit `e0db217`.
+
+## 2026-10-07 — Collisions that mean something: the wreck keeps the words (ADR 0017)
+
+My ask (and the marker's): make colliding messages meaningful, give them a
+connection; the couplet hasn't done it. The agent laid out what it found
+wanting in the couplet: it frames a random pairing and then nothing
+changes; both lines die with their satellites, the fragments are
+anonymous, and the two people never learn anything of each other. It's
+the one moment two strangers' words touch, and it leaves no mark on
+either.
+
+Options weighed (all in ADR 0017, proposed): the couplet as built; aiming
+a "reply" launch at a satellite (rejected again: it makes collisions
+chosen, which breaks the argument, and drifts towards Constellation);
+colliding by meaning (the server judging text, opaquely: a trick); and four
+that work together, which are what's built:
+
+- **The wreck keeps the words.** Each fragment carries a shard: a run of
+  words from one side's line and a run from the other's, joined by " … ".
+  Each line is cut into as many runs as there are fragments, in order, so
+  every word survives once; one side's runs are dealt in order, the
+  other's shuffled, seeded by the two ids, so a replay after a restart
+  makes the same shards (`src/lib/wreck.ts`). Read in order, the wreck is a
+  cut-up neither person wrote. A derelict says nothing, so a satellite
+  hit by one is scattered alone, still in order. Cascades carry it on:
+  debris's own shard is re-cut when it destroys a third satellite, so
+  words travel down the lineage as text. Every shard goes through the
+  word filter (dropped if it fails).
+- **The wreck keeps talking.** A fragment with words is heard over the
+  stations as **static** (marked STATIC, flickering, ░ either side), taking
+  turns with the beacons, logged and in the Heard feed ("Static · from MOTH
+  and LANTERN's collision"). So a crash puts noise made of two people's
+  words into the stations, and a cascade fills them with it: crowding
+  costs everyone airtime as well as satellites.
+- **The wreck falls silent as the sky heals.** "The wreck says …" lists
+  every fragment's piece in order; the ones whose fragment has burned up
+  are faded and struck through, so a collision's words go quiet one by
+  one as decay clears the orbit. On the sky's collision card, the
+  catalogue's collisions, the histories of the two that met, and a
+  fragment's own card ("What it says").
+- **An encounter.** Yours has an Encounters list: each collision a
+  satellite of yours was in, what it met, what that person had said (or
+  what the debris that destroyed it was carrying, and from whose
+  collision), what yours had said, and what the wreck says now. A
+  collision is the only way you meet a stranger here.
+
+Stored as one nullable column, `objects.words` (migration `0006_words`).
+Nothing reads meaning into the text; the connection is causal, as the plan
+said it had to be.
+
+Tests first: `spec/wreck.test.ts` (every word of both lines once, in order
+on each side; a piece of each side per fragment; the same whichever way
+round; a silent side; both silent; short lines; a cascade re-cuts a shard;
+nothing the filter refuses, across combinations of spaced letters), and in
+`spec/collision-server.test.ts` (ALPHA and BRAVO's fragments carry both
+lines, the collision is told with its wreck; CHARLIE's fragments carry
+CHARLIE's line and the debris's words; ALPHA's history has the wreck; a
+fragment's history says what it carries; alice, bob and carol each have
+an encounter naming the other side, carol's with the debris and its
+roots) and `spec/heard-server.test.ts` (a fragment with words is heard,
+one without isn't, and the feed calls it debris with its words). Six
+failed first for the expected reasons; one test's assumption was wrong
+(two short lines over six fragments leave some silent, and the one that
+hit CHARLIE could be silent), so it now checks the encounter against
+what that fragment carries.
+
+The cascade-replay test (two hours of sky stepped 1,440 times) takes about
+three seconds alone, on the previous commit as on this one, and crossed
+vitest's five-second default once with the whole, now larger, suite
+running beside it; it has a 20-second timeout now. `pnpm check` green
+(256 tests), twice in a row.
+
+Checked in Chromium at 1920x1080 by staging a head-on collision between
+two people's satellites (MOTH and LANTERN, with real-sounding lines) on a
+fresh scratch database. Two tries went wrong first, both informative: on
+the busy test sky LANTERN was hit by silent debris before MOTH reached it
+(its three fragments carried its line alone, in order: "To whoever reads
+this: the / bakery on the corner closes on / Sundays now, so go on
+Saturday"), and then by the derelicts the server stages for a watcher,
+which fly at the same height my script used. At another height they met:
+the card read "MOTH and LANTERN collided", both lines, and "The wreck says
+To whoever … I keep a / list of every bird … go on Saturday / …", and a
+minute later Goldstone's row was playing "STATIC ░ bakery on the … I've
+seen from ░". Yours showed the encounter. Fixed on the way: the line under
+the stations still said "MOTH is over Goldstone now" after MOTH was
+destroyed (it only knew burn-ups); it now says it was destroyed in a
+collision.
+
+![A collision as it happens: both lines, what the wreck says, and Goldstone already playing static made of their words](screenshots/2026-10-07-the-wreck-says-and-static.png)
+
+![An encounter in Yours: who MOTH met, what LANTERN had said, and what the wreck says](screenshots/2026-10-07-an-encounter-in-yours.png)
+
+Commit `fd0a0df`.
+
+## 2026-10-07 — The purpose: a question a day, and the why said plainly (ADR 0018)
+
+My ask: flesh out the purpose, the "why", a lot more. The agent's reading:
+the why has two halves, for a visitor (why launch, stay, come back) and
+for the project (the argument), and the app only ever said the second;
+nothing told a stranger what they were there to do besides "launch". Of
+the three purpose ideas in the plan, two were now built (being heard,
+counted: ADR 0016; debris eating airtime: ADR 0017), so this adds the third
+and says the whole thing.
+
+- **A question from the stations each day** (ADR 0018, proposed): a fixed
+  list of 21 in `src/lib/questions.ts` for me to edit ("What do you want to
+  outlast you?", "What should we all stop saying?", "Who do you wish were
+  listening?"…), turning at midnight UTC. The launch form shows today's
+  above the beacon with "It answers today's question" ticked; the form
+  carries which day it showed, so a launch just after midnight answers the
+  one it was written to (today's or yesterday's; older answers nothing).
+  The satellite keeps the question's text (`objects.question`, migration
+  `0007_question`), so editing the list never rewrites the record. Shown in
+  the feed, histories, Yours, and today's on the sky's beacons column with
+  "Answer it". Two answers to the same question that collide say "Both
+  were answering …": a thematic connection on top of the causal one,
+  without anything judging the text.
+- **The why, said plainly.** The launchpad's intro now leads with what
+  you're there to do and what it costs, and ends on the question the app
+  asks: "What's worth saying, if saying it costs everyone a little?" Its
+  big button goes to a new **Why** page (`/why/`, in the nav): what you do
+  here (say one thing, listen, answer the question, decide what your words
+  cost, meet someone the only way you can), what it's about (attention as
+  a commons; Hardin, Kessler and Cour-Palais, Ostrom), and how it maps.
+  The Kessler syndrome page's mapping now mentions being heard and static.
+  The first-launch explainer says it's heard by the people listening, that
+  a collision breaks it into static and Yours shows who it met, and that
+  the controls are on its card and in Yours (it still said "under
+  Beacons", stale since ADR 0015).
+- `PLAN.md`: status for the overnight round; "The idea" and the core loop
+  carry the words; decision rows for 0015–0018; "Collisions that mean
+  something" and "A purpose" rewritten as decided ("What Kessler is for").
+
+Tests first: `spec/questions.test.ts` (the list; same all day, next
+tomorrow, round again; answered from today's or yesterday's form only, and
+junk refused; `sharedQuestion`) was written with its module in one go, so
+its red was a missing module; `spec/question.test.ts` over HTTP (the
+launchpad's question, ticked box and day; the Why page linked and saying
+heard/listen/question/collide/static/commons/worth saying; a launch
+answering keeps it and its history says so; unticked or a week-old form
+answers nothing; today's question on the sky with a way to answer it) went
+red for the expected reasons (4 of 6; the two "answers nothing" cases
+passed before anything existed). A server test stages two answers to the
+same question colliding. `pnpm check` green (267 tests).
+
+Checked in Chromium: at 1920x1080 the launchpad's new intro and form; at
+1512x757 the form had grown past the first screen by 200 px (the question,
+a three-line text box and the tick box), so the question went on one block
+with its label, the box starts at two lines and grows with what's written
+(`field-sizing`), the help text is shorter, and the band notes drop below
+800 px tall instead of 736: it scrolls 75 px now, as it did 62 px before,
+with Launch on the first screen. iPhone 14: intro and button fit, no
+sideways scroll. The Why page at 1920x1080 (a missing space after the
+quoted question fixed).
+
+![The launchpad: the intro saying what it's for, today's question above the beacon, and the box ticked to answer it](screenshots/2026-10-07-launchpad-why-and-question.png)
+
+Commit `248469e`.
+
+## 2026-10-07 — Two follow-ups: derelicts counted together, a bounded feed
+
+Seen on the phone against a busy sky: static "from a derelict, a derelict,
+T-ZV7T2S and 3 others' collision". `collisionOf` now names up to three
+people, then "2 others", then the derelicts counted together at the end
+("ALPHA and 2 derelicts' collision", "A1, B2, C3, 2 others and 2
+derelicts' collision"); one person and one derelict reads as before. A
+story test for it (written with the change). And the feed's query read
+every transmission ever logged to find the latest per beacon; it now reads
+only the latest 2,000 passes (by the time index), which is days of them at
+a busy hour. Typecheck and the affected tests green (47); the full HTTP
+suite waits for a rebuild after the adversarial review, which is using the
+running server. Commit `e0b2562`.
+
+## 2026-10-07 — Adversarial review of the overnight round (findings)
+
+A fresh Sonnet reviewer, with no shared context, attacked everything since
+`a52b08b` against my seven asks, the ADRs and the code, using curl against
+the running build and its own server on another port. It confirmed some
+things hold: pass detection matched a 50 ms brute-force oracle exactly over
+600 s and 35 satellites; a 40-satellite cascade gave identical words on all
+117 fragments whether run in one jump or in 5 s steps; `back` can't
+redirect off the site and cross-site posts get 403; a beacon of
+`</script><script>…` is escaped everywhere. What it found (acted on in the
+entries that follow):
+
+Must-fix:
+1. **"Heard by" was inflatable.** A request with no cookie gets a fresh
+   one, and its stream counted as a new listener: five cookieless
+   `curl /api/events` streams took the owner's own satellite to "Heard by
+   5 people". Hidden tabs counted forever; streams were uncapped. And the
+   copy said "nobody can raise their own".
+2. **Copy the code contradicts.** The Why page said bringing yours down is
+   "taking your words back" (the record keeps them), "nothing is
+   moderated" (there's a word filter), "heard by everyone all at once"
+   (several overhead take turns); a live, already-heard beacon's history
+   said "heard only as it passes over a station"; and the answering box,
+   ticked by default, tagged lines like "Second launch, mid band." as
+   answers, manufacturing "both were answering" connections.
+3. **The feed and stations broke in a busy sky**, just when a cascade
+   happens: 29 of 30 feed cards static, about four `heard` events a
+   second, every card jumping to the top and flashing under the reader;
+   "17 of 19 overhead"; one people's collision's fragments taking about
+   40% of every station's airtime for hours.
+4. **"Heard" was credited on entering the window, not on airtime**: with
+   two long lines overhead, one could get no turn yet still count as
+   "heard by N".
+5. **Ask 6 mostly invisible in a real session.** Staged collisions are
+   derelict against derelict (silent), and with a floor of 20 derelicts
+   most real collisions involve one, so the encounter read "a dead
+   satellite, nobody's, it had nothing to say" and the wreck was one line
+   chopped up. A two-stranger collision needs two people's satellites to
+   meet. Ideas: give derelicts a line, publish the wreck as one post,
+   tell owners on their next visit.
+6. **The card on the sky was modal**: it covered the beacons column and
+   made the sky inert. `/object/<id>/` still left about 45% of a wide
+   screen empty.
+7. **Ask 3's worry isn't fixed by layout alone**: at 1512x757 the stations
+   took about 600 px and the feed one card; on a phone "Sky now" sat
+   under 30 cards; "no handle" on every card reads as a missing person.
+
+Should-fix: tests that would pass with features broken (nothing covers the
+server's one-second ear, the `audience` and `heard` events' shape, or
+words surviving a replay; `typeof null === "object"`; a feed test that
+loops over nothing); an operator test that failed on a dirty database
+because a shard word was literally "owner"; a stations test timing out
+under load; `publish()` dropping a broken listener without recounting the
+audience; focus dropping to the page after a boost from a card; the
+listener hash being unsalted (the owner cookie is stored raw anyway, so a
+database holder could link owners to listening); the new tables
+unbounded. Opinions: the Why page leans preachy in places; the question
+turning at 10–11 am in Canberra suits the marker less than midnight
+there. And a list of README claims now stale, for my rewrite.
+
+## 2026-10-07 — Review fix 1: heard means on air, by people already here
+
+Acting on the review's findings 1, 4, 9 and part of 3:
+
+- **Heard means on air.** The stations' turn-taking is one shared rule now
+  (`onAir` in `src/lib/airtime.ts`): each beacon overhead takes its own
+  turn, and **all the static overhead shares one turn** between it (a
+  fragment a cycle), so a cascade's fragments can crowd a station but
+  never drown it (they took about 40% of every station's airtime before).
+  The server's ear no longer credits a satellite for coming into a window:
+  once a second it works out what each station is broadcasting by that
+  same rule, and a beacon is heard the first time it's on air in a pass
+  (the same pass until it's been off that station for half a lap). One
+  that never gets a turn isn't heard. This also fixes the undercount the
+  reviewer found when one look spans more than a lap (after a stall it
+  looks back up to ten minutes, a second at a time).
+- **Listeners are people who loaded a page.** A stream whose cookie was
+  made for it just then (a script, not a page someone opened) still hears
+  everything but isn't counted (`listenerFor`); a pass credits at most 200
+  listeners; a tab left hidden stops listening after a minute (its stream
+  closes, "Paused"; showing it again reconnects and catches up). Checked:
+  two cookieless `curl /api/events` streams open, and the sky still said
+  "Just you, listening". A second browser or private window is still
+  someone else here, as it is for launching (ADR 0009); the ADR now says
+  that, instead of "nobody can raise their own".
+- **The audience count**: a stream that broke is recounted when it's
+  dropped (it wasn't), and the number is announced once it settles (1.5 s),
+  so a page reloading doesn't tell everyone n−1 then n.
+- The station rows say "Heard by 3 people · 2 more overhead" instead of
+  "2 of 3 overhead".
+- ADR 0016 (still proposed) says all this, and owns up to what the
+  listener hash doesn't protect; ADR 0017 says static shares a turn.
+
+Tests first where they could be: `spec/airtime.test.ts` for the rule
+(nobody overhead; beacons in turn by id; six fragments and a beacon,
+about half each and every fragment heard in time; static alone). In
+`spec/heard-server.test.ts`: five 140-character lines over Canberra at
+once, heard fewer than five times, never twice in a pass, each on air by
+the rule when credited (this failed against the old entry-crediting code:
+all five were credited); a beacon gets through four fragments; heard only
+once it's up; a stream with a just-made cookie isn't a listener; the
+audience announced after settling and recounted when a stream breaks
+(fake timers); and the ear's own one-second timer crediting a pass by
+itself (fake timers; the reviewer noted deleting `startListening()` left
+the suite green). The lap test now looks at just under a lap: over a lap
+plus ten seconds the new code rightly finds Canberra twice. `pnpm check`
+green (277 tests), on a fresh database. Commit `1472389`.
+
+## 2026-10-07 — Review fix 2: a calmer feed, one card per wreck
+
+Acting on the review's findings 3 and 7:
+
+- **One card per wreck.** All the static from one collision's fragments is
+  one card ("Static from MOTH and LANTERN's collision"), showing the piece
+  heard last, how many passes, and "4 of 6 pieces still up" (or "all
+  fallen silent"); a satellite keeps a card of its own. Cards have a key
+  (`o:12`, `c:7`), and the server counts a wreck's passes and listeners
+  across its fragments.
+- **Cards don't jump.** A pass for a card already in the feed updates it
+  where it is; only a new card goes on top, lit for a moment. (Before,
+  every pass moved its card to the top and flashed it: about four a
+  second in a busy sky.)
+- **No "no handle" on every card**: a handle shows if there is one, "yours"
+  if it's yours, otherwise nothing.
+- **Room for the feed.** Station rows hold three lines at a slightly
+  smaller size (a 140-character line fits the column); at 1512x757 the
+  feed now starts at 478 px with about two and a half cards showing
+  (before: one card's worth). On a phone the order is the sky, the
+  stations, "Sky now", then the feed, so the summary isn't under 30 cards.
+
+Tests: two in `spec/heard-server.test.ts` (three fragments of one wreck
+heard over a lap make one card `c:77` with three pieces, all up, its
+passes and two listeners; a satellite's card stays its own), red first
+(no `key`). The sky page's feed test checks a static card's wording and
+that no card says "no handle". `pnpm check` green (279 tests). Commit `855fc08`.
+
+## 2026-10-07 — Review fix 3: derelicts carry echoes; encounters are news
+
+Acting on the review's finding 5 (ask 6 mostly invisible in a real
+session: most collisions involve one of the 20 derelicts, which said
+nothing, and the collisions staged for a watcher were derelict against
+derelict, so silent):
+
+- **Derelicts carry an echo.** A derelict the server puts up now carries
+  the last words of a satellite long gone from the record, picked at
+  random (`objects.echo`, migration `0008_echo`, the line in `words`). It
+  doesn't broadcast them (the dead stay quiet at the stations), but a
+  collision breaks them like any line: your satellite hitting a derelict
+  breaks your words into a stranger's last ones, and the collisions staged
+  for someone watching break two old lines into static. Couplets read
+  "“I was here for a while” a derelict, echoing LANTERN"; a derelict's card
+  has "What it carries", linking to whose words they were; the encounter
+  says "A dead satellite, nobody's, still carrying LANTERN's last words …".
+  A fresh sky (nothing gone yet) has silent derelicts, as before.
+- **Encounters are news.** A cookie remembers when you last looked at
+  Yours (`kessler_seen`). Until you look again, the sky opens with "One of
+  yours met something: MOTH and LANTERN collided. See it in Yours"; Yours
+  says "Since you last looked: 3 more people heard yours, and one of yours
+  met something", and marks those encounters New.
+
+Not done from the reviewer's ideas: aiming a staged collision at two
+people's satellites (it would mean the server destroying someone's
+satellite on purpose), and publishing the wreck as its own feed post (the
+wreck's static is already one card, from fix 2).
+
+Tests: in `spec/collision-server.test.ts`, a derelict has no echo while
+nothing has gone, then carries LANTERN's last words once LANTERN has
+burned up; MOTH hitting it leaves fragments with every word of both, the
+collision names the echo, MOTH's owner meets it, and `newsSince` counts it
+before and not after; a story test for the echo in a couplet; an HTTP test
+that Yours sets the last-looked cookie (httpOnly). `pnpm check` green (283
+tests). Commit `72a17dd`.
+
+## 2026-10-07 — Review fix 4: the card leaves the sky usable; an object's address is a pop-up
+
+Acting on the review's findings 6 and 12:
+
+- **On the sky the card isn't modal.** It sits beside the beacons column,
+  under the view buttons, so the sky, the stations and the feed stay
+  readable and usable while it's open: clicking another object (or a name
+  in the feed) switches the card to it; Escape or × closes it. On a phone
+  it's a sheet from the bottom. (It was modal, covering the column and
+  making the sky inert, despite ADR 0015 promising the sky stayed in view.)
+  The scene's labels keep clear of it.
+- **An object's address is the catalogue with its card popped up**
+  (`/object/<id>/` rewrites to `/catalogue/?object=<id>`, the address
+  staying the same), so following a link to an object, or arriving without
+  JavaScript, gives the same pop-up as everywhere else, not a card on an
+  empty page. Without JavaScript it's open over the page and closes with
+  its own form; with it, it's modal, and closing it leaves you at
+  `/catalogue/`. Boost and bring-down from it without JavaScript still
+  come back to it, thanked or told why not. The card's body is one
+  component (`ObjectCardBody.astro`) for the server's render and the
+  fetched fragment.
+- **Focus**: after a boost or deorbit from a card's own buttons, focus goes
+  back into the card (it fell to the page, since the button is disabled
+  while it posts), and a refresh that answers before the first ask now
+  opens the card properly (focus and announcement).
+
+Tests: the history test now checks the object's address shows the
+catalogue with the card open and its name in the card's heading; the
+manoeuvre tests for the card (forms with `back=object`, a stranger's
+none, the thank-you after a no-JavaScript deorbit) pass against the
+rewritten address unchanged. `pnpm check` green (283 tests). Checked in
+Chromium: `/object/1134/` at 1920x1080 (modal, focus on its heading,
+Escape leaves `/catalogue/`); on the sky, the card opened from the latest
+launches beside the column, not modal, then switched to another object
+from the feed; on an iPhone 14, a 468 px sheet.
+
+![An object's address: the catalogue, with the object's card popped up over it](screenshots/2026-10-07-object-address-card-over-catalogue.png)
+
+Commit `fe908a4`.
+
+## 2026-10-07 — Review fix 5: the question opt-in, copy that matches, tests that would catch it
+
+Acting on the review's findings 2 and 8, and two of its opinions:
+
+- **Answering the question is opt-in.** "My beacon answers it" (the ADR's
+  wording, now the box's too) is no longer ticked for you: a default tick
+  tagged lines like "Second launch, mid band." as answers and manufactured
+  "both were answering" connections.
+- **The day turns at midnight in Canberra** (standard time, so 1 am in
+  summer), not at 10 or 11 in the morning there.
+- **Copy that the code contradicted**, fixed: the Why page no longer says
+  bringing yours down is "taking your words back" (the record keeps them),
+  says "nobody moderates (beyond a small filter on words)", says several
+  overhead take turns, says your own listening never counts towards yours
+  (not "nobody can raise their own"), and mentions derelicts' echoes; its
+  "what it's about" is a little shorter. A live beacon's history says "not
+  heard yet" until it has been, then "it's read out each time it's on air
+  over a ground station" (it said "heard only…", beside a line anyone could
+  already read). The catalogue no longer says beacons are only heard at the
+  stations: what's been heard is beside the sky. ADRs 0015 and 0018 (still
+  proposed) and `PLAN.md` say what the code now does.
+- **Tests that would have passed with things broken**: the stream's
+  per-viewer filter moved into `src/lib/stream.ts` and is tested (a heard
+  event says `mine` to its owner and not to others, with no owner or
+  operator); words through a cascade replay (the cascade test now has
+  twelve people's satellites among the forty derelicts, and the stopped
+  and running servers' fragments carry the same words; before, the crowd
+  was all derelicts, so silent); the hello's `heardBy` can't be null; the
+  operator test's check for leaked owners matches keys, not a fragment
+  that happens to say "owner" (it failed on a dirty database); the
+  400-orbit stations test gets 20 s, as the cascade test did, since it
+  passed 5 s under a loaded suite.
+
+`pnpm check` green twice in a row on a fresh database (284 tests). Commit `262e2b4`.
+
+## 2026-10-07 — Second adversarial review
+
+A fresh Sonnet reviewer, without the drafting context, re-attacked the
+round at `49914ee`: curl and node scripts against the running build and
+throwaway databases, Chromium at 1920, 1440, 1366, 1280, 1024 and 900 px
+wide and an iPhone, and the code. All 284 tests green. Its verdicts on the
+first review's findings: the copy, the feed and the airtime rule fixed;
+the inflatable "heard by", the hidden-tab pause, ask 6 and the sky's card
+only partly.
+
+Must-fix:
+
+1. **A made-up cookie still counts.** Six streams carrying a random UUID
+   as their person cookie, with no page ever loaded, made a new satellite
+   "Heard by 6 people". The rule only refused a cookie minted for the
+   stream itself. And the 200-listener cap took the first 200 to
+   subscribe, so 200 scripted streams opened early would crowd out every
+   real listener.
+2. **Late arrivals are never credited.** Only the people listening at a
+   pass's first second on air got it; someone who opened the sky 2 s into
+   a turn heard the whole rest of it and wasn't counted (unless the room
+   was otherwise empty). The busy room is the case that matters.
+3. **A 140-character line is clipped in the stations panel** at 1024 to
+   1366 px wide: three lines aren't enough in a 335 to 368 px column. The
+   log's "a 140-character line fits the column" was wrong; it fits from
+   about 1440 px and on phones.
+4. **A tab opened in the background never pauses**: only a change of
+   visibility was handled, so a tab that was never seen counts forever. A
+   reconnect pending when it paused could reopen the stream, and a paused
+   tab still said "Just you, listening".
+5. **The derelicts already up have no echoes.** Only new ones get one, and
+   the live ones last up to three days, so a visit soon after deploying
+   meets silent derelicts, which is most collisions.
+6. **The encounter notice faded after 12 s** on a desktop, taken for a
+   launch notice.
+
+Should-fix: on the sky between about 900 and 1500 px the card covers the
+globe; switching cards kept the old one's scroll (the wrong element was
+reset); the announcement of how many are listening never went out while
+people kept arriving or leaving (each change restarted its wait); "since
+you last looked" counted rows of being heard, not people; closing a card
+opened at an object's address kept that object's title, missed an address
+without its trailing slash, and kept `?object=` in the catalogue's;
+stale lines in ADRs 0016 and 0017 and a test comment; the ear sampled
+twice a second; the sky's feed test checks nothing on a fresh database;
+a derelict's card says "it went up before anything here had gone" for
+every derelict without an echo, and a satellite's "hasn't passed over a
+station while anyone was listening" is the old rule. Opinions: the
+question's day would be better from the time zone (it says 1 am in
+summer); the beacons column lost its `aside` landmark; looking back ten
+minutes after a stall blocked the event loop for 3.9 s in a crowded
+harness.
+
+Checked and fine: focus after a manoeuvre from a card, the opt-in box,
+an empty launch no longer asks you to sign up, the sky's card non-modal
+and switchable, no overflow on a phone, one cookie set at an object's
+address, the same-pass rule against a brute-force oracle (449 of 453
+passes, no extras), and no owner leaking through the stream.
+
+Logged with its fixes: commit `5f14155`.
+
+## 2026-10-07 — Review fix 6: the second review's findings
+
+All six must-fixes, and most of the rest:
+
+- **Only a browser that has loaded something here is listening.** Any
+  request but the event stream notes its browser (hashed, as a listener
+  is) in a new `visitors` table (migration `0009_visitors`); a stream
+  counts only if its cookie is there. Kept rather than held in memory, so
+  the tabs that reconnect after a deploy still count. This replaces the
+  "cookie made for this request" rule, and `locals.newPerson` is gone.
+  Checked against the running build: six streams with made-up cookies,
+  then a seventh, read "listening: 0"; a browser that loaded `/sky/`
+  first read 1. A script can still load a page first, like any new
+  browser (ADR 0009's cost, said in ADR 0016).
+- **The cap is drawn at random**, so 200 streams opened first can't crowd
+  out the people who came after.
+- **Someone who starts listening mid-pass is credited.** Each pass is kept
+  with who it has credited; every second on air credits whoever is newly
+  listening (the transmission row is written once, its count updated),
+  and everyone is told the new count, which updates the card where it is
+  (an older pass's recount changes the counts, not the "last heard").
+- **The ear looks once per tick** (it sampled twice, as the interval
+  drifts past a second) **and two minutes back at most**, not ten, after
+  a stall (ten held the event loop for 3.9 s in the reviewer's crowded
+  harness). The heard tests that span a lap listen a minute at a time.
+- **The announcement of how many are listening** is a trailing throttle:
+  a change starts the wait and later changes don't restart it.
+- **"Since you last looked"** counts people, each once (`countDistinct`),
+  and says "3 people heard yours", not "3 more people".
+- **Derelicts already up get echoes** at the server's first settle, once,
+  before anything moves (so a replay after a stop still breaks the same
+  words). A derelict's card no longer says "it went up before anything
+  had gone" of every echo-less one, nor "long gone" of a satellite
+  brought down a minute ago.
+- **The encounter notice** has its own id, stays until its × is clicked,
+  and sits over the bottom left of the scene, clear of the view buttons
+  (the first try, at the top, covered them at 1280 px wide) and of a
+  collision's card. On a phone, making the notice hold its close button
+  (`position: relative`) let its desktop `left: 50%` push it off screen
+  and widen the page to 569 px; caught on the iPhone check and fixed.
+- **A 140-character line takes four lines** in the stations below
+  1440 px wide, as on a phone (measured at 1280x720: scrollHeight 76,
+  clientHeight 76; it was 76 against 57).
+- **On the sky between 832 and 1440 px the card covers the beacons
+  column**, not the globe.
+- **A tab opened hidden pauses** after a minute like one hidden later; a
+  reconnect pending at the pause no longer reopens the stream; a paused
+  tab says "Not listening while hidden".
+- **Closing a card** opened at `/object/12`, `/object/12/` or the
+  catalogue's `?object=12` leaves the catalogue at its own address
+  (keeping `show=mine`) with its own title, and focus on its heading.
+  Switching cards starts the new one at its top (the dialog scrolls, not
+  its body).
+- **The question's day** follows Canberra's clock (`Intl`, Sydney's zone),
+  summer time included, so it turns at midnight there all year; the
+  tests check a summer and a winter midnight.
+- The beacons column is an `aside` again; "Not heard yet" says "on air";
+  ADRs 0016 and 0017 (proposed) say what the code now does (the feed
+  updates cards in place, derelicts carry echoes, the listening rules,
+  nothing pruned yet).
+
+Not done: the sky's feed test still checks only the empty state on a
+fresh database (a pass over HTTP is minutes away; the cards' content is
+covered by the server tests); `transmissions`, `listens` and `visitors`
+aren't pruned; the listener hash stays unkeyed (said in ADR 0016).
+
+Tests first where they could be: late listeners, the random cap, made-up
+cookies and remembering visitors after a restart, the announcement under
+churn (these four failed against the old code), news counting people,
+the echo backfill, and the summer midnight. `pnpm check` green (289
+tests, 0 errors, 0 warnings); `pnpm check:evidence` green. Checked in
+Chromium at 1280x720 (four-line beacon, the card over the column, the
+notice clear of the buttons), 1920x1080, 1366x768 (switching cards) and
+an iPhone 14 (390 wide, no overflow, the notice dismissed).
+
+Commit `5f14155`.
+
+## 2026-10-08 — A code review of PR 7, its fixes, and an adversarial review of those
+
+A `/code-review` of PR 7 (high effort) reported ten findings. Fixed, test
+first where there was a contract to test:
+
+- **The wreck lost words in a nearly full sky.** Shards were cut for every
+  fragment `fragmentsOf` made, then the fragments were cut to `LIVE_CAP`,
+  so the words dealt to the dropped ones went with them (at the cap, all of
+  them). Now the shards are cut for the fragments there's room for. New
+  test, with `LIVE_CAP=2`: every word of both still survives.
+- **A failed write left `listen()` thinking a pass was logged.** The
+  in-memory pass (and who it had credited) was set before the transaction;
+  if it threw, the rest of the pass updated transmission row 0 (nothing)
+  while still inserting `listens`, so "heard by" could be above zero with
+  no passes. Now a failed write puts the passes back as they were (newest
+  first), so the pass starts again at the next look. Tested with a trigger
+  that aborts the insert.
+- **"One of yours met something" came back on every visit** after it was
+  dismissed, since only Yours moved the seen cookie. Dismissing now sets
+  `kessler_met` to the encounter's time, and the sky tells only encounters
+  after the later of that and the last look at Yours (`newsFrom`, new
+  `spec/seen.test.ts`).
+- **Every request without a cookie wrote a `visitors` row, for good**
+  (crawlers, link previews). A cookie the server hasn't kept is now held in
+  memory (ten minutes, at most 10,000) and written down when it comes back:
+  its page's stream, or any other request.
+- **One person was two listeners** once they signed in (`p:<hash>`, then
+  `o:<id>`). `link()` (claim and sign-in) now moves the cookie's `listens`
+  rows to the operator. `listenerKey` moved to `src/lib/listener.ts`, so
+  `operators.ts` can use it without an import cycle.
+- Efficiency: `encountersOf` takes `since` and `limit` in SQL. Yours reads
+  its encounters once (`newsSince` takes the list). The sky asks for one
+  encounter, not every story. `/object/<id>/` checks existence with
+  `objectById` instead of a second `historyOf`. `heardTotals` runs only in
+  Yours.
+- The beacon counter counts as the textarea's `maxlength` does (UTF-16
+  units), so it never says there's room the field won't give.
+- One finding was half wrong: `heardBy(id)` in `heard.ts` isn't dead (the
+  spec uses it), but its comment claimed it counted passes. The comment is
+  fixed.
+
+Then a fresh Sonnet reviewer attacked the fixes. It judged 1, 3, 5–9
+complete, and 2, 4 and 10 partial:
+
+- **Rollback order**: two passes started for one key in one look would
+  restore the wrong one. Fixed by rolling back newest first.
+- **A second device signing in** carried over what it had heard of the
+  operator's own satellites, as the owner hearing their own. `link()` now
+  drops those rows (new test).
+- **A tab still open from before signing in** kept crediting the old cookie
+  key. Signing in now maps that key to the operator in memory
+  (`listener.ts`), for crediting and for the listening count (the sign-in
+  test now listens through such a tab).
+- **A made-up cookie, new each time**, was still written down, since it
+  was well formed. Now any cookie the server hasn't kept needs a second
+  sighting, so the "minted" flag is gone and the middleware is simpler.
+
+Left as said in ADR 0016 (updated, still proposed): a restart within ten
+minutes of someone's first page forgets them until they load something
+else. Signing out makes someone new, as it does for launching. A
+dismissal is per browser. No HTTP test drives the met notice, since an
+encounter can't be staged over HTTP. Re-review not run: the revision was
+four targeted fixes, each with its own test.
+
+`pnpm check` green (297 tests, 0 errors, 0 warnings) against a fresh
+build on a scratch database; `pnpm check:evidence` green. Commit `bef0696`.
+
+## 2026-10-08 — Advay's look at the running app: a lost link, cramped selects, a redundant box
+
+Advay reviewed PR 7 in the browser and raised four things.
+
+- **"What's Kessler syndrome?" was hard to see** under the new "What this
+  is, and why" button. It was plain dim text over the launchpad's warm
+  afterglow. It's now a small dark chip with an amber edge: still quieter
+  than the button above it, but it reads.
+- **The catalogue's Kind and Band selects had their chevrons against the
+  right edge** (the browser's own, with only the text's 0.5 rem of
+  padding). They now draw their own chevron, in `--ink-dim`, 0.7 rem in,
+  with 2 rem of padding for it.
+- **"Only yours" was redundant** now that Yours is a view of its own (ADR
+  0015), and it showed in every view but Yours. The box is gone, and so
+  is `mine` from the catalogue query. An old `?mine=1` link opens Yours.
+  The spec test now checks Yours, the old link, and that no view has the
+  box (it failed first on the old link).
+- **Is the Why page redundant?** Asked, not changed: see below.
+
+`pnpm check` green (297 tests, 0 errors, 0 warnings) against a fresh
+build; the launchpad and catalogue checked at 1920x1080 with
+`agent-browser`. Commit `a3a6af2`.
+
+## 2026-10-08 — The Kessler syndrome page keeps to the physics; Why keeps the argument
+
+Advay's question above: is the Why page redundant? Not with the README,
+which tells the project to the marker; Why is for people in the app.
+The overlap was between `/why/` and `/kessler/`, which both argued the
+commons (Hardin, Ostrom) and both said how the app maps onto it. Advay
+picked trimming Kessler over merging the two:
+
+- **Kessler** keeps the cascade, the real cases and the regulation facts
+  (the FCC's five-year rule), plus its real-orbit-to-this-sky table, now
+  without the rows and clauses that re-explained being heard and static.
+  It names Hardin once, drops Ostrom, and hands "what it's for" to Why.
+- **Why** keeps the purpose, the commons argument and its own
+  sky-to-attention mapping, and now lists the three sources it argues
+  from (Hardin, Kessler and Cour-Palais, Ostrom).
+
+New spec test: Kessler links to Why and doesn't argue Ostrom or explain
+being heard again, and Why cites its three sources. It failed first.
+
+Checking the pages in Chrome (1920x1080, iPhone 14; no horizontal
+overflow) turned up an older bug. Astro drops the space where a line of
+text breaks before or after a tag, so the Kessler page's sources read
+"Science162" and "belt.Journal", and the table said "every3 minutes" (the
+last introduced by this trim). They now have explicit spaces, with a
+regression test on both pages' sources and figures (it failed on the old
+build).
+
+`pnpm check` green (300 tests, 0 errors, 0 warnings) against a fresh
+build. Commit `a3a6af2`.
+
+## 2026-10-08 — The sky's boxes fold
+
+Advay found the sky crowded: the Sky now panel over the scene, and
+Beacons and Heard down the right. Each now folds to its heading row (so
+"Live" and "Just you, listening" stay in view) with a chevron button at
+the end of the row: down while open, right once folded. Folding Beacons
+gives Heard the column, and folding Sky now clears the scene.
+
+- `src/scripts/collapsible.ts` wires any `[data-collapsible]` box: the
+  button (`aria-expanded`, `aria-controls` its body, named by the box's
+  heading) shows or hides the body, and the state is kept per browser in
+  `localStorage`, read and written inside try/catch, so a browser that
+  keeps nothing just starts open.
+- Without JavaScript the boxes are served open and the buttons hidden,
+  so nothing is ever out of reach.
+
+Tests first: `spec/collapsible.test.ts` (JSDOM: starts open, folds and
+unfolds one box alone, remembered, works with storage that throws) and a
+spec test that the sky serves its three boxes open with hidden buttons
+whose bodies are inside the box and exclude the heading. Both failed
+first. `pnpm check` green (305 tests, 0 errors, 0 warnings) against a
+fresh build. Checked in Chrome at 1920x1080 (all three folded, still
+folded after a reload) and on an iPhone 14 (390 wide, no overflow).
+Commit `80ba3a6`.
+
+## 2026-10-08 — README cleared to a skeleton
+
+Advay is rewriting the README in their own words, so it's now a
+skeleton: the same five headings, with an HTML comment under each saying
+what goes there and a worked example drawn from the old text (falsifiable
+claims with numbers, tests written as behaviour, trade-offs named
+honestly). The comments don't render on `/readme/`; the headings do, so
+the invariant test still passes. The old text is at `d8fb66a`.
+`pnpm check` green (305 tests, 0 errors, 0 warnings) against a fresh
+build. Commit `cce5e32`.
+
+## 2026-10-08 — A layout test: the launchpad and the sky fit a desktop
+
+Advay found the launchpad scrolls on their laptop, putting the Launch
+button below the fold. It isn't new: Claude has kept making changes that
+bring vertical scrolling back to these screens, even after being told
+again and again to fix it. Reminding it each time hasn't held, so the
+rule now lives in the harness instead: a test that the launchpad and the
+sky never scroll vertically on a desktop, kept apart from the spec suite,
+and a section in CLAUDE.md telling every later agent to run it. Worth a
+place in `PROCESS.md` as a harness change: a recurring correction turned
+into a check rather than repeated in chat.
+
+- `layout/desktop-fit.test.ts`, run by `pnpm test:layout` (its own
+  `vitest.layout.config.ts`, reusing the spec's global setup, so it
+  checks the running app at `APP_URL`). It drives installed Chrome
+  (`playwright-core`, as the performance suite does) and fails if either
+  page's document is taller than the window, or if a control outside a
+  panel that scrolls on its own is off screen, so hiding the overflow
+  can't pass it.
+- Viewports: the marking desktop (1920x1080) and two laptops as Chrome
+  shows them: a 14-inch MacBook Pro (1512x860, the 1512x982 screen Advay
+  has, less the menu bar and toolbar) and a 13-inch MacBook Air
+  (1440x790). Each for a new visitor and for someone who has just
+  launched, since a launch adds notices to the launchpad.
+- Not in `pnpm check`: CI has no Chrome. CLAUDE.md gains a "Layout"
+  section saying to run it after any change to either page.
+- `AGENTS.md` deleted: nothing here uses it, and it had already drifted
+  from CLAUDE.md.
+
+It fails 5 of 12, as Advay expected, and is left red until they ask for
+the fix: the launchpad is 59px too tall at 1512x860 and 43px at 1440x790
+for a new visitor, and for someone who has just launched 24px at
+1920x1080, 235px at 1512x860 and 219px at 1440x790. The sky fits
+everywhere. Recorded as a known failure in `PLAN.md`. Commit `8aa68f3`.
+
+## 2026-10-08 — An object's card, told plainly
+
+Advay, on a fragment's card: "very hard to read and understand. It's not
+clear what's happening at all, and detracts from the whole purpose of the
+final project." A highly critical issue, in his words.
+
+![Before: Fragment no. 341's card, as Advay saw it. One cascade told three
+ways ("Broken off in BOOM67 and 2 derelicts' collision", "Debris from 2
+derelicts' collision destroyed BOOM67", "BOOM67: TESTACC."), the words as
+flickering static, nothing saying what a derelict or TESTACC
+is.](screenshots/2026-10-08-object-card-before.png)
+
+What was wrong, looking at ~10 real cards, not only his:
+
+- **It told a made-up collision.** `collisionOf` flattens a lineage's
+  roots, so a fragment from a two-step cascade (two derelicts collide; their
+  debris destroys BOOM67) was "broken off in BOOM67 and 2 derelicts'
+  collision", which never happened.
+- **The same lineage three ways**, in prose, out of order (birth, words,
+  ancestry, now, what followed), and none of it labelled: "BOOM67:
+  TESTACC." for "launched by TESTACC"; "“idk bruh” BOOM67" for "BOOM67's
+  beacon said".
+- **Jargon left bare** (derelict, static, passes), and the fragment's words
+  ("bruh") with no way to see they were a piece of "idk bruh".
+
+The card now (`src/lib/chronicle.ts` for the wording, the new `Said.astro`
+for its markup, `ObjectHistory.astro` rewritten, one column):
+
+1. **What it is in a line**: "A piece of BOOM67, broken off when debris
+   destroyed it 6 h ago." Under the name, what the thing is ("A dead
+   satellite nobody owns", "Debris from a collision").
+2. **Its state as chips** while it's up: in orbit, the band it's in now,
+   height and fall, when it burns up (the live counters kept).
+3. **Its words, readably**, and for a fragment **where they were torn
+   from**: each source line with the carried words marked ("From BOOM67's
+   beacon: idk [bruh]"). Worked out from how the pair dealt its words
+   (`tornFrom` in `wreck.ts` shares `dealt` with `shardsOf`, so it's exact),
+   not by searching.
+4. **What happened, as a timeline**, oldest first, a step at a time:
+   "Two derelicts collided. Derelicts are dead satellites nobody owns." /
+   "Debris from that collision hit BOOM67 and destroyed it. BOOM67 was
+   launched by TESTACC. Its beacon said “idk bruh”." / "This fragment broke
+   off, one of 3." / "Now: still in orbit." A destroyed satellite's wreck
+   shows as chips, each a link to that fragment's card. Every name links to
+   its card. A long cascade shows where it began, folds the middle and keeps
+   the last three steps (never folding one step alone).
+5. **What it led to**, counted and scoped: fragments from its collision,
+   collisions they caused, how many of the whole chain are still up, and
+   what they destroyed.
+6. **Traced back to**, for a fragment from a chain of collisions: everyone
+   in the chain, oldest first, and whose each was (ADR 0010's blame, said
+   once).
+
+`historyOf` gains the fragment's whole **ancestry** (every collision that
+led to it, with which collision each piece of debris came from) and its
+place among its siblings (for the exact torn-from). No data model change.
+
+**The same made-up collision on other screens.** The catalogue, the Heard
+feed and the sky's notices said "debris from A, B and C's collision" for a
+cascade too. `collisionOf` now says "a chain of collisions involving A, B
+and C" when there are three or more roots (a single collision always has
+two, since debris that hits debris leaves nothing), and keeps "A and B's
+collision" for one collision, as ADR 0010 words it. Small counts are
+spelled ("two derelicts").
+
+Tests first, each failing first: the cascade told step by step and the
+satellite's story against the staged collisions in
+`spec/collision-server.test.ts`; the derelict echo's card; torn-from in
+`spec/wreck.test.ts`; the card's shape over HTTP in `spec/history.test.ts`;
+and `spec/chronicle.test.ts`, new, with made-up histories for the cases a
+staged sky rarely reaches. A one-off check confirmed the refactored
+`shardsOf` deals byte-identical shards to the old one over 6,000 random
+pairs, since stored fragments depend on it.
+
+**Adversarial review** (a fresh Opus reviewer, at Advay's request instead of
+Sonnet; ~25 real cards, 390 px and 1920 px). Its must-fixes, all fixed:
+
+- The band chip showed the stored band, not the band now (a boosted
+  satellite said "Low band" in mid). Now `bandNow`.
+- "Hit by debris and destroyed … It was carrying “nominal”" read as the
+  satellite carrying it. Now "The debris was carrying".
+- Two derelicts: "This one was carrying" with no "one". Now "One was
+  carrying … The other was carrying". On a derelict's own card, "the
+  derelict" could mean itself: now "another derelict", "the other
+  derelict"; a derelict met before is "another derelict".
+- "Faded: the 1 that have burned up". Now "1 has burned up and fallen
+  silent".
+- "The collision left 6 fragments. The words they carry:" over one piece.
+  Now "6 fragments; 1 carries words:".
+- Torn-from marked the wrong copy of a repeated word, and could put both of
+  a shard's runs in one line. Now exact (above), with a test that every
+  word of both lines is marked exactly once across a wreck.
+- Double full stops after a beacon ending in its own. Fixed.
+
+Its should-fixes, fixed: the rest of the app's flattened wording (above); a
+cut-short cascade that hid where it began; "Traced back to" out of order and
+repeating the timeline (now oldest first, and only for a chain); "2
+derelicts nobody's"; counts in "What it led to" that didn't agree; the "…"
+join unexplained (now said once); torn-from out of the shard's order; faded
+chips below 4.5:1 contrast (now dashed and dimmer, no opacity); and the
+nits (spaces swallowed by highlights, ordering, a satellite with no callsign
+named "debris", screen readers hearing bare words on wreck chips, a false
+"went to its other fragments"). Left: "Not heard yet … It's over Goldstone
+now" (reworded to "shows here once someone has heard it", since a pass
+over a station with nobody listening isn't heard), and the page can't be
+tested over HTTP with a staged fragment, so the wording is tested in
+`chronicle.ts`. Re-review not run: the fixes each have a test or were
+checked on the cards the reviewer cited.
+
+Also fixed in passing, seen behind the card: the catalogue's introduction
+said "beside thesky" (Astro's dropped space again), with a test.
+
+![After: a fragment from a two-step cascade. What it is in a line, its
+state as chips, its words inside the lines they were torn from, then what
+happened in order.](screenshots/2026-10-08-object-card-after.png)
+
+`pnpm check` green (325 tests, 0 errors, 0 warnings) against a fresh build
+on a scratch database; `pnpm check:evidence` green. Checked in Chrome at
+1920x1080 (the catalogue's card and the sky's side card) and on an iPhone
+14 (390 wide, no overflow). Commit `d409ccf`.
+
+## 2026-10-08 — The launchpad fits a desktop
+
+Advay asked for the layout test (`pnpm test:layout`, from main) to pass
+before pushing. It failed 5 of 12, as recorded: the launchpad was taller
+than the window on both laptops for a new visitor, and at every viewport
+for someone who had just launched (up to 235px over at 1512x860). The sky
+already fit. Measured part by part, the form column was the problem: two
+notices stacked above the form (96px and 48px), three bands of two or three
+lines each, and each field's help on a line of its own.
+
+Fixed without hiding anything (the test also fails a control pushed off
+screen, so clipping can't pass it):
+
+- **One compact notice box** for "Yours in orbit" and a full sky, in the
+  small type.
+- **The wait between launches is on the Launch button** ("Launch again in
+  4 min 59 s", counting down, then "Launch"), where you'd click anyway,
+  not a notice above a form it disables. The spec's wait checks still hold
+  (they read the page's text).
+- **The three bands side by side** wherever the form is at least 30rem
+  wide (a container query on the console, so phones and narrow windows
+  keep the stacked list): name, "Laps every 3 minutes" (was "round the
+  planet every 3 minutes"), and the note and lifetime flowing together.
+  The trade-off now reads in one row. This replaces the short-screen rule
+  that hid each band's note on a laptop.
+- **Each field's rule beside its name** in the same wide form; the
+  beacon's count shares a row with "My beacon answers it".
+- The console a little wider (38rem beside the intro) and the spacing a
+  little tighter on short screens.
+
+`pnpm test:layout` 12 of 12, before and after the spec suite had filled
+the database. The tightest case, 1440x790 just after a launch, has 28px to
+spare, so a longer "Yours in orbit" list still fits. Checked by eye at
+1920x1080, 1440x790 (just launched), a 1000px window (stacked bands) and a
+390px phone (no horizontal overflow; the countdown kept on one line).
+
+![The launchpad at 1440x790 just after a launch, the tightest case: the
+whole form and the line under the Launch button in view, the bands side by
+side, the wait on the button.](screenshots/2026-10-08-launchpad-fits-1440x790.png)
+
+`pnpm check` green (325 tests, 0 errors, 0 warnings) against a fresh build;
+`pnpm check:evidence` green. Commit `ade7d43`.
+
+## 2026-10-08 — The bands back as rows
+
+Advay, on the side-by-side band tiles from the fit above: "looks a bit
+weird now, and not as nice as before." They were: in a third of the form
+each note broke mid-phrase ("Heard most often. Burns / up in 1 to 8
+hours."), so the three read as ragged paragraphs rather than a choice.
+The bands are the stacked rows again, as they were before the fit: the
+name on the left, "round the planet every 3 minutes" on the right (the
+shortened "Laps every…" reverted), the note and lifetime underneath, all
+three lines kept on every screen.
+
+The height the tiles saved now comes from spacing on short screens only
+(at most 56rem tall): tighter band rows, inputs and labels, a smaller
+heading, and a little less around the notice box and the line under the
+button. Nothing hidden; the old rule that dropped each band's note on a
+laptop stays gone.
+
+`pnpm test:layout` 12 of 12; the tightest case, 1440x790 just after a
+launch, has 21px to spare. Checked by eye at 1920x1080, 1512x860 and
+1440x790 (just launched). `pnpm check` green (325 tests, 0 errors, 0
+warnings) against a fresh build. Commit `59480dd`.
+
 ## 2026-10-07 — Resident operators: launches on a schedule (ADR 0015)
 
 Asked for: satellites seeded in every hour, fake launches that seem real,
@@ -1724,3 +2858,34 @@ about one run in 400; it now spans four hours (about one in 160,000).
 `pnpm check` green (245 tests) against a fresh build.
 
 Commit `70d1fea`.
+
+## 2026-10-08 — PR #5 brought up to date with main
+
+The resident operators branch had fallen 48 commits behind main (the
+overnight round and the 2026-10-08 work), and both sides had taken the
+same numbers. Merged main in, and renumbered the branch's:
+
+- **ADR 0015 → ADR 0019** (`doc/adr/0019-resident-operators.md`), since
+  main's 0015 is "Yours, and each object's card". Every reference to the
+  residents' record in code, tests, the ADR index and `PLAN.md` now says
+  0019; main's own references to 0015 are untouched. The entries above
+  this one keep the number they were written with.
+- **Migration 0005 → 0010** (`0010_resident_operators`), after main's
+  0005–0009. Regenerated with `drizzle-kit generate` from the merged
+  schema, so the snapshot chain follows main's; the SQL is the same one
+  line (`operators.resident`). The branch was never deployed, so nothing
+  has run the old 0005.
+- `src/lib/sky.ts`: both sides added a function in the same place (the
+  residents' launches, and main's `echoTheSilent`); kept both, and
+  `settle` runs each. Imports joined.
+- The log's two runs of entries kept whole: main's first, then the
+  branch's three.
+- Where the two sides met in the tests (they merged without conflict
+  but didn't typecheck or pass): main's `heard-server` test needs an
+  exact sky, so it turns the residents off (`RESIDENTS_PER_HOUR=0`), as
+  the branch's other server tests do; main's `History` fixture in
+  `chronicle.test.ts` gains the branch's `resident: false`; the branch's
+  `residents-server` launches pass main's new `question: null`.
+
+`pnpm check` green (0 errors, 0 warnings, 350 tests) against a fresh
+build on a fresh database; `pnpm check:evidence` green.

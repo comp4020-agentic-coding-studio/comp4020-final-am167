@@ -31,6 +31,13 @@ async function three() {
 }
 
 describe("the catalogue as a table", () => {
+  // Astro drops the space where a line breaks before a tag: "beside thesky"
+  // (seen behind an object's card, 2026-10-08)
+  it("keeps the space before the links in its introduction", async () => {
+    const intro = (await view("")).querySelector("main p")!.textContent!.replace(/\s+/g, " ");
+    expect(intro).toContain("beside the sky");
+  });
+
   it("filters and sorts with a plain form and links", async () => {
     // everything ever launched, where the status filter means something
     const page = await view("?show=all");
@@ -77,15 +84,23 @@ describe("the catalogue as a table", () => {
     }
   });
 
-  it("shows only yours when asked", async () => {
+  // Yours is its own view (ADR 0015), so there's no "Only yours" box as
+  // well; an old link to it opens Yours (the user's review, 2026-10-08)
+  it("shows only yours in Yours, and an old 'only yours' link goes there", async () => {
     const a = new Session(baseUrl);
     const name = callsign("MINE");
     await a.launch({ band: "mid", callsign: name, beacon: "only mine" });
-    const page = await view("?mine=1", a);
-    const rows = [...page.querySelectorAll("tbody tr")];
-    expect(rows.length).toBeGreaterThan(0);
-    for (const row of rows) expect(row.textContent).toMatch(/yours/);
-    expect(rows.some((row) => row.textContent?.includes(name))).toBe(true);
+    for (const search of ["?show=mine", "?mine=1"]) {
+      const page = await view(search, a);
+      expect(page.querySelector("h1")?.textContent, search).toBe("Yours");
+      const rows = [...page.querySelectorAll("tbody tr")];
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) expect(row.textContent).toMatch(/yours/);
+      expect(rows.some((row) => row.textContent?.includes(name))).toBe(true);
+    }
+    for (const search of ["", "?show=all", "?show=mine"]) {
+      expect((await view(search, a)).querySelector("input[name=mine]"), search).toBeNull();
+    }
   });
 
   it("names each satellite's operator, and finds by handle", async () => {

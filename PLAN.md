@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-07 (PRs #3 and #4 merged, so all C9 building is done; stale C9 items tidied; C9 write-ups outstanding; resident operators built, ADR 0015 proposed)._
+_Last updated 2026-10-08 (the object card retold plainly; the launchpad fits a desktop, so `pnpm test:layout` passes; ADRs 0015–0018 still proposed; resident operators built, ADR 0019 proposed)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -64,7 +64,7 @@ _Last updated 2026-10-07 (PRs #3 and #4 merged, so all C9 building is done; stal
     Madrid), all heard by everyone, to give the passes back; the sky opens
     on the whole planet with a beacon panel per station, and the horizon
     over any station one click away.
-  - **Resident operators** (Advay, 2026-10-07; ADR 0015, proposed): so
+  - **Resident operators** (Advay, 2026-10-07; ADR 0019, proposed): so
     the site feels active at any hour, the server launches for a cast of
     sixteen invented operators (companies, a university lab, a radio club,
     a school, an advertiser, a memorial, hobbyists), about two an hour
@@ -75,19 +75,81 @@ _Last updated 2026-10-07 (PRs #3 and #4 merged, so all C9 building is done; stal
     entirely later on** (Advay, 2026-10-07): see "Open questions".
   - Not built, though once listed for C9: conjunction alerts and dodging
     (moved to C10).
+- **Overnight round, 2026-10-07 (branch `claude/nifty-thompson-s7cine`, a
+  PR for Advay; not on `main`):** Advay's list after playing with the app,
+  each built, tested and logged in `notes/log.md`, the four design changes
+  as ADRs **proposed** for him to accept or change:
+  - The handle pop-up no longer opens for a launch that would be refused
+    (an empty form) (`3b41406`).
+  - **Yours** in the catalogue, with each satellite's boost and bring-down;
+    every object's history as a **pop-up card** (with its controls if it's
+    yours); no controls in the sky's station panel (ADR 0015; `51e1fc0`).
+  - **Beacons heard by people** (ADR 0016; `e0db217`): 140 characters, not
+    60; who's listening; each pass heard while someone's listening logged,
+    with "heard by" counting people; a **Heard** feed beside the sky.
+  - **The wreck keeps the words** (ADR 0017; `fd0a0df`): fragments carry
+    pieces of both colliding beacons, heard as static; "the wreck says";
+    encounters in Yours.
+  - **The purpose** (ADR 0018; `248469e`): a question from the stations each day, the
+    launchpad's intro rewritten around the why, a Why page (`/why/`), the
+    first-launch explainer brought up to date. "A purpose" and "Collisions
+    that mean something" below are rewritten as decided.
+  - **Adversarial review** (fresh Sonnet reviewer; findings `f262b7e`)
+    and five rounds of fixes: "heard" now means on air, by the shared
+    turn rule, and counts only people who loaded a page (`1472389`); one
+    feed card per wreck, cards never jump, no "no handle" (`855fc08`);
+    derelicts carry echoes of gone satellites' last words, and encounters
+    are announced (`72a17dd`); the sky's card isn't modal, and an object's
+    address is the catalogue with its card popped up (`fe908a4`); the
+    question is opt-in and turns at Canberra midnight, the copy matches
+    the code, test gaps closed (`262e2b4`). Plus derelicts counted
+    together in lineage wording and a bounded feed query (`e0b2562`).
+  - **Second adversarial review** (fresh Sonnet reviewer; its
+    must-fixes all fixed in one round, `5f14155`, "Review fix 6" in
+    `notes/log.md`): a stream counts only from a browser that has loaded
+    something here (a new `visitors` table), the 200 cap is drawn at
+    random, and people who arrive mid-pass are credited; a 140-character
+    line fits the stations on a laptop; a tab opened hidden pauses; the
+    derelicts already up get echoes; the encounter notice stays until
+    dismissed; on a laptop the sky's card covers the beacons column, not
+    the globe; the question's day follows Canberra's clock, summer time
+    included.
+  - All of it is in
+    [PR #7](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/7),
+    from `claude/nifty-thompson-s7cine`, for Advay to review.
+  - For Advay: accept (or change) ADRs 0015–0018; edit the question list
+    (`src/lib/questions.ts`) and the Why page's wording into his own; the
+    README is now further out of date (it says 60 characters and "one live
+    satellite each", and nothing of being heard, static or the question).
+- **The object card, retold (2026-10-08, Advay: "very hard to read and
+  understand … detracts from the whole purpose"):** what it is in a line,
+  its state as chips, a fragment's words inside the lines they were torn
+  from, what happened as a dated timeline (a cascade step by step, never one
+  made-up collision), what it led to, and who a chain traces back to
+  (`src/lib/chronicle.ts`). Cascades elsewhere (catalogue, Heard feed, sky)
+  now read "a chain of collisions involving A, B and C". Opus adversarial
+  review acted on. See `notes/log.md`.
 - **C9 cutoff:** Mon 12 Oct 2026, 12:00.
 - **Next, for C9 (write-ups only; nothing left to build):**
   1. `PROCESS.md`: the C9 part (it stops at the C8 slice), from
-     `notes/log.md`.
+     `notes/log.md`, including the layout test as a harness
+     change (a correction Claude kept needing, made a check).
   2. `reflections/crit-9.md` (Advay's).
   3. Before the cutoff: `pnpm check` against a fresh build, then preflight.
+- **The launchpad fits a desktop (fixed 2026-10-08, at Advay's request):**
+  `pnpm test:layout` passes 12 of 12. The notices are one compact box, the
+  wait between launches is on the Launch button, each field's rule sits
+  beside its name, and the spacing tightens on short screens; the bands
+  stay the stacked rows they were (Advay preferred them to side-by-side
+  tiles). The tightest case (1440x790, just launched) has 21px to spare.
+  Run it after any change to the launchpad or the sky.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or
   operators, and its tested list predates them. ADR 0010 is judged by what
   the README says good means, so the rewrite should say it. It should
   also say that some satellites are resident operators', not people's
-  (ADR 0015). Advay also confirms which sources he has read.
+  (ADR 0019). Advay also confirms which sources he has read.
 - **Never deploy, flip public or commit without Advay's say-so** (CLAUDE.md).
 
 ## The idea
@@ -101,17 +163,29 @@ The argument: space is the newest commons (Hardin 1968, Ostrom 1990), and the
 attention economy is an old one. People launch to be seen, crowd the orbits
 where they're seen most, and the debris is a cost nobody pays for directly.
 
+Since 2026-10-07 (ADRs 0016–0018) the words carry the argument as much as
+the orbits: a beacon is heard by the people present, a collision breaks
+two people's words into static everyone hears around, and the question the
+app leaves each visitor with is **what's worth saying, if saying it costs
+everyone a little?** See "What Kessler is for" below.
+
 ## Core loop
 
 1. **Launch.** As many satellites as you like, five minutes apart. Pick an altitude band and a
-   callsign, and write a short beacon line.
-2. **Be seen.** Every time your satellite passes over the shared viewing point,
-   its beacon line shows to everyone watching.
-3. **Share the sky.** Satellites and debris follow deterministic orbits.
-4. **Collide.** Two objects that meet become a cloud of fragments, and those
-   fragments can hit other objects.
-5. **Deorbit (optional).** An owner can bring their own satellite down on
-   purpose, giving up their visibility to leave the sky cleaner.
+   callsign, and write a beacon of up to 140 characters, answering the
+   stations' question of the day or not (ADR 0016, 0018).
+2. **Be heard.** Every time your satellite passes over one of the three
+   ground stations, its beacon is heard by everyone listening (with the sky
+   open) at that moment; the stations log it, and it counts who heard it.
+3. **Listen.** Your being here is everyone else's audience. The sky page is
+   the sky and, beside it, what the stations hear and have heard.
+4. **Share the sky.** Satellites and debris follow deterministic orbits.
+5. **Collide.** Two objects that meet become a cloud of fragments carrying
+   pieces of both beacons, heard as static, and those fragments can hit
+   other objects (ADR 0017). Both owners find the encounter in Yours.
+6. **Deorbit or boost (optional).** An owner can bring their own satellite
+   down on purpose, giving up their beacon to leave the sky cleaner, or
+   boost it up a band once.
 
 ## Decisions so far
 
@@ -125,7 +199,12 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Overhead (2026-10-07, ADR 0014, accepted) | **Three ground stations** at the Deep Space Network's sites (Canberra, Goldstone, Madrid), all heard by everyone, so everyone still reads the same line at the same moment. The sky opens on the whole planet; the horizon over any station is a click away. Replaces the row below. |
 | ~~Overhead (2026-10-04)~~ | ~~**One shared ground station**~~, a fixed point on the planet. A beacon shows to everyone when its satellite crosses that arc, so everyone reads the same line at the same moment. The station is the launchpad. |
 | Launch flow (2026-10-04) | The landing page is the **launchpad** with the launch form. Launching plays a rocket rising, then the camera **pans up** into the orbit view and the new satellite appears. C8 gets a simple version of the pan; the cinematic version is week 12 polish. Without JS the form still posts and redirects to the orbit view. |
-| Beacon rules (2026-10-04) | **At most 60 characters, plain text, no URLs, a small word blocklist.** Shown in the sky while the satellite is live; the catalogue keeps it after. |
+| ~~Beacon rules (2026-10-04)~~ | ~~**At most 60 characters**~~, plain text, no URLs, a small word blocklist. Shown in the sky while the satellite is live; the catalogue keeps it after. Length replaced by the row below. |
+| Beacon length (2026-10-07, ADR 0016, proposed) | **140 characters**: a thought, not a slogan, readable in the dozen seconds a low satellite is over a station. Several overhead take turns sized to the line (4 to 10 s). |
+| Heard by people (2026-10-07, ADR 0016, proposed) | **A pass over a station while people have the sky open is heard**: logged, and each listener who isn't the owner counted once ("heard by", people not tabs; cookies hashed). A **Heard** feed beside the sky; who's listening now. A beacon is public in the feed once heard (ADR 0012's withholding until it's gone is relaxed). |
+| The wreck keeps the words (2026-10-07, ADR 0017, proposed) | **Each fragment carries a run of words from each colliding line**, heard over the stations as static; "the wreck says" fades as fragments burn up; each owner gets the encounter in Yours. Replaces "fragments carrying words can come later". |
+| Question of the day (2026-10-07, ADR 0018, proposed) | **The stations ask one question a day** (fixed list, `src/lib/questions.ts`, turning at midnight in Canberra); a beacon can answer it (a box to tick, not ticked by default). Two answers that collide say so. |
+| Managing yours (2026-10-07, ADR 0015, proposed) | **Boost and bring down from Yours (`/catalogue/?show=mine`) and from each satellite's pop-up card**, never the station panel. Every object's history pops up as a card. |
 | Launch limits (2026-10-04) | ~~One live satellite per person, plus a cooldown~~ (starting at 10 minutes) after your satellite dies or is deorbited, so relaunching costs something. Replaced 2026-10-06, below. |
 | Launch limits (2026-10-06) | **Any number up, five minutes apart** (first a minute; Advay set five the same day, after one person launching nonstop took the sky from 2 collisions an hour to 60, and three filled it to its cap). Advay: "someone can send more satellites to send more messages but increase the risk of ruining it for all". Each launch is another beacon heard and another object everyone shares the sky with; the gap is between your launches, not after one dies. The sky cap (200 satellites) stays as the machine's backstop. Replaces "one each keeps it fair" (ADR 0002, superseded): the commons is now tested by how much each person takes, not rationed. |
 | Collisions scale with satellites (2026-10-06) | **A requirement from Advay:** the more satellites up, the more collisions. The model does this (more than linearly, the shape of a real cascade): measured with people's satellites held steady, 0 or 5 people up give 1 to 4 collisions an hour (the derelict floor of 20 dominates), 20 give about 20, 50 give about 130. Advay kept the floor at 20 (asked 2026-10-06), so the rise only shows once people outnumber it. Re-check whenever the tuning changes. |
@@ -139,7 +218,7 @@ where they're seen most, and the debris is a cost nobody pays for directly.
 | Collision geometry (2026-10-06) | **Mixed directions, plus near misses.** Orbits are flat and the period depends only on height, so two objects going the same way at the same height never close in, and decay keeps the gap in radius³ fixed. So each object gets a direction (prograde or retrograde): opposite-direction objects at similar heights cross head-on twice a lap. Same-direction objects can still collide when one creeps up on another within a (larger) hit distance. Rejected: hidden 3D inclinations (rewrites the rendering). Needs a decision record. |
 | Collision mechanics (2026-10-06, draft) | **Predicted by the server, broadcast ahead.** Positions are closed-form, so the server solves each pair's next crossing, keeps a queue of upcoming hits and sets a timer for the next (as decay does for burn-ups). A `conjunction` event gives every screen the impact time in advance, so all screens draw it at the same moment. At impact both objects are `destroyed` and seeded fragments spawn near the point, mostly keeping their parent's direction, so a head-on hit leaves debris going both ways. Catch-up after a restart runs the queue forward in time order (decays and collisions, new debris colliding inside the gap). New `collisions` table; `objects` gains direction and source collision (the lineage of ADR 0003). |
 | Seeding (2026-10-06) | **The server keeps a baseline of derelicts**: dead, ownerless satellites and old debris, as real orbit has, so collisions can happen when only the marker's two sessions are open. |
-| Resident operators (2026-10-07, ADR 0015, proposed) | **The server launches for a cast of invented operators**, about two an hour on a schedule that's a pure function of the clock, so there's always something launching and something to hear. At most 20 of theirs up (counted in the derelict floor, so they take most of the derelicts' place; at least 5 derelicts stay), none while the sky is half full; collisions in a quiet sky about 3.7 an hour against 1.8 without; a stopped server launches what it missed, up to six hours back. Not disclosed on the page for now (a line in each one's record was drafted, then taken out at Advay's call; he may add it back). |
+| Resident operators (2026-10-07, ADR 0019, proposed) | **The server launches for a cast of invented operators**, about two an hour on a schedule that's a pure function of the clock, so there's always something launching and something to hear. At most 20 of theirs up (counted in the derelict floor, so they take most of the derelicts' place; at least 5 derelicts stay), none while the sky is half full; collisions in a quiet sky about 3.7 an hour against 1.8 without; a stopped server launches what it missed, up to six hours back. Not disclosed on the page for now (a line in each one's record was drafted, then taken out at Advay's call; he may add it back). |
 | Identity (2026-10-06) | **Optional claim on top of the cookie.** You still launch anonymously within seconds (ADR 0002's reason holds); you can claim a unique operator handle with a passphrase, which keeps your record and blame across devices. No email, no personal data; passphrases hashed with Node's `scrypt`. Supersedes ADR 0002, so needs a new record. Rejected: required sign-up (marker friction), GitHub OAuth (secrets, personal data, marker needs an account), handle without a password (no cross-device). |
 | Blame (2026-10-06) | **Worked out from lineage, not stored.** Every fragment traces through its collision to the satellites at the root; their operators are who to blame. |
 | C9 scope (2026-10-06) | **Collisions + login.** Collisions, debris, lineage and blame by operator, and the optional claim. Conjunction alerts and dodging wait for C10. The C9 written decision is who sees the blame (ADR 0010). |
@@ -165,6 +244,10 @@ across each band.
 - Launches, collisions and fragment clouds appear on every open screen at once.
 - **Who caused it** (the C9 decision, ADR 0010): every screen names the
   operators behind a collision, traced through lineage.
+- **Being heard needs others here** (ADR 0016): a beacon is heard only by
+  the people who have the sky open as it passes over a station, and each
+  is counted; the sky page says how many are listening now. Your presence
+  is someone else's audience.
 - **Conjunction alerts** (C10; once the likely C9 decision, replaced by ADR
   0010 when dodging moved out): when two satellites are on a
   collision course, both owners are warned and either can spend limited fuel to
@@ -357,90 +440,105 @@ by the launch limits of 2026-10-06 (any number up, five minutes apart)._
   as stars joined by declared connections) and The Garden (grows only while
   people are present together).
 
-## Collisions that mean something (future work, needs thought)
+## Collisions that mean something
 
-_Added 2026-10-06 at Advay's request; not decided._
+_Added 2026-10-06 at Advay's request; the couplet built for C9; explored
+again and decided 2026-10-07 (ADR 0017, proposed), after Advay (and the
+marker) said the couplet hadn't met it._
 
-Right now a collision is just two orbits meeting: the two beacons involved
-have nothing to do with each other, and nothing of them survives in the
-wreck. The collision should read as a meeting of two messages, so that what
-collides has a connection, or gains one by colliding. Directions to think
-through (not exclusive):
+Why the couplet fell short: it framed a random pairing and then nothing
+changed. Both lines died with their satellites, the fragments were
+anonymous dots, and the two people never learned anything of each other.
+The collision is the one moment two strangers' words touch here, and it
+left no mark on either.
 
-- **The wreck keeps the words.** Each fragment carries a word or two from
-  each beacon. When debris passes over the station it's heard as broken
-  static mixing both lines, and the catalogue shows each fragment's words
-  next to the two lines they came from. A cascade then scatters words across
-  the sky: a fragment of A and B that hits C makes fragments carrying all
-  three, so the lineage (ADR 0003) is readable as text, not just ids.
-- **The collision as a couplet.** The collision event shows both beacons
-  together ("A said … / B said …") on every screen and in the catalogue.
-  Cheap, and pairs naturally with the first idea, but on its own it only
-  frames a random pairing.
-- **Write knowing your neighbours.** At launch, show (or play) the beacons
-  already in the band you picked, so you write in the context of who you
-  might hit. The connection comes from the person, not the server.
-- **Aim at a satellite.** A "reply" launch: pick a live satellite and the
-  server picks a phase whose orbit crosses it. Most direct connection, but it
-  turns collisions into something you aim at, which undercuts the argument
+Options weighed (the record is ADR 0017):
+
+- **The couplet** (built in C9): both beacons side by side. A
+  juxtaposition, not a connection.
+- **Aim at a satellite** (a "reply" launch onto a crossing orbit):
+  rejected twice. It makes a collision chosen, which breaks the argument
   (debris as a cost nobody meant to cause), and drifts towards
-  Constellation's declared connections. Probably rejected; noted so it's
-  weighed.
+  Constellation's declared connections.
+- **Collide by meaning** (similar lines likelier to meet): the server
+  judging text, opaquely. A trick.
+- **The wreck keeps the words** (built): each fragment carries a run of
+  words from each line, every word of both surviving once, paired with
+  pieces of the other; a cut-up neither person wrote. Cascades carry words
+  on down the lineage.
+- **The wreck keeps talking** (built): fragments with words are heard as
+  static at the stations, taking turns over everyone else's beacons, and
+  appear in the feed. Crowding costs airtime, not only satellites.
+- **The wreck falls silent as the sky heals** (built): "the wreck says"
+  fades each piece as its fragment burns up.
+- **An encounter** (built): both owners find the collision in Yours: who
+  they met, what that person said, what the wreck says. The only way you
+  meet a stranger here.
+- **Thematic as well as causal** (built with the question, ADR 0018): two
+  answers to the same day's question that collide are told as such.
 
-Questions to settle first:
+Settled on the old questions: the connection is causal (and thematic only
+through the question, which nobody judges); the filter runs on every
+shard; fragments' words are one nullable column (`objects.words`).
 
-- Is the connection **thematic** (the two lines relate) or **causal** (the
-  wreck shows both lines because they hit)? Only the second can be done
-  without the server reading meaning into text.
-- The blocklist has to run on mixed words too: two clean beacons can combine
-  into something that isn't.
-- If fragments carry words, the debris record needs them, which is a data
-  model change and gets a decision record.
+## What Kessler is for
 
-Settled for C9 (2026-10-06, built): the connection is causal; a collision
-shows **both beacons as a couplet** on every screen, in the catalogue and in
-each object's record. Fragments carrying words can come later as a nullable
-column, so deferring it is cheap.
+_Added 2026-10-06 as "A purpose" (three ideas Advay liked); decided and
+fleshed out 2026-10-07 at his request (ADRs 0016–0018, proposed). The long
+version for visitors is the Why page, `/why/`; the launchpad says it in
+four lines._
 
-## A purpose (future work, needs thought)
+The why has two halves. The app used to say only the second.
 
-_Added 2026-10-06; Advay likes all three and is still thinking them over.
-Not decided._
+**For a visitor: why launch, why stay, why come back.**
 
-Launching "to be seen" is the incentive, but there's no goal to chase and
-nothing shared to lose. Three ideas, meant to work together:
+1. **Say one thing to the people who are here.** 140 characters on a
+   satellite, heard by whoever has the sky open each time it passes over a
+   station, all at once. Not a feed you scroll alone: a moment shared with
+   whoever is present.
+2. **Be heard, counted.** Each beacon says how many different people have
+   heard it ("heard by"), and nobody can raise their own. Being heard needs
+   other people to be here at the same time.
+3. **Listen.** The sky is also a radio. Your being here is everyone else's
+   audience; a line passing over a station with nobody listening isn't
+   heard at all.
+4. **Answer the question.** One a day from the stations, a prompt to write
+   to and a topic shared by everyone that day; tomorrow there's another.
+5. **Decide what your words cost.** Every launch crowds a sky everyone
+   shares; the low band is heard most and crowds fastest; a collision
+   breaks your words into a stranger's and leaves them as static over
+   everyone else's. Bringing yours down keeps the sky readable.
+6. **Meet someone, the only way you can.** No chat, no replies: a
+   collision is the only way your words ever touch a stranger's, and you
+   find who you met in Yours.
 
-1. **Be heard, and count it.** Each satellite keeps a "heard by" count: how
-   many people had the sky open when it passed over the station. It's your
-   score, shown to you and kept in the catalogue. It makes "be seen"
-   concrete, explains why the low band is worth the risk, and makes being
-   online at the same time matter. The server already knows who is
-   connected over SSE, so it's cheap to keep and testable over HTTP.
-2. **Airtime is the scarce thing, and debris eats it.** The station panel
-   has three slots. Debris passing overhead takes a slot too, heard as
-   static, so a cascade doesn't only destroy satellites, it drowns out the
-   beacons still flying. Your crowding costs others their audience and
-   theirs costs you yours: the attention-economy argument as one mechanic,
-   with no rules to vote on.
-3. **The station asks a question.** One question a day (or a week); beacons
-   answer it. Gives a stranger a reason to launch beyond "say something",
-   and a shared topic. It also helps "Collisions that mean something": two
-   answers to the same question already have a connection, so a wreck that
-   mixes their words reads as two people answering together. The catalogue
-   becomes an archive of answers per question.
+**For the project: the argument.** Attention is a commons. A post costs
+nothing to make and takes a little of a shared, finite thing (the room to
+be heard), and nobody pays for that directly, so it's overused (Hardin
+1968). Low orbit is the newest commons and fills the same way (Kessler and
+Cour-Palais 1978). Kessler makes the cost physical: words take up orbit,
+crowding makes collisions, and collisions turn words into noise made of
+real people's words, torn out of context and mixed with a stranger's. No
+rules to vote on and no moderator; what keeps the sky usable is what
+everyone can see (who launched what, who's been heard, what each launch
+went on to cost, traced through lineage) and what each person does with
+their own satellites (Ostrom 1990).
 
-Things to ponder:
+The question it leaves each visitor with: **what's worth saying, if saying
+it costs everyone a little?**
 
-- Does "heard by" count people, sessions or passes? Cookies are cheap (ADR
-  0002), so one person with many tabs or browsers could inflate it.
-- Does a score pull people towards gaming it rather than writing something
-  worth hearing? Whether to show others' counts, or only your own.
-- How much airtime debris takes, so a cascade hurts without the panel
-  being static for days.
-- Who writes the questions (Advay, a fixed list, rotating), and whether
-  beacons must answer or may ignore it.
-- Overlap check: none of this declares connections (Constellation) or grows
-  from presence (The Garden), but presence does now count towards a score.
+Settled from the old list of things to ponder:
+
+- "Heard by" counts **people**: an operator, or a hashed cookie, once per
+  satellite; tabs don't count twice; a new browser still does (ADR 0009's
+  known cost). It's shown to everyone, on every beacon, since a social
+  space's audience is public; the owner can't raise their own.
+- **Debris takes airtime** by taking turns like a beacon, sized to its
+  words; a cascade fills the stations with static until it burns up (hours
+  in the low band). Watch whether that's too much once real people use it.
+- **Questions** are a fixed list in the code for Advay to edit; beacons
+  may ignore them (a box to tick, not ticked for you).
+- Left out still: a shared sky-health number on every screen.
 
 ## Open questions
 
@@ -474,9 +572,14 @@ flow, beacon rules, launch limits, bands.
   debris they caused~~: yes, on every screen (ADR 0010).
 - ~~**Before the C9 debris table:** how colliding beacons connect~~: a
   couplet; words on fragments later (see "Collisions that mean something").
-- **Open:** which of the purpose ideas to adopt (see "A purpose").
+- ~~**Open:** which of the purpose ideas to adopt~~: all three, with the
+  wreck (ADRs 0016–0018, proposed; see "What Kessler is for").
+- **Open (2026-10-07):** whether static should take full turns at the
+  stations in a cascade, or less; whether to archive answers per question
+  in the catalogue; whether Yours should tell you about an encounter the
+  next time you visit (it lists them, but doesn't announce them).
 - **Open:** seeing a burn-up on demand (see "Now and later").
-- **Later on:** whether to keep the resident operators at all (ADR 0015,
+- **Later on:** whether to keep the resident operators at all (ADR 0019,
   proposed until then). Against: they aren't disclosed, so activity a
   marker sees may be the server's rather than other visitors'; they
   roughly double collisions in a quiet sky; the app becomes less a record

@@ -113,19 +113,16 @@ a:hover {
   }
 }
 
-/* An object's history (ADR 0012): on its own page, and in the panel the sky
-   opens when an object is clicked. Global, since the panel's markup is
-   fetched into the sky page. */
-.history {
-  --history-gap: 1.25rem;
-}
-
+/* An object's history (ADR 0012), in the card that pops up when an object
+   is clicked (ADR 0015). Global, since the card's markup is fetched into
+   the page. One column, read top to bottom (2026-10-08): what it is, its
+   state, its words, then what happened as a timeline. */
 .history p {
   margin: 0.35rem 0 0;
 }
 
 .history .history-kind {
-  margin: 0;
+  margin: 0.15rem 0 0;
   color: var(--ink-dim);
   font-size: var(--step--1);
   font-weight: 700;
@@ -137,8 +134,73 @@ a:hover {
   color: var(--amber);
 }
 
+.history .history-summary {
+  margin-top: 0.6rem;
+  font-size: var(--step-1);
+  line-height: 1.4;
+}
+
+/* a callsign (at most 16 characters) never breaks at its hyphen */
+.history a.name {
+  color: var(--ink);
+  font-weight: 700;
+  white-space: nowrap;
+  text-decoration-color: var(--grid-strong);
+  text-underline-offset: 0.15em;
+}
+
+.history a.name:hover {
+  color: var(--amber);
+  text-decoration-color: currentColor;
+}
+
+.history time {
+  color: var(--ink-dim);
+}
+
+.history q {
+  font-style: italic;
+}
+
+/* its state at a glance */
+.history-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--step--1);
+}
+
+.history-status li {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--grid);
+  border-radius: 999px;
+  background: rgb(219 228 239 / 0.04);
+}
+
+.history-status .state {
+  font-weight: 700;
+}
+
+.history-status .state.live {
+  border-color: rgb(242 165 65 / 0.6);
+  color: var(--amber);
+}
+
+.history-status .state.live::before {
+  content: "● ";
+}
+
+.history-controls {
+  margin-top: 0.75rem;
+}
+
 .history-part {
-  margin-top: var(--history-gap);
+  margin-top: 1.1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--grid);
 }
 
 .history-part :is(h2, h3) {
@@ -151,32 +213,380 @@ a:hover {
 }
 
 .history-beacon {
-  margin: 0.4rem 0 0;
+  margin: 0.5rem 0 0;
   padding-left: 0.75rem;
   border-left: 3px solid var(--amber);
   font-size: var(--step-1);
-  font-style: italic;
 }
 
-.history-couplet {
-  color: var(--ink-dim);
-}
-
-.history-couplet q {
-  color: var(--ink);
-  font-style: italic;
-}
-
-.history-blame {
+.history .history-note {
   color: var(--ink-dim);
   font-size: var(--step--1);
 }
 
-.history-manoeuvres {
-  margin: 0.35rem 0 0;
-  padding-left: 1.1rem;
+/* a fragment's words: plainly readable, marked as static by the frame */
+.history .carried {
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  border-left: 3px solid #ff9a6a;
+  border-radius: 0 4px 4px 0;
+  background:
+    repeating-linear-gradient(0deg, rgb(219 228 239 / 0.035) 0 1px, transparent 1px 3px),
+    rgb(255 154 106 / 0.07);
+  font-size: var(--step-1);
+  overflow-wrap: anywhere;
 }
 
-.history time {
+/* and where they were torn from: each line, its carried words marked */
+.torn {
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.torn li + li {
+  margin-top: 0.45rem;
+}
+
+.torn-whose {
+  display: block;
   color: var(--ink-dim);
+  font-size: var(--step--1);
+}
+
+.torn-line {
+  color: var(--ink-dim);
+  overflow-wrap: anywhere;
+}
+
+.torn mark {
+  padding: 0.05em 0;
+  border-radius: 2px;
+  background: rgb(255 154 106 / 0.25);
+  color: var(--ink);
+  font-style: normal;
+}
+
+/* what happened: a timeline, oldest first */
+.timeline {
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.moment {
+  position: relative;
+  padding: 0 0 1rem 1.5rem;
+}
+
+.moment:last-child {
+  padding-bottom: 0;
+}
+
+/* the rail to the next moment */
+.moment::before {
+  content: "";
+  position: absolute;
+  top: 0.75rem;
+  bottom: -0.25rem;
+  left: calc(0.325rem - 1px);
+  width: 2px;
+  background: var(--grid-strong);
+}
+
+.moment:last-child::before {
+  display: none;
+}
+
+/* the moment's dot: hollow for now, amber for the fragment itself */
+.moment::after {
+  content: "";
+  position: absolute;
+  top: 0.3rem;
+  left: 0;
+  width: 0.65rem;
+  height: 0.65rem;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--ink-dim);
+}
+
+.moment.this::after {
+  background: #ff9a6a;
+  box-shadow: 0 0 0 3px rgb(255 154 106 / 0.25);
+}
+
+/* the folded middle of a long cascade */
+.moment.gap::after {
+  border: 2px dashed var(--ink-dim);
+  background: var(--night-deep);
+}
+
+.moment.gap .moment-what {
+  color: var(--ink-dim);
+}
+
+.moment.now::after {
+  border: 2px solid var(--amber);
+  background: var(--night-deep);
+}
+
+.history .moment-what {
+  margin: 0;
+}
+
+.moment-when {
+  display: block;
+  color: var(--ink-dim);
+  font-size: var(--step--1);
+}
+
+.moment.now .moment-when {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+.history .moment-more {
+  margin-top: 0.3rem;
+  color: var(--ink-dim);
+  font-size: var(--step--1);
+}
+
+.moment-more q,
+.moment-more strong,
+.moment-more a.name {
+  color: var(--ink);
+}
+
+/* the pieces a collision left, each a fragment's card */
+.wreck-pieces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wreck-chip {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid rgb(255 154 106 / 0.45);
+  border-radius: 3px;
+  background: rgb(255 154 106 / 0.07);
+  color: var(--ink);
+  font-size: var(--step--1);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.wreck-chip:hover,
+.wreck-chip:focus-visible {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+/* burned up: dashed and dimmer, still readable */
+.wreck-chip.gone {
+  border-style: dashed;
+  border-color: var(--grid-strong);
+  background: none;
+  color: var(--ink-dim);
+}
+
+/* what it led to, counted */
+.tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.75rem;
+  margin: 0.6rem 0 0;
+}
+
+.tally div {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.tally dd {
+  margin: 0;
+  font-size: var(--step-2);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.tally dt {
+  color: var(--ink-dim);
+  font-size: var(--step--1);
+}
+
+/* who a fragment traces back to */
+.traced {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.traced li {
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--grid);
+}
+
+.traced li:first-child {
+  border-top: 0;
+}
+
+.traced span {
+  color: var(--ink-dim);
+}
+
+/* Boosting and bringing down (ADR 0011), on a satellite's card and in Yours
+   (ADR 0015). Global, since the card is fetched into the sky and the
+   catalogue. */
+.manoeuvres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.manoeuvres form {
+  margin: 0;
+}
+
+.manoeuvres[hidden],
+.manoeuvres form[hidden],
+.manoeuvres .spent[hidden] {
+  display: none;
+}
+
+.manoeuvres .spent {
+  align-self: center;
+  font-size: var(--step--1);
+  color: var(--ink-dim);
+}
+
+.manoeuvres button {
+  padding: 0.3rem 0.65rem;
+  font: inherit;
+  font-size: var(--step--1);
+  font-weight: 700;
+  color: var(--ink);
+  background: rgb(219 228 239 / 0.06);
+  border: 1px solid var(--grid-strong);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.manoeuvres button:hover,
+.manoeuvres button:focus-visible {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.manoeuvres button[value="deorbit"] {
+  border-color: rgb(242 165 65 / 0.55);
+}
+
+.manoeuvres button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.manoeuvres .manoeuvre-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--danger);
+}
+
+.manoeuvres .manoeuvre-error:empty {
+  display: none;
+}
+
+/* What a collision's wreck says (ADR 0017): pieces of both lines, the
+   burned-up ones faded. Global: it's in fetched cards and built by scripts. */
+.wreck {
+  margin: 0.4rem 0 0;
+  color: var(--ink);
+  font-size: var(--step--1);
+  overflow-wrap: anywhere;
+}
+
+.wreck-label {
+  color: var(--ink-dim);
+}
+
+.wreck-piece {
+  font-style: italic;
+}
+
+.wreck-piece.silent {
+  color: var(--ink-dim);
+  opacity: 0.5;
+  text-decoration: line-through;
+  text-decoration-color: rgb(147 166 191 / 0.4);
+}
+
+.wreck-between,
+.wreck-note {
+  color: var(--ink-dim);
+}
+
+/* Static: a fragment heard over a station, carrying broken pieces of two
+   strangers' lines (ADR 0017) */
+.static-words {
+  color: #c9d3e0;
+  font-style: italic;
+  letter-spacing: 0.01em;
+  text-shadow: 1px 0 rgb(255 122 69 / 0.35), -1px 0 rgb(80 160 255 / 0.35);
+  animation: static-flicker 3.2s steps(1) infinite;
+}
+
+.static-words::before,
+.static-words::after {
+  color: var(--ink-dim);
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.static-words::before {
+  content: "░ ";
+}
+
+.static-words::after {
+  content: " ░";
+}
+
+.static-mark {
+  color: #ff9a6a;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes static-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  47% {
+    opacity: 0.55;
+  }
+  49% {
+    opacity: 0.9;
+  }
+  83% {
+    opacity: 0.7;
+  }
+}
+
+/* the stations' question a beacon answered (ADR 0018) */
+.history-question {
+  color: var(--ink-dim);
+  font-size: var(--step--1);
+}
+
+.history-question q {
+  color: var(--ink);
+  font-style: italic;
 }

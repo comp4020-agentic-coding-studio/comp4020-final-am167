@@ -1,0 +1,44 @@
+---
+import { ago } from "../lib/format.ts";
+import type { HeardItem } from "../lib/heard.ts";
+import { heardBy, passes, staticFrom } from "../lib/story.ts";
+
+// One card in the sky's feed of what was heard (ADR 0016): a beacon, who
+// launched it, the line, and where, when and by how many it was heard; or
+// all the static from one wreck (ADR 0017), the piece heard last, and how
+// much of it is still up. The sky's script builds the same card for each
+// new one (src/scripts/sky.ts).
+interface Props {
+  item: HeardItem;
+  now: number;
+}
+const { item: h, now } = Astro.props;
+const gone = { live: null, decayed: "Burned up", deorbited: "Brought down", destroyed: "Destroyed" }[h.fate];
+const debris = h.kind === "debris";
+---
+<li class:list={["heard-item", { mine: h.mine, gone: !debris && gone !== null, static: debris }]} data-key={h.key}>
+  <p class="heard-who">
+    {debris ? (
+      <>
+        <span class="static-mark">Static</span>
+        <a href={`/object/${h.id}/`} class="heard-from">{staticFrom(h.from)}</a>
+      </>
+    ) : (
+      <>
+        <span class="swatch" style={`--hue: ${(h.id * 137.508) % 360}`}></span>
+        <a href={`/object/${h.id}/`}><strong>{h.callsign}</strong></a>
+        {(h.mine || h.handle) && <span class="heard-handle">{h.mine ? "yours" : h.handle}</span>}
+      </>
+    )}
+    <time class="heard-when" datetime={new Date(h.at).toISOString()}>{ago(now - h.at)}</time>
+  </p>
+  <p class="heard-line">{debris ? <span class="static-words">{h.words}</span> : h.beacon}</p>
+  {h.question && <p class="heard-question">Answering <q>{h.question}</q></p>}
+  <p class="heard-meta">
+    {debris ? (
+      <>Over {h.station} · {passes(h.passes)} · {h.up === 0 ? "all fallen silent" : `${h.up} of ${h.pieces} pieces still up`}</>
+    ) : (
+      <>Over {h.station} · {heardBy(h.heardBy, h.mine)} · {passes(h.passes)}{gone && <> · {gone}</>}</>
+    )}
+  </p>
+</li>

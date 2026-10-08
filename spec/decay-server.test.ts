@@ -14,7 +14,7 @@ import { reentryAt } from "../src/lib/orbit.ts";
 // no derelicts, and launches placed by a seeded generator, so nothing here
 // collides (collisions have their own tests)
 process.env.DERELICTS = "0";
-// nor the resident operators' launches (ADR 0015), which have their own tests
+// nor the resident operators' launches (ADR 0019), which have their own tests
 process.env.RESIDENTS_PER_HOUR = "0";
 let seed = 7;
 const random = () => {
@@ -42,7 +42,7 @@ beforeAll(async () => {
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 const DAY = 86_400_000;
-const input = { band: "low" as const, callsign: "FALLER", beacon: "going down" };
+const input = { band: "low" as const, callsign: "FALLER", beacon: "going down", question: null };
 const launch = (who: Parameters<Sky["launch"]>[0], values: typeof input, now: number) => sky.launch(who, values, now, random);
 
 describe("burning up, on the server", () => {

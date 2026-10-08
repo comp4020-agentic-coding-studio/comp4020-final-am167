@@ -1,8 +1,8 @@
 // Bringing a satellite down asks first, and thanks whoever does it (ADR
-// 0011), on the sky page: the forms post in the background and `inPlace`
-// takes the satellite's new orbit, so the page carries on and you watch it
-// go. Without this script the forms post as normal, and the page they come
-// back to has the thank-you open.
+// 0011), wherever its controls are (a card, or Yours: ADR 0015): the forms
+// post in the background and `inPlace` takes the satellite's new orbit, so
+// the page carries on and you watch it go. Without this script the forms
+// post as normal, and the page they come back to has the thank-you open.
 
 export interface Manoeuvred {
   id: number;
@@ -11,12 +11,10 @@ export interface Manoeuvred {
 
 interface Options<T extends Manoeuvred> {
   // applies the result: the satellite's new orbit
-  inPlace: (object: T, action: "deorbit" | "boost") => void;
-  // where to say a refusal
-  refused: (message: string) => void;
+  inPlace: (object: T, action: "deorbit" | "boost") => void | Promise<void>;
 }
 
-export function wireManoeuvres<T extends Manoeuvred>({ inPlace, refused }: Options<T>): void {
+export function wireManoeuvres<T extends Manoeuvred>({ inPlace }: Options<T>): void {
   const confirm = document.getElementById("deorbit-confirm") as HTMLDialogElement | null;
   const thanks = document.getElementById("thanks") as HTMLDialogElement | null;
   if (!confirm || !thanks) return;
@@ -52,7 +50,15 @@ export function wireManoeuvres<T extends Manoeuvred>({ inPlace, refused }: Optio
     return new Promise((resolve) => confirm!.addEventListener("close", () => resolve(confirm!.returnValue === "yes"), { once: true }));
   }
 
-  async function post(form: HTMLFormElement, body: URLSearchParams, action: "deorbit" | "boost", callsign: string | null) {
+  // a refusal is said beside the buttons that asked (ManoeuvreControls)
+  const say = (form: HTMLFormElement, message: string) => {
+    const line = form.closest("[data-manoeuvres]")?.querySelector("[data-manoeuvre-error]");
+    if (line) line.textContent = message;
+  };
+
+  // the satellite's new orbit, or nothing if it was refused
+  async function post(form: HTMLFormElement, body: URLSearchParams, action: "deorbit" | "boost", callsign: string | null): Promise<T | undefined> {
+    say(form, "");
     try {
       // the attribute: `form.action` is the button named "action"
       const res = await fetch(form.getAttribute("action")!, {
@@ -62,13 +68,13 @@ export function wireManoeuvres<T extends Manoeuvred>({ inPlace, refused }: Optio
       });
       const reply = (await res.json()) as { object?: T; error?: string };
       if (!res.ok || !reply.object) {
-        refused(reply.error ?? "That didn't work. Try again.");
+        say(form, reply.error ?? "That didn't work. Try again.");
         return;
       }
-      inPlace(reply.object, action);
       if (action === "deorbit") thank(reply.object.callsign ?? callsign);
+      return reply.object;
     } catch {
-      refused("The connection dropped. Try again.");
+      say(form, "The connection dropped. Try again.");
     }
   }
 
@@ -79,13 +85,14 @@ export function wireManoeuvres<T extends Manoeuvred>({ inPlace, refused }: Optio
     const action = button.value as "deorbit" | "boost";
     const callsign = button.dataset.callsign ?? null;
     e.preventDefault();
-    // which satellite, as it was when clicked: the sky's panel moves on to
-    // another of yours as they pass over, maybe while the question is open
+    // which satellite, as it was when clicked, whatever the page does
+    // while the question is open
     const body = new URLSearchParams([...new FormData(form)].map(([key, value]) => [key, String(value)]));
     body.set("action", action);
     if (action === "deorbit" && !(await ask(callsign))) return;
     button.disabled = true;
-    await post(form, body, action, callsign);
+    const object = await post(form, body, action, callsign);
     button.disabled = false;
+    if (object) await inPlace(object, action);
   });
 }

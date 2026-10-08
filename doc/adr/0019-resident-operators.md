@@ -1,4 +1,4 @@
-# 0015. Resident operators launch on a schedule
+# 0019. Resident operators launch on a schedule
 
 **Status:** proposed (2026-10-07).
 
@@ -60,7 +60,7 @@ add the disclosure back later), in `src/lib/residents.ts`:
   resident's operator, so they're heard over the stations, collide, leave
   debris and are named in the blame (ADR 0010) like anyone's. Their
   operator rows carry a new `resident` flag (migration
-  `0005_resident_operators`): nobody can sign in as one (no passphrase),
+  `0010_resident_operators`): nobody can sign in as one (no passphrase),
   and their handles are taken, so nobody can pose as one. A handle a person
   claimed first stays theirs, and that resident never launches.
 - **Run in the catch-up**, like collisions and burn-ups (ADR 0004, 0008):

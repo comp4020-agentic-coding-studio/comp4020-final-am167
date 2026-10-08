@@ -1,0 +1,20 @@
+---
+import { ago } from "../lib/format.ts";
+import type { Line } from "../lib/chronicle.ts";
+
+// A line of an object's card (src/lib/chronicle.ts), as markup: names bold
+// and linked to their own cards, lines quoted, moments as times. One
+// expression, so no stray spaces: each piece carries its own.
+interface Props {
+  line: Line;
+  now: number;
+}
+const { line, now } = Astro.props;
+---
+{line.map((bit) =>
+  typeof bit === "string" ? bit
+  : "name" in bit ? (bit.href ? <a class="name" href={bit.href}>{bit.name}</a> : <strong>{bit.name}</strong>)
+  : "link" in bit ? <a href={bit.href}>{bit.link}</a>
+  : "quote" in bit ? <q>{bit.quote}</q>
+  : <time datetime={new Date(bit.at).toISOString()}>{ago(now - bit.at)}</time>
+)}

@@ -7,7 +7,7 @@ import type { SkyEvent } from "../src/lib/events.ts";
 import { reentryAt } from "../src/lib/orbit.ts";
 import { HOUR, RESIDENTS, slotsBetween } from "../src/lib/residents.ts";
 
-// The server's side of the resident operators (ADR 0015): the sky launches
+// The server's side of the resident operators (ADR 0019): the sky launches
 // each one when it's due, as a satellite like anyone's, under a handle nobody
 // can sign in as; a server that was stopped launches what it missed (up to a
 // few hours back), at the times they were due, and never twice; and the
@@ -105,7 +105,7 @@ describe("the resident operators, on the server", async () => {
   });
 
   it("tells a person's launch apart: it isn't a resident's", () => {
-    const result = sky.launch("a person", { band: "low", callsign: "MINE", beacon: "hello" }, T + 4 * HOUR);
+    const result = sky.launch("a person", { band: "low", callsign: "MINE", beacon: "hello", question: null }, T + 4 * HOUR);
     if (!result.ok) throw new Error("launch refused");
     expect(sky.historyOf(result.object.id, "a person", T + 4 * HOUR)!.resident).toBe(false);
   });
@@ -196,7 +196,7 @@ describe("the residents' share of the sky", () => {
   it("stops while the sky is half full, people's satellites included", async () => {
     const { sky } = await server({ SKY_CAP: "6" });
     for (const name of ["ONE", "TWO"]) {
-      const result = sky.launch(`person ${name}`, { band: "high", callsign: name, beacon: "hello" }, T - 7 * HOUR);
+      const result = sky.launch(`person ${name}`, { band: "high", callsign: name, beacon: "hello", question: null }, T - 7 * HOUR);
       expect(result.ok).toBe(true);
     }
     for (let t = T; t <= T + 12 * HOUR; t += 15 * 60_000) sky.settle(t);
