@@ -2537,4 +2537,4 @@ It fails 5 of 12, as Advay expected, and is left red until they ask for
 the fix: the launchpad is 59px too tall at 1512x860 and 43px at 1440x790
 for a new visitor, and for someone who has just launched 24px at
 1920x1080, 235px at 1512x860 and 219px at 1440x790. The sky fits
-everywhere. Recorded as a known failure in `PLAN.md`.
+everywhere. Recorded as a known failure in `PLAN.md`. Commit `8aa68f3`.
