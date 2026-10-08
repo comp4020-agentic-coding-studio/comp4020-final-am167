@@ -2723,4 +2723,4 @@ laptop stays gone.
 `pnpm test:layout` 12 of 12; the tightest case, 1440x790 just after a
 launch, has 21px to spare. Checked by eye at 1920x1080, 1512x860 and
 1440x790 (just launched). `pnpm check` green (325 tests, 0 errors, 0
-warnings) against a fresh build.
+warnings) against a fresh build. Commit `59480dd`.
