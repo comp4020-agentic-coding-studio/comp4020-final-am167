@@ -2889,3 +2889,5 @@ same numbers. Merged main in, and renumbered the branch's:
 
 `pnpm check` green (0 errors, 0 warnings, 350 tests) against a fresh
 build on a fresh database; `pnpm check:evidence` green.
+
+Commit `a08d722`.
