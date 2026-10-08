@@ -167,7 +167,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
               <label class="band">
                 <input type="radio" name="band" value={band} checked={values.band === band} />
                 <span class="band-name">{b.label}</span>
-                <span class="band-period">Laps every {every(b.period)}</span>
+                <span class="band-period">round the planet every {every(b.period)}</span>
                 <span class="band-hint">{hint[band]} <span class="band-life">{life(band)}</span></span>
               </label>
             ))}
@@ -1210,9 +1210,8 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   }
 
   /* Beside the intro, the form fits one window (pnpm test:layout): a little
-     wider, and, wherever the form is wide enough, the three bands side by
-     side (which also puts the trade-off in one row to compare) and each
-     field's rule beside its name. */
+     wider, and, wherever the form is wide enough, each field's rule beside
+     its name. */
   @media (min-width: 52.01rem) {
     .console {
       max-width: 38rem;
@@ -1224,31 +1223,6 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   }
 
   @container (min-width: 30rem) {
-    .bands {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .band {
-      grid-template-columns: auto minmax(0, 1fr);
-      align-content: start;
-      row-gap: 0.15rem;
-      padding: 0.5rem 0.6rem;
-    }
-
-    .band input {
-      grid-row: auto;
-    }
-
-    .band-period,
-    .band-hint {
-      grid-column: 1 / -1;
-      text-align: left;
-    }
-
-    .bands .field-error {
-      grid-column: 1 / -1;
-    }
-
     /* each field's rule beside its name, not under the box (the beacon's
        name comes after the stations' question) */
     .field {
@@ -1280,7 +1254,8 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     }
   }
 
-  /* and on a short laptop screen, the spacing tightens */
+  /* and on a short laptop screen, the spacing tightens (each band keeps
+     both its lines) */
   @media (min-width: 52.01rem) and (max-height: 56rem) {
     .console button[type="submit"] {
       padding: 0.6rem 1rem;
@@ -1292,16 +1267,56 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
 
     .console {
       margin-bottom: 1rem;
-      padding: 1rem 1.25rem;
+      padding: 0.85rem 1.25rem;
     }
 
     .console h2 {
-      margin-bottom: 0.6rem;
+      margin-bottom: 0.5rem;
+      font-size: var(--step-1);
+    }
+
+    .bands {
+      gap: 0.4rem;
+    }
+
+    .band {
+      padding: 0.3rem 0.75rem;
+      line-height: 1.3;
+    }
+
+    .today {
+      padding: 0.3rem 0.75rem 0.35rem;
     }
 
     .bands,
     .field {
       margin-bottom: 0.7rem;
+    }
+
+    legend,
+    .field label {
+      margin-bottom: 0.25rem;
+    }
+
+    .field :is(input, textarea) {
+      padding: 0.45rem 0.7rem;
+    }
+
+    .field textarea {
+      min-height: calc(2lh + 0.9rem + 2px);
+    }
+
+    .notices {
+      margin-bottom: 0.75rem;
+      padding: 0.4rem 0.75rem;
+    }
+
+    .beacon-foot {
+      margin-top: 0.3rem;
+    }
+
+    .launch-as {
+      margin-top: 0.5rem;
     }
   }
 

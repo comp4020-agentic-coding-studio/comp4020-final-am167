@@ -129,10 +129,11 @@ _Last updated 2026-10-08 (the object card retold plainly; the launchpad fits a d
   3. Before the cutoff: `pnpm check` against a fresh build, then preflight.
 - **The launchpad fits a desktop (fixed 2026-10-08, at Advay's request):**
   `pnpm test:layout` passes 12 of 12. The notices are one compact box, the
-  wait between launches is on the Launch button, the three bands sit side
-  by side wherever the form is wide enough, and each field's rule sits
-  beside its name. The tightest case (1440x790, just launched) has 28px to
-  spare. Run it after any change to the launchpad or the sky.
+  wait between launches is on the Launch button, each field's rule sits
+  beside its name, and the spacing tightens on short screens; the bands
+  stay the stacked rows they were (Advay preferred them to side-by-side
+  tiles). The tightest case (1440x790, just launched) has 21px to spare.
+  Run it after any change to the launchpad or the sky.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or

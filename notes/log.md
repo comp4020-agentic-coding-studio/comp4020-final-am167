@@ -2702,3 +2702,25 @@ side, the wait on the button.](screenshots/2026-10-08-launchpad-fits-1440x790.pn
 
 `pnpm check` green (325 tests, 0 errors, 0 warnings) against a fresh build;
 `pnpm check:evidence` green. Commit `ade7d43`.
+
+## 2026-10-08 — The bands back as rows
+
+Advay, on the side-by-side band tiles from the fit above: "looks a bit
+weird now, and not as nice as before." They were: in a third of the form
+each note broke mid-phrase ("Heard most often. Burns / up in 1 to 8
+hours."), so the three read as ragged paragraphs rather than a choice.
+The bands are the stacked rows again, as they were before the fit: the
+name on the left, "round the planet every 3 minutes" on the right (the
+shortened "Laps every…" reverted), the note and lifetime underneath, all
+three lines kept on every screen.
+
+The height the tiles saved now comes from spacing on short screens only
+(at most 56rem tall): tighter band rows, inputs and labels, a smaller
+heading, and a little less around the notice box and the line under the
+button. Nothing hidden; the old rule that dropped each band's note on a
+laptop stays gone.
+
+`pnpm test:layout` 12 of 12; the tightest case, 1440x790 just after a
+launch, has 21px to spare. Checked by eye at 1920x1080, 1512x860 and
+1440x790 (just launched). `pnpm check` green (325 tests, 0 errors, 0
+warnings) against a fresh build.
