@@ -27,7 +27,7 @@ _Last updated 2026-10-08 (the object card retold plainly; the launchpad fits a d
   - A page explaining Kessler syndrome at `/kessler/` (`356e469`).
   - Orbital decay ending in a burn-up (ADR 0007, accepted; `fb51cae`).
   - Collisions predicted, announced and replayed by the server (ADR 0008,
-    accepted; `41f32ef`); launches any number up, five minutes apart
+    accepted; `41f32ef`); launches any number up, one minute apart
     (`5cf1247`).
   - Collisions drawn on every screen, blame traced through lineage, and
     claimable operators (ADRs 0009 and 0010, accepted 2026-10-07;
@@ -161,7 +161,7 @@ everyone a little?** See "What Kessler is for" below.
 
 ## Core loop
 
-1. **Launch.** As many satellites as you like, five minutes apart. Pick an altitude band and a
+1. **Launch.** As many satellites as you like, one minute apart. Pick an altitude band and a
    callsign, and write a beacon of up to 140 characters, answering the
    stations' question of the day or not (ADR 0016, 0018).
 2. **Be heard.** Every time your satellite passes over one of the three
@@ -196,7 +196,7 @@ everyone a little?** See "What Kessler is for" below.
 | Question of the day (2026-10-07, ADR 0018, proposed) | **The stations ask one question a day** (fixed list, `src/lib/questions.ts`, turning at midnight in Canberra); a beacon can answer it (a box to tick, not ticked by default). Two answers that collide say so. |
 | Managing yours (2026-10-07, ADR 0015, proposed) | **Boost and bring down from Yours (`/catalogue/?show=mine`) and from each satellite's pop-up card**, never the station panel. Every object's history pops up as a card. |
 | Launch limits (2026-10-04) | ~~One live satellite per person, plus a cooldown~~ (starting at 10 minutes) after your satellite dies or is deorbited, so relaunching costs something. Replaced 2026-10-06, below. |
-| Launch limits (2026-10-06) | **Any number up, five minutes apart** (first a minute; Advay set five the same day, after one person launching nonstop took the sky from 2 collisions an hour to 60, and three filled it to its cap). Advay: "someone can send more satellites to send more messages but increase the risk of ruining it for all". Each launch is another beacon heard and another object everyone shares the sky with; the gap is between your launches, not after one dies. The sky cap (200 satellites) stays as the machine's backstop. Replaces "one each keeps it fair" (ADR 0002, superseded): the commons is now tested by how much each person takes, not rationed. |
+| Launch limits (2026-10-06) | **Any number up, one minute apart** (first a minute; Advay set five the same day, after one person launching nonstop took the sky from 2 collisions an hour to 60, and three filled it to its cap). Advay: "someone can send more satellites to send more messages but increase the risk of ruining it for all". Each launch is another beacon heard and another object everyone shares the sky with; the gap is between your launches, not after one dies. The sky cap (200 satellites) stays as the machine's backstop. Replaces "one each keeps it fair" (ADR 0002, superseded): the commons is now tested by how much each person takes, not rationed. |
 | Collisions scale with satellites (2026-10-06) | **A requirement from Advay:** the more satellites up, the more collisions. The model does this (more than linearly, the shape of a real cascade): measured with people's satellites held steady, 0 or 5 people up give 1 to 4 collisions an hour (the derelict floor of 20 dominates), 20 give about 20, 50 give about 130. Advay kept the floor at 20 (asked 2026-10-06), so the rise only shows once people outnumber it. Re-check whenever the tuning changes. |
 | Sky cap (2026-10-04) | **At most 200 satellites in orbit at once**; launches are refused while it's full. Added after review: nothing leaves the sky in C8 and a cookieless client can launch without limit, so this protects the 256 MB machine. Revisit with decay in C9. |
 | Catalogue (2026-10-04) | **The "In orbit" table shows callsigns, not beacons.** A beacon is only heard as its satellite passes over the station, so flying low (heard more often) stays worth it. The reviewer pointed out that a permanent list of beacons made "be seen" pointless. |
@@ -261,7 +261,7 @@ summary, the records are the source of truth.
 
 _The C8 decision, kept as history: superseded by ADR 0009 (accepted
 2026-10-07), which keeps the cookie and adds an operator you can claim, and
-by the launch limits of 2026-10-06 (any number up, five minutes apart)._
+by the launch limits of 2026-10-06 (any number up, one minute apart)._
 
 **An anonymous browser cookie, plus the callsign you pick at launch.**
 
@@ -344,7 +344,7 @@ by the launch limits of 2026-10-06 (any number up, five minutes apart)._
   a restart.
 - Stopping the server and restarting applies the collisions that fell in the
   gap.
-- Launches five minutes apart per person; dodging uses fuel; only the owner can
+- Launches one minute apart per person; dodging uses fuel; only the owner can
   deorbit.
 
 ## Now and later
@@ -382,7 +382,7 @@ by the launch limits of 2026-10-06 (any number up, five minutes apart)._
   only touches the drawing code.
 - **C9 (week 10), built:** server-side collisions making debris, boot-time
   replay of missed time, orbital decay, deorbiting your own satellite (the
-  cooldown became a five-minute gap between launches). Conjunction alerts
+  cooldown became a one-minute gap between launches). Conjunction alerts
   and dodging with fuel moved to C10. See "Status and next steps".
 - **A page explaining Kessler syndrome (added 2026-10-06; built
   2026-10-06).** People Advay has shown the app to don't know what Kessler
@@ -552,7 +552,7 @@ flow, beacon rules, launch limits, bands.
   collisions per hour once orbits slowed.
 - **C10:** how fuel works, and whether it refills (moved with dodging;
   boosting needs none).
-- ~~**C9:** exact cooldown length~~: replaced by a five-minute gap between
+- ~~**C9:** exact cooldown length~~: replaced by a one-minute gap between
   launches (2026-10-06).
 - ~~**Week 12 (or sooner):** whether to move the sky's rendering to
   Three.js~~: done in C9 (ADRs 0005 and 0006).

@@ -38,7 +38,7 @@ describe("the sky page", () => {
     // open without JavaScript too
     expect(dialog!.hasAttribute("open")).toBe(true);
     const text = dialog!.textContent!;
-    for (const point of [/beacon/i, /burns? up/i, /collide/i, /debris/i, /5 minutes/i, /boost/i, /bring it down/i]) {
+    for (const point of [/beacon/i, /burns? up/i, /collide/i, /debris/i, /1 minute|a minute/i, /boost/i, /bring it down/i]) {
       expect(text, String(point)).toMatch(point);
     }
     // it can be closed without JavaScript beyond the dialog's own
