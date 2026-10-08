@@ -28,7 +28,7 @@ const { objects, collisions, operators, manoeuvres, transmissions, listens } = s
 // How long between one person's launches (PLAN.md, "Launch limits"). There's
 // no limit on how many you have up: each launch is another beacon heard, and
 // another object everyone else has to share the sky with.
-export const LAUNCH_GAP = 5 * 60_000;
+export const LAUNCH_GAP = 60_000;
 
 // The most satellites the sky holds at once (PLAN.md, "Launch limits"), so
 // the sky, and the 256 MB machine holding it, can't outgrow decay clearing

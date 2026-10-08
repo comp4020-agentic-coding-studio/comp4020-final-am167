@@ -2724,3 +2724,13 @@ laptop stays gone.
 launch, has 21px to spare. Checked by eye at 1920x1080, 1512x860 and
 1440x790 (just launched). `pnpm check` green (325 tests, 0 errors, 0
 warnings) against a fresh build. Commit `59480dd`.
+
+## 2026-10-08 — Launch gap cut to one minute
+
+`LAUNCH_GAP` in `src/lib/sky.ts` went from five minutes to one, on request.
+Copy that quoted the gap followed: the first-launch explainer (now says "a
+minute", so no "1 minutes"), `/why`, `/kessler`, `PLAN.md`, and the
+explainer assertion in `spec/sky.test.ts`. The server tests use the constant,
+so they follow it.
+
+Commit `31950cc`.

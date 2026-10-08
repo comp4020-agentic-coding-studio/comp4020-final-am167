@@ -14,6 +14,7 @@ interface Props {
 }
 const { callsign, signedIn } = Astro.props;
 const gap = Math.round(LAUNCH_GAP / 60_000);
+const gapText = gap === 1 ? "a minute" : `${gap} minutes`;
 const descent = Math.round(MANOEUVRE.descentMs / 60_000);
 const boosts = FUEL === 1 ? "once" : `${FUEL} times`;
 const climbs = FUEL === 1 ? "one climb" : `${FUEL} climbs`;
@@ -53,9 +54,9 @@ const climbs = FUEL === 1 ? "one climb" : `${FUEL} climbs`;
         </dd>
       </div>
       <div>
-        <dt>Launch again in {gap} minutes</dt>
+        <dt>Launch again in {gapText}</dt>
         <dd>
-          Have as many up as you like, {gap} minutes apart, but every launch
+          Have as many up as you like, {gapText} apart, but every launch
           crowds the orbit for everyone. The sky holds {SKY_CAP} satellites.
         </dd>
       </div>
