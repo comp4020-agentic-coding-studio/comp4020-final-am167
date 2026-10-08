@@ -8,6 +8,7 @@
     "check": "pnpm typecheck && pnpm test",
     "check:evidence": "node scripts/check-evidence.ts",
     "test": "vitest run",
+    "test:layout": "vitest run --config vitest.layout.config.ts",
     "dev": "node scripts/migrate.mjs && astro dev",
     "build": "astro build",
     "start": "node scripts/migrate.mjs && node dist/server/entry.mjs",

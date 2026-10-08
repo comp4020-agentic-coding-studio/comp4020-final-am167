@@ -2503,3 +2503,38 @@ honestly). The comments don't render on `/readme/`; the headings do, so
 the invariant test still passes. The old text is at `d8fb66a`.
 `pnpm check` green (305 tests, 0 errors, 0 warnings) against a fresh
 build. Commit `cce5e32`.
+
+## 2026-10-08 — A layout test: the launchpad and the sky fit a desktop
+
+Advay found the launchpad scrolls on their laptop, putting the Launch
+button below the fold. It isn't new: Claude has kept making changes that
+bring vertical scrolling back to these screens, even after being told
+again and again to fix it. Reminding it each time hasn't held, so the
+rule now lives in the harness instead: a test that the launchpad and the
+sky never scroll vertically on a desktop, kept apart from the spec suite,
+and a section in CLAUDE.md telling every later agent to run it. Worth a
+place in `PROCESS.md` as a harness change: a recurring correction turned
+into a check rather than repeated in chat.
+
+- `layout/desktop-fit.test.ts`, run by `pnpm test:layout` (its own
+  `vitest.layout.config.ts`, reusing the spec's global setup, so it
+  checks the running app at `APP_URL`). It drives installed Chrome
+  (`playwright-core`, as the performance suite does) and fails if either
+  page's document is taller than the window, or if a control outside a
+  panel that scrolls on its own is off screen, so hiding the overflow
+  can't pass it.
+- Viewports: the marking desktop (1920x1080) and two laptops as Chrome
+  shows them: a 14-inch MacBook Pro (1512x860, the 1512x982 screen Advay
+  has, less the menu bar and toolbar) and a 13-inch MacBook Air
+  (1440x790). Each for a new visitor and for someone who has just
+  launched, since a launch adds notices to the launchpad.
+- Not in `pnpm check`: CI has no Chrome. CLAUDE.md gains a "Layout"
+  section saying to run it after any change to either page.
+- `AGENTS.md` deleted: nothing here uses it, and it had already drifted
+  from CLAUDE.md.
+
+It fails 5 of 12, as Advay expected, and is left red until they ask for
+the fix: the launchpad is 59px too tall at 1512x860 and 43px at 1440x790
+for a new visitor, and for someone who has just launched 24px at
+1920x1080, 235px at 1512x860 and 219px at 1440x790. The sky fits
+everywhere. Recorded as a known failure in `PLAN.md`.

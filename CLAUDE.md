@@ -48,6 +48,20 @@ Run the performance tests **only when I ask for them**; they're not part of
 which starts its own server and database and writes reports to the ignored
 `performance-results/`. Don't commit the reports.
 
+### Layout
+
+The launchpad (`/`) and the sky (`/sky/`) must each fit one desktop window
+with no vertical scrolling. Agents have repeatedly brought the scrolling back
+while changing these pages, so this is a check, not a reminder.
+`pnpm test:layout` (`layout/desktop-fit.test.ts`) drives installed Chrome
+against the running app at `APP_URL` and fails if either page scrolls
+vertically, or has a control off screen, at 1920x1080 or either MacBook
+viewport it lists, for a new visitor or someone who has just launched. It
+isn't part of `pnpm check` (CI has no Chrome), so **run it yourself after any
+change to either page's layout, CSS or content**, against a fresh build. Fix
+the layout rather than hiding the overflow. Known failures are in `PLAN.md`'s
+status.
+
 ## How to work in here
 
 - Keep the app running locally while working, and kill any dev or preview
