@@ -2732,3 +2732,5 @@ Copy that quoted the gap followed: the first-launch explainer (now says "a
 minute", so no "1 minutes"), `/why`, `/kessler`, `PLAN.md`, and the
 explainer assertion in `spec/sky.test.ts`. The server tests use the constant,
 so they follow it.
+
+Commit `31950cc`.
