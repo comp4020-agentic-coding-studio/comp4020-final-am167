@@ -115,9 +115,17 @@ _Last updated 2026-10-07, overnight (Advay's feedback round on branch `claude/ni
 - **C9 cutoff:** Mon 12 Oct 2026, 12:00.
 - **Next, for C9 (write-ups only; nothing left to build):**
   1. `PROCESS.md`: the C9 part (it stops at the C8 slice), from
-     `notes/log.md`.
+     `notes/log.md`, including the layout test as a harness
+     change (a correction Claude kept needing, made a check).
   2. `reflections/crit-9.md` (Advay's).
   3. Before the cutoff: `pnpm check` against a fresh build, then preflight.
+- **Known failure, to fix (Advay, 2026-10-08):** the launchpad scrolls
+  vertically on a desktop, so the Launch button can be below the fold.
+  `pnpm test:layout` fails 5 of 12: the launchpad for a new visitor at
+  1512x860 (59px over) and 1440x790 (43px), and for someone who has just
+  launched at all three viewports (24px at 1920x1080, up to 235px at
+  1512x860; the "yours in orbit" and wait notices push it down). The sky
+  fits at all three. Left red on purpose until Advay asks for the fix.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or

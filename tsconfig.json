@@ -1,5 +1,5 @@
 {
-  // Covers the supplied harness (spec/, scripts/); widen `include` if your app
+  // Covers the supplied harness (spec/, layout/, scripts/); widen `include` if your app
   // is TypeScript and you want `pnpm typecheck` to cover it too.
   "compilerOptions": {
     "target": "ES2023",
@@ -16,5 +16,5 @@
     "moduleDetection": "force",
     "verbatimModuleSyntax": true
   },
-  "include": ["*.ts", "spec", "scripts", "src"]
+  "include": ["*.ts", "spec", "layout", "scripts", "src"]
 }
