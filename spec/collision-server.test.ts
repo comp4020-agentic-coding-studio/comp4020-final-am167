@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { FRAGMENTS, HIT, fatalMeeting, nextMeeting } from "../src/lib/collide.ts";
-import { angleAt, periodAt, radiusAt, type Elements } from "../src/lib/orbit.ts";
+import { angleAt, bandReach, periodAt, radiusAt, type Elements } from "../src/lib/orbit.ts";
 import { wordsOf } from "../src/lib/wreck.ts";
 import { sharedQuestion } from "../src/lib/story.ts";
 import { momentsOf, plain, summaryOf, tornFromOf, tracedTo } from "../src/lib/chronicle.ts";
@@ -510,6 +510,21 @@ describe("a collision staged over a station", async () => {
     sky.settle(after);
     expect(sky.stageCollision(after + 60_000)).toBeNull();
     expect(sky.stageCollision(after + sky.STAGE.every)).not.toBeNull();
+  });
+});
+
+// It used to meet in the middle of the low band, and its fragments, spread
+// through the band, took nearly every low launch with them.
+describe("a staged collision's debris", async () => {
+  const { sky } = await freshServer();
+
+  it("stays under the launch bands, where nothing launched since can meet it", () => {
+    const staged = sky.stageCollision(T)!;
+    expect(staged.radius).toBeLessThan(bandReach("low").min);
+    sky.settle(staged.at + 1);
+    const debris = sky.liveSky(staged.at + 1).filter((o) => o.kind === "debris");
+    expect(debris).toHaveLength(2 * FRAGMENTS.perObject);
+    for (const fragment of debris) expect(fragment.radius).toBeLessThan(bandReach("low").min);
   });
 });
 

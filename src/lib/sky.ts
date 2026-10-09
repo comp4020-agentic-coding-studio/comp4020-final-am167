@@ -567,11 +567,16 @@ function echoTheSilent(now: number): void {
 // server sends two derelicts at each other: same height, opposite ways, a
 // dead-centre pass (collide.ts) that meets over a ground station, picked at
 // random, `lead` from now. The rest of the world launches too.
+//
+// They meet under the launch bands, where the debris stays (collide.ts) and
+// burns up within the hour, so a collision staged to be watched doesn't
+// take people's satellites with it. In the low band's middle, as it first
+// was, its debris was the end of nearly every low launch.
 export const STAGE = {
   every: 5 * 60_000,
   horizon: 4 * 60_000,
   lead: 25_000,
-  radius: 1.3,
+  radius: 1.1,
   // not into a sky that's already busy
   busy: 150,
 };

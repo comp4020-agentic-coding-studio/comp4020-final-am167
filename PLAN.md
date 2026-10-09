@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-08 (the object card retold plainly; the launchpad fits a desktop, so `pnpm test:layout` passes; ADRs 0015–0018 still proposed)._
+_Last updated 2026-10-09 (staged collisions moved under the launch bands, ADR 0019 proposed; ADRs 0015–0018 still proposed)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -134,6 +134,13 @@ _Last updated 2026-10-08 (the object card retold plainly; the launchpad fits a d
   stay the stacked rows they were (Advay preferred them to side-by-side
   tiles). The tightest case (1440x790, just launched) has 21px to spare.
   Run it after any change to the launchpad or the sky.
+- **Staged collisions under the bands (2026-10-09, Advay: collisions felt
+  too forced, satellites never burned up; ADR 0019, proposed):** the
+  collision staged for a watcher met in the low band's middle, and its
+  debris took nearly every low launch (3% burned up, measured). It now
+  meets at radius 1.1, under the bands, and keeps its fragments there: low
+  launches burn up about 56% of the time, as 0008 intended. Next lever if
+  still too forced: a close pair that may never collide.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or

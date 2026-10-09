@@ -5,7 +5,7 @@
 //
 // Distances are in planet radii, angles in radians, times in server ms.
 
-import { DECAY, angleAt, burnAt, periodAt, radiusAt, turnedAt, type Elements, type Orbit } from "./orbit.ts";
+import { DECAY, angleAt, bandReach, burnAt, periodAt, radiusAt, turnedAt, type Elements, type Orbit } from "./orbit.ts";
 
 const TAU = 2 * Math.PI;
 
@@ -61,6 +61,14 @@ export const FRAGMENTS = {
   angleSpread: 0.1,
   keepDirection: 0.7,
 };
+
+// A collision under the launch bands keeps its fragments under them, out of
+// reach of the lowest launch: heights keep their order as everything falls,
+// so nothing launched since can meet them. The server stages its collisions
+// there (src/lib/sky.ts); in the low band's middle their debris took nearly
+// every low launch with it.
+const FLOOR = bandReach("low").min;
+const CEILING = FLOOR - (Math.max(HIT.headOn, HIT.lapping) * (SIZE.satellite + SIZE.debris)) / 2;
 
 const directionOf = (orbit: Orbit) => orbit.direction ?? 1;
 
@@ -188,12 +196,15 @@ export function fragmentsOf<T extends Sized & { id: number }>(a: T, b: T, at: nu
   const [first, second] = a.id < b.id ? [a, b] : [b, a];
   const random = seeded(first.id * 100_003 + second.id);
   const impact = impactOf(first, second, at);
+  // under the launch bands, no higher than CEILING
+  const highest = impact.radius < FLOOR ? CEILING : Infinity;
+  const maxSpread = Math.max(0, Math.min(FRAGMENTS.maxSpread, highest - impact.radius));
   const fragments: Elements[] = [];
   for (const parent of [first, second]) {
     if (parent.kind === "debris") continue;
     for (let i = 0; i < FRAGMENTS.perObject; i++) {
-      const spread = Math.max(-1, Math.min(1, normal(random) / 2)) * FRAGMENTS.maxSpread;
-      const radius = Math.max(impact.radius + spread, DECAY.endRadius + 0.01);
+      const spread = Math.max(-1, Math.min(1, normal(random) / 2)) * maxSpread;
+      const radius = Math.max(Math.min(impact.radius + spread, highest), DECAY.endRadius + 0.01);
       const phase = impact.angle + (random() * 2 - 1) * FRAGMENTS.angleSpread;
       const keep = random() < FRAGMENTS.keepDirection;
       fragments.push({

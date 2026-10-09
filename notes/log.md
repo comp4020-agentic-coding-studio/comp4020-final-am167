@@ -2734,3 +2734,34 @@ explainer assertion in `spec/sky.test.ts`. The server tests use the constant,
 so they follow it.
 
 Commit `31950cc`.
+
+## 2026-10-09 — Staged collisions moved under the launch bands
+
+Advay: collisions felt too often and too forced; satellites never seemed
+to burn up, they always got destroyed. Before changing anything, measured
+why with a Monte Carlo over the real `collide.ts` and `orbit.ts` (a
+satellite launched into 7 derelicts a band, plus a staged collision every
+5 minutes for the last 4 hours). The culprit was the collision the server
+stages for a watcher (ADR 0008): it met at radius 1.3, the low band's
+middle, and spread 6 fragments ±0.15 through the band. Heights keep their
+order as everything falls, so that debris sat beside every low launch for
+hours. One staged collision's debris took about 14% of low launches; with
+staging, 3% of low satellites burned up (the rest died a median 3 minutes
+after launch), against 54% with none. Mid and high were untouched.
+
+Of the levers offered (stage under the bands; let a close pair never
+collide; make debris less deadly; shorten the low band's 4-hour lifetime),
+Advay chose the first. `STAGE.radius` is now 1.1, under the low band's
+reach (1.14), and `fragmentsOf` keeps any collision under the bands from
+throwing fragments up within a hit of the lowest launch. Re-measured: low
+launches burn up about 56% of the time with staging every 5 minutes, the
+"about half" ADR 0008 chose. Recorded as ADR 0019 (proposed), superseding
+0008's staging height.
+
+TDD: a unit test that a wreck at 1.1 throws nothing within a hit of the
+lowest launch and never meets a satellite launched after it, and a server
+test that a staged collision's debris stays under the bands; both failed
+first (fragments up to 1.133, staged at 1.30). Checked by eye at 1920x1080
+on a fresh database: the staged collision still plays over Canberra, just
+above the atmosphere. `pnpm check` green (328 tests, 0 errors, 0
+warnings) against a fresh build.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FRAGMENTS, HIT, SIZE, fatalMeeting, fragmentsOf, hitDistance, impactOf, nextMeeting } from "../src/lib/collide.ts";
-import { angleAt, periodAt, radiusAt, reentryAt, burnAt, type Orbit } from "../src/lib/orbit.ts";
+import { angleAt, bandReach, periodAt, radiusAt, reentryAt, burnAt, type Orbit } from "../src/lib/orbit.ts";
 
 // Collisions (ADR 0008). Orbits go either way round, and two objects collide
 // when their angles meet while their heights are within the hit distance. The
@@ -171,5 +171,32 @@ describe("the wreck", () => {
   it("sends a head-on wreck both ways", () => {
     const directions = new Set(fragmentsOf(a, b, at).map((f) => f.direction));
     expect(directions).toEqual(new Set([1, -1]));
+  });
+});
+
+// A collision under the launch bands (the server's staged ones, src/lib/sky.ts)
+// keeps its fragments under them, so its debris can't reach anything launched
+// since: heights keep their order as everything falls.
+describe("a wreck under the launch bands", () => {
+  const a = { ...orbit(1.1, 0), id: 4 };
+  const b = { ...orbit(1.1, 2, -1), id: 9 };
+  const at = nextMeeting(a, b, 0)!;
+  const fragments = fragmentsOf(a, b, at);
+  const floor = bandReach("low").min;
+
+  it("throws no fragment within a hit of the lowest launch", () => {
+    const sat = { ...orbit(floor, 0), kind: "satellite" as const };
+    const reach = Math.max(hitDistance(sat, { ...sat, kind: "debris" }), hitDistance(sat, { ...sat, direction: -1, kind: "debris" }));
+    expect(fragments).toHaveLength(2 * FRAGMENTS.perObject);
+    for (const fragment of fragments) expect(fragment.radius).toBeLessThanOrEqual(floor - reach);
+  });
+
+  it("never meets a satellite launched after it", () => {
+    for (const fragment of fragments)
+      for (const direction of [1, -1] as const)
+        for (let phase = 0; phase < TAU; phase += 0.5) {
+          const sat = { ...orbit(floor, phase, direction, at), kind: "satellite" as const };
+          expect(nextMeeting(sat, { ...fragment, kind: "debris" }, at)).toBeNull();
+        }
   });
 });

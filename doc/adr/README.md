@@ -14,7 +14,7 @@ be edited until it's accepted.
 | [0005](0005-three-js-horizon-view.md) | The sky is drawn with Three.js, as a horizon view over the station | accepted; the view it opens on superseded by 0014 |
 | [0006](0006-three-js-launchpad.md) | The launchpad is a Three.js scene, and the launch hands off to the sky | accepted |
 | [0007](0007-orbital-decay-in-closed-form.md) | Orbital decay in closed form, ending in a scripted burn-up | accepted; period law superseded by 0013 |
-| [0008](0008-collisions-predicted-in-closed-form.md) | Collisions predicted in closed form, with orbits going both ways | accepted; head-on chance superseded by 0013 |
+| [0008](0008-collisions-predicted-in-closed-form.md) | Collisions predicted in closed form, with orbits going both ways | accepted; head-on chance superseded by 0013, staging height by 0019 (proposed) |
 | [0009](0009-an-operator-you-can-claim.md) | A person is a cookie, and an operator you can claim | accepted |
 | [0010](0010-every-screen-names-who-caused-it.md) | Every screen names who caused a collision, as it happens | accepted |
 | [0011](0011-deorbiting-and-boosting.md) | Bringing your satellite down, or boosting it up a band | accepted; where the controls are superseded by 0015 |
@@ -25,3 +25,4 @@ be edited until it's accepted.
 | [0016](0016-heard-by-people.md) | A beacon is heard by people, and the sky keeps a log of what was heard | proposed |
 | [0017](0017-the-wreck-keeps-the-words.md) | When two beacons collide, the wreck keeps both their words | proposed |
 | [0018](0018-a-question-from-the-stations.md) | The stations ask a question each day, and the app says what it's for | proposed |
+| [0019](0019-staged-collisions-under-the-bands.md) | Staged collisions happen under the launch bands | proposed |
