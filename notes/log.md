@@ -2764,4 +2764,4 @@ test that a staged collision's debris stays under the bands; both failed
 first (fragments up to 1.133, staged at 1.30). Checked by eye at 1920x1080
 on a fresh database: the staged collision still plays over Canberra, just
 above the atmosphere. `pnpm check` green (328 tests, 0 errors, 0
-warnings) against a fresh build.
+warnings) against a fresh build. Commit `a286df9`.

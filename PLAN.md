@@ -139,7 +139,7 @@ _Last updated 2026-10-09 (staged collisions moved under the launch bands, ADR 00
   collision staged for a watcher met in the low band's middle, and its
   debris took nearly every low launch (3% burned up, measured). It now
   meets at radius 1.1, under the bands, and keeps its fragments there: low
-  launches burn up about 56% of the time, as 0008 intended. Next lever if
+  launches burn up about 56% of the time, as 0008 intended (`a286df9`). Next lever if
   still too forced: a close pair that may never collide.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
