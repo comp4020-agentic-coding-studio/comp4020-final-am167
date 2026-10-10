@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blame, couplet, headline, skyCount, staticFrom, type StoryParty } from "../src/lib/story.ts";
+import { blame, couplet, headline, nobodys, skyCount, staticFrom, type StoryParty } from "../src/lib/story.ts";
 
 // How a collision is told on every screen and in the catalogue (ADR 0010):
 // both sides named, neither singled out, debris passing the blame back to
@@ -88,6 +88,15 @@ describe("telling a collision", () => {
     expect(line).toContain("The derelict x: griefer.");
     expect(line).toContain("The derelict y: griefer2.");
     expect(line).toContain("The derelict was nobody's.");
+  });
+
+  // the sky's news line lets a collision like that give way to a burn-up
+  it("knows a collision that took nobody's satellite, even through a lineage", () => {
+    const dead = { ...derelict, id: 51 };
+    expect(nobodys([derelict, dead])).toBe(true);
+    expect(nobodys([debrisOf(derelict, dead), derelict])).toBe(true);
+    expect(nobodys([alpha, derelict])).toBe(false);
+    expect(nobodys([debrisOf(alpha, derelict), dead])).toBe(false);
   });
 
   it("puts the two beacons side by side, when both had one", () => {

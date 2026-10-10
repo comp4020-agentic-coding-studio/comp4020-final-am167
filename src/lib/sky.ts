@@ -1,11 +1,11 @@
-import { and, count, countDistinct, desc, eq, gt, inArray, isNotNull, isNull, lt, max, ne, or, sql, type SQL } from "drizzle-orm";
+import { TransactionRollbackError, and, count, countDistinct, desc, eq, gt, inArray, isNotNull, isNull, lt, max, ne, or, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { fatalMeeting, fragmentsOf, impactOf, nextMeeting } from "./collide.ts";
 import { listening, publish } from "./events.ts";
 import { FUEL, REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
-import { STATIONS, nextStation } from "./stations.ts";
+import { STATIONS, nextStation, type Station } from "./stations.ts";
 import { lineOf, shardsOf, type WreckPiece } from "./wreck.ts";
 import {
   BANDS,
@@ -223,7 +223,8 @@ function refreshMeetings(sky: SkyObject[]): void {
     for (const other of known) {
       // fragments of one collision start at one point: they never hit each other
       if (object.sourceCollision !== null && object.sourceCollision === other.sourceCollision) continue;
-      const at = nextMeeting(other, object, -Infinity, fatalMeeting(other, object));
+      const fatal = fatalMeeting(other, object);
+      const at = fatal === null ? null : nextMeeting(other, object, -Infinity, fatal);
       if (at === null) continue;
       const [a, b] = other.id < object.id ? [other, object] : [object, other];
       const key = `${a.id}:${b.id}`;
@@ -521,19 +522,23 @@ const echoes = (n: number, now: number) =>
     .limit(n)
     .all();
 
-export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
+// A derelict's row, with an echo if there's one to carry.
+const derelictRow = (orbit: Orbit, now: number) => {
   const [echo] = echoes(1, now);
-  const object = toObject(
-    db
-      .insert(objects)
-      .values({ kind: "derelict", band: bandAt(orbit.radius), launchedAt: now, ...orbit, words: echo?.beacon ?? null, echo: echo?.id ?? null })
-      .returning(columns)
-      .get(),
-  );
-  publish({ type: "launch", object });
+  return { kind: "derelict" as const, band: bandAt(orbit.radius), launchedAt: now, ...orbit, words: echo?.beacon ?? null, echo: echo?.id ?? null };
+};
+
+// New derelicts are announced like launches, and their collisions worked out.
+function arrived(added: SkyObject[], now: number): void {
+  for (const object of added) publish({ type: "launch", object });
   unquiet();
   refreshMeetings(live());
   announce(now);
+}
+
+export function addDerelict(orbit: Orbit, now = Date.now()): SkyObject {
+  const object = toObject(db.insert(objects).values(derelictRow(orbit, now)).returning(columns).get());
+  arrived([object], now);
   return object;
 }
 
@@ -563,45 +568,101 @@ function echoTheSilent(now: number): void {
 // ── a collision to watch (ADR 0008) ───────────────────────────────────────
 
 // When nothing is coming, a visitor could watch for an hour and see no
-// collision. So, for someone watching, and no more often than `every`, the
-// server sends two derelicts at each other: same height, opposite ways, a
-// dead-centre pass (collide.ts) that meets over a ground station, picked at
-// random, `lead` from now. The rest of the world launches too.
+// collision. So, for someone watching, every so often (`every`: a gap drawn
+// at random each time, so it doesn't come like clockwork; at a steady 5
+// minutes it was nearly all a watcher saw, ADR 0020), and for someone who
+// has just arrived no later than `newcomer` after the last, the server sends two
+// derelicts at each other: same height, opposite ways, a dead-centre pass
+// (collide.ts) that meets over a ground station, picked at random, `lead`
+// from now. The rest of the world launches too.
 //
-// They meet under the launch bands, where the debris stays (collide.ts) and
-// burns up within the hour, so a collision staged to be watched doesn't
-// take people's satellites with it. In the low band's middle, as it first
-// was, its debris was the end of nearly every low launch.
+// It's a collision to watch, and nothing more: it keeps to itself. The pair
+// meets just over the atmosphere, under the launch bands, where the wreck
+// only falls (collide.ts) and burns up within minutes. And it's only sent
+// where nothing else gets to either derelict before they meet, and nothing
+// up could ever meet a fragment of theirs; over the station picked, or
+// failing that another, or not this time. In the low band's middle, as it
+// first was, its debris was the end of nearly every low launch; at the
+// bottom of the sky but not kept to itself, it took the satellites falling
+// through to burn up, broke up the next staged pair, and set off more
+// collisions than it was.
 export const STAGE = {
-  every: 5 * 60_000,
+  every: { least: 10 * 60_000, most: 15 * 60_000 },
+  newcomer: 5 * 60_000,
   horizon: 4 * 60_000,
   lead: 25_000,
-  radius: 1.1,
+  radius: 1.08,
   // not into a sky that's already busy
   busy: 150,
 };
 let lastStaged = -Infinity;
+let nextStaging = -Infinity;
+
+// Whether two derelicts sent at each other keep to themselves: nothing else
+// gets to either before they meet, and nothing up could ever meet a fragment
+// of theirs. (Fragments fall with everything else, so whatever is out of a
+// fragment's reach when it's made stays out of it, and anything launched
+// later is higher still.) Which meeting of a pair hits, and how the wreck
+// breaks, are drawn from ids: the derelicts' are theirs, but a fragment's
+// isn't known yet, so any meeting with one counts.
+function keepsToItself(a: SkyObject, b: SkyObject, sky: SkyObject[], now: number): boolean {
+  const at = nextMeeting(a, b, now);
+  if (at === null) return false;
+  const fragments = fragmentsOf(a, b, at).map((orbit) => ({ ...orbit, kind: "debris" as const }));
+  return sky.every(
+    (other) =>
+      [a, b].every((one) => {
+        const fatal = fatalMeeting(other, one);
+        return fatal === null || (nextMeeting(other, one, -Infinity, fatal) ?? Infinity) > at;
+      }) &&
+      fragments.every((fragment) => nextMeeting(other, fragment, at) === null),
+  );
+}
 
 export function stageCollision(now = Date.now()): Conjunction | null {
-  if (now - lastStaged < STAGE.every) return null;
+  if (now < nextStaging) return null;
   if (schedule().some((hit) => hit.at > now && hit.at - now < STAGE.horizon)) return null;
-  if (live().length >= STAGE.busy) return null;
-  lastStaged = now;
+  const sky = live();
+  if (sky.length >= STAGE.busy) return null;
   const period = periodAt(STAGE.radius);
   // how far each sweeps before they meet (lead is under half a lap, so this
   // is their first meeting)
   const sweep = ((2 * Math.PI) / period) * STAGE.lead;
   const way: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
-  const station = STATIONS[Math.floor(Math.random() * STATIONS.length)];
-  const orbit = (direction: 1 | -1) => ({
+  const first = Math.floor(Math.random() * STATIONS.length);
+  const orbit = (station: Station, direction: 1 | -1) => ({
     radius: STAGE.radius,
     phase: station.angle - direction * sweep,
     period: Math.round(period),
     epoch: now,
     direction,
   });
-  const a = addDerelict(orbit(way), now);
-  const b = addDerelict(orbit(-way as 1 | -1), now);
+  // The pair goes in first, for its ids, then over the first station where
+  // it keeps to itself; if there's none it comes out again, and the next
+  // settle tries again.
+  let pair: SkyObject[];
+  try {
+    pair = db.transaction((tx) => {
+      const [a, b] = [way, -way as 1 | -1].map((direction) =>
+        toObject(tx.insert(objects).values(derelictRow(orbit(STATIONS[first], direction), now)).returning(columns).get()),
+      );
+      for (let i = 0; i < STATIONS.length; i++) {
+        const station = STATIONS[(first + i) % STATIONS.length];
+        const sent = [a, b].map((object) => ({ ...object, ...orbit(station, object.direction) }));
+        if (!keepsToItself(sent[0], sent[1], sky, now)) continue;
+        for (const object of sent) tx.update(objects).set({ phase: object.phase }).where(eq(objects.id, object.id)).run();
+        return sent;
+      }
+      return tx.rollback();
+    });
+  } catch (error) {
+    if (error instanceof TransactionRollbackError) return null;
+    throw error;
+  }
+  lastStaged = now;
+  nextStaging = now + STAGE.every.least + Math.random() * (STAGE.every.most - STAGE.every.least);
+  arrived(pair, now);
+  const [a, b] = pair;
   const hit = meetings.get(`${Math.min(a.id, b.id)}:${Math.max(a.id, b.id)}`);
   return hit ? toConjunction(hit) : null;
 }
@@ -640,8 +701,10 @@ const unquiet = () => {
 };
 
 // Someone has just opened the sky: settle now, so a collision can be
-// staged for them (stageCollision) without waiting out the quiet.
+// staged for them (stageCollision) without waiting out the quiet, and no
+// later than STAGE.newcomer after the last one.
 export function watcherArrived(): void {
+  nextStaging = Math.min(nextStaging, lastStaged + STAGE.newcomer);
   unquiet();
 }
 

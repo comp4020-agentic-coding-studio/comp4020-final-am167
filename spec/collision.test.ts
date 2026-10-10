@@ -117,6 +117,18 @@ describe("predicting a meeting", () => {
     expect(draws.filter((n) => n === 1).length).toBeLessThan(10);
   });
 
+  // a close pair isn't doomed: otherwise a satellite with a neighbour in
+  // reach, given hours, almost never burns up (ADR 0020)
+  it("lets about half of close pairs never collide, the same answer every time, but never a dead-centre pass", () => {
+    const a = { ...orbit(1.3, 0), id: 11 };
+    const pairs = Array.from({ length: 2000 }, (_, i) => ({ ...orbit(1.3 + HIT.headOn / 2, 2, -1), id: 100 + i }));
+    const never = pairs.filter((b) => fatalMeeting(a, b) === null).length / pairs.length;
+    expect(never).toBeGreaterThan(0.42);
+    expect(never).toBeLessThan(0.58);
+    for (const b of pairs.slice(0, 50)) expect(fatalMeeting(b, a)).toBe(fatalMeeting(a, b));
+    expect(fatalMeeting(a, { ...orbit(1.3, 2, -1), id: 12 })).toBe(1);
+  });
+
   it("finds a meeting to well under a millisecond, at real clock times", () => {
     const epoch = 1_790_000_000_000;
     const a = orbit(1.3, 0, 1, epoch);
@@ -183,6 +195,11 @@ describe("a wreck under the launch bands", () => {
   const at = nextMeeting(a, b, 0)!;
   const fragments = fragmentsOf(a, b, at);
   const floor = bandReach("low").min;
+
+  it("only falls: no fragment is thrown above the impact", () => {
+    const { radius } = impactOf(a, b, at);
+    for (const fragment of fragments) expect(fragment.radius).toBeLessThanOrEqual(radius);
+  });
 
   it("throws no fragment within a hit of the lowest launch", () => {
     const sat = { ...orbit(floor, 0), kind: "satellite" as const };

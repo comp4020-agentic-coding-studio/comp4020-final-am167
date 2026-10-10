@@ -2765,3 +2765,234 @@ first (fragments up to 1.133, staged at 1.30). Checked by eye at 1920x1080
 on a fresh database: the staged collision still plays over Canberra, just
 above the atmosphere. `pnpm check` green (328 tests, 0 errors, 0
 warnings) against a fresh build. Commit `a286df9`.
+
+## 2026-10-10 — Staged collisions keep to themselves (PR 10's findings)
+
+A test report on PR 10 (a comment on the PR) found the move under the
+bands only moved the harm. Every low satellite spends its last hour
+falling through 1.06–1.14, where all the staged debris now lay, so with
+someone watching through a satellite's last 40 minutes it was nearly
+always destroyed instead of burning up (finding 1). Staged pairs started
+inside the last hour's staged debris and about one in five was broken up
+before it met, so the collision announced over a station never happened
+(finding 2). And fragments packed into that thin shell met each other and
+the next pairs: a watcher saw about 20 collisions an hour, most of them
+knock-ons (finding 3). Plus a wrong figure in ADR 0019 ("burn up within
+about half an hour"; the capped fragments took an hour).
+
+Advay asked for the findings fixed. Before changing anything, rebuilt
+the reviewer's harness (the real `sky.ts` on scratch databases, the clock
+passed in, ids offset at random so each run draws different meetings;
+kept outside the repo) and reproduced the report: ~25 collisions an hour
+while watching, 13–19 of them knock-ons, 11–14% of staged pairs broken
+up, and 0 of 80 low satellites burning up when watched throughout.
+
+The fix, as one rule: a staged collision keeps to itself.
+
+- `fragmentsOf`: a collision under the low band's reach only falls; each
+  fragment goes down from the impact (still no higher than out of reach
+  of the lowest launch). From a staged collision about four in five land
+  in the atmosphere and burn up at once, streaking down from the flash.
+- `STAGE.radius` 1.1 → 1.08, so the rest burn up within 16 minutes, not
+  an hour.
+- `stageCollision` only sends a pair where nothing up meets either
+  derelict (at the meeting their ids say hits) before they meet, and
+  nothing up could meet any of their fragments at all. Heights keep their
+  order, so what's out of a fragment's reach when it's made stays out,
+  and anything launched later starts higher. It tries the station picked
+  at random, then the other two, then waits for the next settle. The
+  pair is inserted in a transaction for its ids (they decide which
+  meeting hits and how the wreck breaks) and rolled back if no station
+  suits.
+
+Swept the staging height (1.07, 1.08, 1.10) and whether debris counts in
+the check. Leaving debris out let 0.2–4.3 knock-ons an hour through;
+with it, none. 1.08 over 1.10 for a wreck that clears in 16 minutes, not
+33 (fewer later stagings held off); over 1.07 for a collision drawn a
+little clear of the airglow line.
+
+Measured, the PR's first version against this (8 or 4 runs a row):
+
+| | first version | this |
+|---|---|---|
+| 10 low launches at once, watched throughout: burned up | 0/80 | 34/80 |
+| watched only through their last 40 min | 2/80 | 18/80 |
+| never watched | 17/80 | 22/80 |
+| satellites destroyed by staged material, all runs | 65 | 0 |
+| staged pairs broken up before meeting | 11–14% | 0 |
+| collisions/h watching an empty sky | 25.5 (17.4 knock-ons) | 11.9 (0) |
+| collisions/h watching a quiet sky (3 launches/h) | 27.4 (17.5 knock-ons) | 12.3 (0) |
+
+So watching no longer costs anyone a satellite. What's left of "too
+forced": in a busy sky natural collisions still destroy most satellites,
+mid and high especially (unwatched quiet runs: about 30% low, 9% mid, 4%
+high burned up), since any close pair collides eventually; and the
+staging rate (every 5 minutes) is now met almost every time, about 12 an
+hour. Both are recorded in ADR 0019, revised in place (still proposed).
+
+TDD: four tests, each failing first against the PR's code for the
+expected reason: a wreck under the bands only falls (a fragment at
+1.1067 above a 1.0997 impact); a watched hour with two satellites in
+their last minutes either side of the staging height leaves both burned
+up (one was destroyed); and among a dozen dead-centre fragments at the
+staging height, every staged collision happens as announced, and its
+derelicts and wreck are in no other collision (18 were).
+
+### Opus review of the fix: partly resolved
+
+A fresh Opus reviewer (adversarial, read-only, its own harness in /tmp)
+checked the fix against the PR 10 report and Advay's complaint. Findings
+1–3 and the ADR wording: fixed. No satellite lost to staged material in
+~2,650 exposed, no staged pair broken up in ~3,800, one knock-on in 1,576
+(a satellite brought down through a wreck); every mutant of the guard,
+the only-falls rule or the rollback fails a new test. `stageCollision`
+at most 2.7 ms.
+
+The complaint itself is only partly resolved:
+
+- Natural collisions still destroy most satellites, in a quiet sky too:
+  about 77% at 2 launches an hour (23% burn up: low 43%, mid 14%, high
+  12%), 95% at a crit of 60 launches in an hour. Debris from natural
+  collisions does about 62% of the killing. A scratch-copy sketch of
+  "a close pair may never collide" at 50% raised quiet-sky burn-ups to
+  51%, at 75% to 78% (61% at a crit).
+- Staging is now a metronome: with nothing interrupting it, a staged
+  collision every 5:00, at r 1.0795 over a station, about 85% of what a
+  watcher sees. A marker's 10 minutes: 2.35 collisions, 1.95 of them
+  staged.
+- A watcher is never told of a burn-up: a collision story under 15
+  minutes old outranks it in the sky's news line
+  (`src/scripts/sky.ts:368–378`), and staging keeps one fresh. (Only the
+  "burned up" line; the 30-second "is burning up" line still showed when
+  no collision was under 2 minutes old, so 27% went untold, not all: the
+  second review, below.)
+- Smaller: `keepDerelicts` times its gap from the newest derelict of any
+  kind, staged ones included, so the floor drains while someone watches
+  (20 → 5 over 6 hours); a day's open tab adds ~520 staged derelicts and
+  ~1,550 fragments to the record; the tests only need one staged
+  collision an hour, and dropping the retry over the other stations
+  passes them.
+
+Corrected from it: ADR 0019 and `PLAN.md` said natural collisions kill
+most satellites "in a busy sky" (a quiet one too), the wreck "streaks
+down from the flash" (many fragments start just over the ground), and
+"anything launched later starts higher" (not a later natural fragment or
+a manoeuvre). The levers (never-collide chance, staging cadence, the news
+line) are design decisions left for Advay.
+
+## 2026-10-10 — A close pair may never collide; burn-ups shown on the sky
+
+Advay, on the review above: do levers 1 and 3 (a close pair that may
+never collide; a burn-up outranking a story about two derelicts), then
+review again. Recorded as ADR 0020 (proposed).
+
+**A close pair may never collide.** `CHANCE.ever` is the chance a pair
+within the hit distance collides at all, drawn once from its ids by a
+second draw in `fatalMeeting`, which now returns null for a pair that
+never will (so a pair that does collide hits at the same meeting as
+before). A dead-centre pass still always hits, so staging is unchanged.
+The server skips null pairs, and the check before staging treats them as
+no threat. The server tests that set two objects on a course now go
+through a helper that says plainly if a pair stops colliding.
+
+Tuned in a scratch copy with the reviewer's harness (the real `sky.ts`,
+derelict floor on, launches into random bands, every run played out),
+for `ever` = 1, 0.5, 0.4, 0.3 and 0.25. Satellites burned up, 1 → 0.4:
+quiet sky 18% → 66%, tab open 19% → 60%, unwatched 22% → 65%, gentle
+crit 16% → 63%, crit 4% → 45%, busy 7% → 31%. 0.4 because most
+satellites burn up in a quiet sky while crowding still costs; 0.3 and
+0.25 flatten that difference. PLAN.md's "collisions scale with
+satellites" re-checked: 0/5/20/50 people's satellites held up give
+0.2/0.1/0.2/7.8 collisions an hour (were 1.7/0.5/4.8/126).
+
+**Burn-ups shown.** `nobodys` (story.ts) says a collision took nobody's
+satellite (only derelicts, or debris from theirs). The sky's news line
+leaves those out while a person's satellite is burning up or burned up
+in the last 15 minutes; a collision coming still comes first, and the
+collision's own card still pops up. Burn-ups hidden from a watcher in
+the harness: 69 of 70 → 1 of 71 (tab open), 46 of 53 → 6 (busy). (Wrong,
+as the next review found: the old harness's model of the line ignored
+"is burning up on re-entry", so before the change 27% were hidden, not
+nearly all; see the next entry.) Seen
+live on a fresh database at 1920x1080: launched EMBER and brought it
+down; the line read "EMBER was brought down, and burned up 2 min ago"
+through the next staged collision, which still got its 25-second warning
+and its card.
+
+TDD: a unit test that most close pairs never collide (share within 0.05
+of `1 - CHANCE.ever` over 2,000 pairs), the same answer either way round,
+and a dead-centre pass always hits; and one that `nobodys` tells a
+derelicts-only collision from one tracing to someone's satellite. Both
+failed first (no never-collide; no helper). `pnpm check` green (334
+tests, 0 errors, 0 warnings) against a fresh build; `pnpm test:layout`
+12 of 12; `pnpm check:evidence` green.
+
+Still open (not chosen): staging every 5 minutes is now nearly all a
+watcher sees (97% in a quiet sky; 59 of 60 marker sessions saw only
+staged collisions); `keepDerelicts` counts staged derelicts.
+
+### Second Opus review, and the round after it
+
+A fresh Opus reviewer (adversarial, read-only) re-measured with its own
+harness, which replays the sky page's news line line by line on the real
+event stream. Verdict: burn-ups improved but not resolved (64–70% now
+burn up in a quiet sky, was 17–23%), and "too often and too forced" no
+better in a quiet sky (95% of what a watcher saw was staged, every 5
+minutes; 89 of 100 markers saw only staged collisions). It found:
+
+- the "69 of 70 burn-ups hidden" baseline above was wrong: the old line's
+  30-second "is burning up" text counted, so 27% were hidden before, and
+  the honest measure is time on the line (about 18 seconds a burn-up
+  before, about 10 minutes after);
+- news-line edge cases in my change: dropping nobody's collisions from
+  the list let an older collision of someone's come back above the
+  burn-up; your own destroyed satellite switched the filter off; the
+  change had no test;
+- the never-collide test passed with the rule reverted (it compared with
+  the constant); crowding barely raises the risk below about 40
+  satellites up; nothing tells someone who comes back that theirs burned
+  up.
+
+Advay: natural collisions a bit more often, and staging every 10 to 15
+minutes instead of 5. Done, as ADR 0020 (revised in place, renamed
+`0020-fewer-less-forced-collisions.md`):
+
+- `CHANCE.ever` 0.4 → 0.5.
+- Staging waits a random 10 to 15 minutes after the last (`STAGE.every`),
+  or 5 (`STAGE.newcomer`) for someone who has just opened the sky
+  (`watcherArrived`), so a marker's ten minutes still see one.
+- The news line's choices are pure functions in `src/lib/news.ts`:
+  `freshBurnUp` (never one of yours destroyed) and `storyToTell` (the
+  newest collision, unless a fresh burn-up is newer or it took nobody's
+  satellite; never an older one in its place). The sky script uses them.
+- Figures above corrected in place where they were wrong (this log, ADR
+  0019, PLAN.md).
+
+Measured with the reviewer's harness, its news-line replica now calling
+the repo's own `news.ts`, and a "newcomer" measure added (did someone who
+has just arrived see a collision in their first 10 minutes?). Staging
+every 5 / fixed 10 / fixed 15 / random 10–15 / random 10–15 plus the
+newcomer rule, all at 0.5: collisions a watcher sees an hour with a tab
+open 11.7 / 6.6 / 4.6 / 5.5 / 6.2; newcomers who saw one 100 / 95 / 68 /
+82 / 99%. Chose the last. Before ADR 0020 → now: satellites burned up,
+quiet 17% → 58%, tab 23% → 55%, unwatched 20% → 56%, crit of 60 7% →
+33%, busy 7% → 25%; collisions a watcher sees an hour, quiet 14.4 → 7.5
+(staged 79% → 89%), crit 26.7 → 10.9; burn-ups watched through their
+plunge that the line told 64–73% → 100%; line time about a burn-up with
+a tab open 0.2% → 13%. Gaps between staged collisions: median 12
+minutes, irregular. PLAN.md's scaling check at 0.5: 0/5/20/40/50 people's
+satellites up give 0.1/0.2/0.6/3.9/11.9 collisions an hour.
+
+TDD, each failing first for the expected reason: about half of close
+pairs never collide (a fixed band, 0.42–0.58: fails at 0.4 and at 1);
+staged collisions 10 to 15 minutes apart, never at one steady beat;
+someone just arrived gets one 5 minutes after the last, someone already
+watching doesn't; and `news.ts`'s choices (the latest real burn-up past
+your own destroyed one; nobody's or older collisions give way; no older
+collision comes back).
+
+Still open, for Advay: the line is still mostly staged collisions while
+no burn-up is fresh (drop them? their card tells them); nothing tells
+someone who comes back that theirs burned up; crowding bites only once
+people outnumber the derelict floor; `keepDerelicts` counts staged
+derelicts.

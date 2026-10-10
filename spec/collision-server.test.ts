@@ -10,6 +10,7 @@ import { wordsOf } from "../src/lib/wreck.ts";
 import { sharedQuestion } from "../src/lib/story.ts";
 import { momentsOf, plain, summaryOf, tornFromOf, tracedTo } from "../src/lib/chronicle.ts";
 import type { SkyEvent } from "../src/lib/events.ts";
+import type { Conjunction } from "../src/lib/sky.ts";
 
 // The server's side of collisions (ADR 0008): a collision is predicted and
 // announced before it happens, applied when its time comes (both objects
@@ -46,6 +47,14 @@ async function freshServer() {
 const HOUR = 3_600_000;
 // in the future, so the server's own wake-up timers never fire mid-test
 const T = Date.now() + 10 * 24 * HOUR;
+
+// When two objects these tests set on a course collide. A close pair may
+// never collide (ADR 0020), so this says so rather than failing obscurely.
+function whenTheyHit(a: Parameters<typeof fatalMeeting>[0], b: Parameters<typeof fatalMeeting>[1]): number {
+  const nth = fatalMeeting(a, b);
+  if (nth === null) throw new Error(`objects ${a.id} and ${b.id} never collide: pick another pair`);
+  return Math.round(nextMeeting(a, b, T, nth)!);
+}
 const orbit = (radius: number, phase: number, direction: 1 | -1, epoch = T): Elements => ({
   radius,
   phase,
@@ -67,7 +76,7 @@ describe("a collision, on the server", async () => {
   const a = sky.addDerelict(orbit(1.3, 0, 1), T);
   const b = sky.addDerelict(orbit(1.3 + HIT.headOn / 2, 2, -1), T);
   // most meetings miss: the pair's ids say which one hits
-  const at = Math.round(nextMeeting(a, b, T, fatalMeeting(a, b))!);
+  const at = whenTheyHit(a, b);
 
   it("is announced to everyone before it happens", () => {
     const conjunction = heard.find((e) => e.type === "conjunction");
@@ -191,7 +200,7 @@ describe("who a collision names (ADR 0010)", async () => {
   };
   const alpha = put({ owner: "alice", callsign: "ALPHA", beacon: "hello from alpha", ...orbit(1.3, 0, 1) });
   const bravo = put({ owner: "bob", callsign: "BRAVO", beacon: "bravo here", ...orbit(1.3 + HIT.headOn / 2, 2, -1) });
-  const at = Math.round(nextMeeting(alpha, bravo, T, fatalMeeting(alpha, bravo))!);
+  const at = whenTheyHit(alpha, bravo);
   const collisions = () => heard.flatMap((e) => (e.type === "collision" ? [e.collision] : []));
 
   it("names both, with their beacons and their operators' handles, as a couplet", async () => {
@@ -403,7 +412,7 @@ describe("a wreck in a nearly full sky", async () => {
   const b = put("ben", "every light up here was somebody's idea", orbit(1.3 + HIT.headOn / 2, 2, -1));
 
   it("still carries every word of both, in the fragments it has room for", () => {
-    const at = Math.round(nextMeeting(a, b, T, fatalMeeting(a, b))!);
+    const at = whenTheyHit(a, b);
     const [hit] = sky.settle(at + 1).collisions;
     expect(hit.fragments).toHaveLength(2);
     const carried = hit.fragments.flatMap((f) => (f.words ? wordsOf(f.words) : []));
@@ -428,7 +437,7 @@ describe("a derelict's echo", async () => {
     expect(dead).toMatchObject({ kind: "derelict", words: gone.beacon, echo: gone.id });
     // a satellite on the same height the other way round: dead centre
     const moth = { ...db.insert(schema.objects).values({ kind: "satellite", owner: "mo", callsign: "MOTH", beacon: "every bird I've seen from my window", band: "low", launchedAt: T, ...orbit(1.36, 2, -1) }).returning().get(), kind: "satellite" as const, direction: -1 as const };
-    const at = Math.round(nextMeeting(dead, moth, T, fatalMeeting(dead, moth))!);
+    const at = whenTheyHit(dead, moth);
     const [hit] = sky.settle(at + 1).collisions;
     expect(hit.parties.find((p) => p.kind === "derelict")).toMatchObject({ words: gone.beacon, echoOf: "LANTERN" });
     const carried = hit.fragments.flatMap((f) => (f.words ? wordsOf(f.words) : []));
@@ -481,7 +490,7 @@ describe("two answers that collide", async () => {
   const b = { ...put("ben", "Who do you wish were listening?", orbit(1.33, 2, -1)), kind: "satellite" as const, direction: -1 as const };
 
   it("keeps the question each was answering, so the collision can say so", () => {
-    const at = Math.round(nextMeeting(a, b, T, fatalMeeting(a, b))!);
+    const at = whenTheyHit(a, b);
     sky.settle(at + 1);
     const [story] = sky.recentCollisions(1);
     expect(story.parties.map((p) => p.question)).toEqual(["Who do you wish were listening?", "Who do you wish were listening?"]);
@@ -509,7 +518,48 @@ describe("a collision staged over a station", async () => {
     const after = sky.conjunctions(T)[0].at + 1;
     sky.settle(after);
     expect(sky.stageCollision(after + 60_000)).toBeNull();
-    expect(sky.stageCollision(after + sky.STAGE.every)).not.toBeNull();
+    expect(sky.stageCollision(after + sky.STAGE.every.most)).not.toBeNull();
+  });
+});
+
+// Staged every 5 minutes, it came like clockwork, and with fewer natural
+// collisions it was nearly all a watcher saw (the second review, 2026-10-10).
+// A marker has ten minutes: someone who has just opened the sky gets one
+// no later than STAGE.newcomer after the last, not up to 15 minutes on.
+describe("a collision staged for someone who has just arrived", async () => {
+  const { sky } = await freshServer();
+  const first = sky.stageCollision(T)!;
+  sky.settle(first.at + 1);
+  const soon = T + sky.STAGE.newcomer + 60_000;
+
+  it("comes sooner than the usual gap, but not for someone already watching", () => {
+    expect(soon).toBeLessThan(T + sky.STAGE.every.least);
+    expect(sky.stageCollision(soon)).toBeNull();
+    sky.watcherArrived();
+    expect(sky.stageCollision(soon)).not.toBeNull();
+  });
+});
+
+describe("collisions staged for someone watching for hours", async () => {
+  const { sky } = await freshServer();
+  const random = vi.spyOn(Math, "random").mockImplementation(seeded(5));
+  const times: number[] = [];
+  try {
+    for (let t = T; t < T + 4 * HOUR; t += 15_000) {
+      sky.settle(t);
+      const staged = sky.stageCollision(t);
+      if (staged) times.push(t);
+    }
+  } finally {
+    random.mockRestore();
+  }
+  const gaps = times.slice(1).map((t, i) => (t - times[i]) / 60_000);
+
+  it("come 10 to 15 minutes apart, never at one steady beat", () => {
+    expect(gaps.length).toBeGreaterThan(10);
+    for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(10);
+    expect(Math.min(...gaps)).toBeLessThan(12);
+    expect(Math.max(...gaps)).toBeGreaterThan(13);
   });
 });
 
@@ -525,6 +575,79 @@ describe("a staged collision's debris", async () => {
     const debris = sky.liveSky(staged.at + 1).filter((o) => o.kind === "debris");
     expect(debris).toHaveLength(2 * FRAGMENTS.perObject);
     for (const fragment of debris) expect(fragment.radius).toBeLessThan(bandReach("low").min);
+  });
+});
+
+// A staged collision is there to be watched, and does nothing else: its pair
+// meets nothing first, and its debris meets nothing at all. Once, its debris
+// lay where satellites fall to burn up and took them, broke up the next
+// staged pair, and set off more collisions than were staged (the review of
+// PR 10).
+type Sky = typeof import("../src/lib/sky.ts");
+
+// Someone watching for an hour: the server settles, and tries to stage a
+// collision, every 15 seconds. Then everything plays out.
+function watch(sky: Sky, from: number): Conjunction[] {
+  const random = vi.spyOn(Math, "random").mockImplementation(seeded(11));
+  try {
+    const staged: Conjunction[] = [];
+    for (let t = from; t < from + HOUR; t += 15_000) {
+      sky.settle(t);
+      const conjunction = sky.stageCollision(t);
+      if (conjunction) staged.push(conjunction);
+    }
+    sky.settle(from + 6 * HOUR);
+    return staged;
+  } finally {
+    random.mockRestore();
+  }
+}
+
+describe("a collision staged while satellites fall to burn up", async () => {
+  const { sky, db, schema } = await freshServer();
+  // two people's satellites in their last minutes, either side of where
+  // staged collisions happen (too far apart to meet each other)
+  const put = (owner: string, values: Elements) =>
+    db
+      .insert(schema.objects)
+      .values({ kind: "satellite", owner, callsign: owner.toUpperCase(), beacon: `${owner}'s line`, band: "low", launchedAt: values.epoch, ...values })
+      .returning()
+      .get();
+  const satellites = [put("ann", orbit(sky.STAGE.radius + 0.004, 0, 1)), put("ben", orbit(sky.STAGE.radius - 0.012, 3, -1))];
+  const staged = watch(sky, T);
+
+  it("takes neither of them: both burn up", () => {
+    expect(staged.length).toBeGreaterThan(0);
+    const rows = sky.catalogue("all", undefined);
+    for (const { id } of satellites) expect(rows.find((o) => o.id === id)).toMatchObject({ fate: "decayed" });
+  });
+});
+
+describe("a collision staged among debris", async () => {
+  const { sky, db, schema } = await freshServer();
+  // a dozen fragments of some old collision right at the staging height,
+  // going both ways: the first meeting of any of them with a derelict there
+  // would hit
+  const random = seeded(7);
+  for (let i = 0; i < 12; i++) {
+    const values = orbit(sky.STAGE.radius, random() * 2 * Math.PI, random() < 0.5 ? 1 : -1);
+    db.insert(schema.objects).values({ kind: "debris", band: "low", launchedAt: T, sourceCollision: 999_999, ...values }).run();
+  }
+  const staged = watch(sky, T);
+  const log = sky.collisionLog();
+
+  it("happens as announced, every time", () => {
+    expect(staged.length).toBeGreaterThan(0);
+    for (const { a, b, at } of staged) expect(log).toContainEqual(expect.objectContaining({ a, b, at }));
+  });
+
+  it("sets nothing else off", () => {
+    // its derelicts, and the fragments they left, are in no other collision
+    const pairs = new Set(staged.flatMap(({ a, b }) => [a, b]));
+    const own = new Set(log.filter((c) => pairs.has(c.a) && pairs.has(c.b)).map((c) => c.id));
+    const wreck = sky.catalogue("all", undefined).filter((o) => o.sourceCollision !== null && own.has(o.sourceCollision));
+    const theirs = new Set([...pairs, ...wreck.map((o) => o.id)]);
+    expect(log.filter((c) => (theirs.has(c.a) || theirs.has(c.b)) && !own.has(c.id))).toEqual([]);
   });
 });
 

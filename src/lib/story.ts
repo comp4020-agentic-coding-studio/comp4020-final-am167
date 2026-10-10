@@ -79,6 +79,11 @@ export function headline([a, b]: readonly [StoryParty, StoryParty]): string {
   return `${capital(describe(a))} and ${describe(b)} collided`;
 }
 
+// Whether a collision took nobody's satellite: only derelicts met, or
+// debris from theirs.
+export const nobodys = (parties: readonly [StoryParty, StoryParty]): boolean =>
+  parties.every((party) => party.kind === "derelict" || (party.kind === "debris" && (party.from ?? []).every((root) => root.kind === "derelict")));
+
 // "ALPHA: launched without a handle. BRAVO: skywriter." Everyone the
 // collision traces back to, debris resolved to its roots, each once, and the
 // derelicts, which nobody launched, said once at the end. Sorted by what each

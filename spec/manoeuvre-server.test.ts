@@ -59,6 +59,14 @@ const HOUR = 3_600_000;
 // in the future, so the server's own wake-up timers never fire mid-test
 const T = Date.now() + 10 * 24 * HOUR;
 
+// When two objects these tests set on a course collide. A close pair may
+// never collide (ADR 0020), so this says so rather than failing obscurely.
+function whenTheyHit(a: Parameters<typeof fatalMeeting>[0], b: Parameters<typeof fatalMeeting>[1]): number {
+  const nth = fatalMeeting(a, b);
+  if (nth === null) throw new Error(`objects ${a.id} and ${b.id} never collide: pick another pair`);
+  return Math.round(nextMeeting(a, b, T, nth)!);
+}
+
 describe("bringing a satellite down", async () => {
   const { sky, heard, put } = await freshServer();
   const sat = put("alice", 1.35, 1, 1);
@@ -140,7 +148,7 @@ describe("a manoeuvre and the collisions coming", async () => {
   const { sky, heard, put } = await freshServer();
   const a = put("dave", 1.3, 0, 1);
   const b = put("erin", 1.3 + HIT.headOn / 2, 2, -1);
-  const at = Math.round(nextMeeting(a, b, T, fatalMeeting(a, b))!);
+  const at = whenTheyHit(a, b);
 
   it("calls off a collision its old orbit was heading for, and tells everyone", () => {
     expect(sky.conjunctions(T).map((c) => [c.a, c.b, c.at])).toEqual([[a.id, b.id, at]]);

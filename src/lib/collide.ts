@@ -35,9 +35,15 @@ export const SIZE = {
 // a bigger chance. Head-on meetings were three times as frequent before the
 // orbits slowed (ADR 0013); each is three times the chance it was, so
 // collisions come about as often as they did.
+//
+// And not every close pair ever collides (ADR 0020): `ever` is the chance it
+// does, drawn once from its ids too. Otherwise a pair in reach met so often
+// over hours that nearly every satellite with a neighbour was destroyed
+// before it could burn up.
 export const CHANCE = {
   headOn: 0.06,
   lapping: 0.5,
+  ever: 0.5,
 };
 
 // A pass closer than this share of the hit distance is dead centre: it
@@ -62,11 +68,12 @@ export const FRAGMENTS = {
   keepDirection: 0.7,
 };
 
-// A collision under the launch bands keeps its fragments under them, out of
-// reach of the lowest launch: heights keep their order as everything falls,
-// so nothing launched since can meet them. The server stages its collisions
-// there (src/lib/sky.ts); in the low band's middle their debris took nearly
-// every low launch with it.
+// A collision under the launch bands only falls: its fragments go down from
+// the impact, never up, and no higher than out of reach of the lowest
+// launch. Heights keep their order as everything falls, so nothing launched
+// since can meet them, and those knocked into the atmosphere burn up at
+// once. The server stages its collisions there (src/lib/sky.ts); in the low
+// band's middle their debris took nearly every low launch with it.
 const FLOOR = bandReach("low").min;
 const CEILING = FLOOR - (Math.max(HIT.headOn, HIT.lapping) * (SIZE.satellite + SIZE.debris)) / 2;
 
@@ -196,15 +203,15 @@ export function fragmentsOf<T extends Sized & { id: number }>(a: T, b: T, at: nu
   const [first, second] = a.id < b.id ? [a, b] : [b, a];
   const random = seeded(first.id * 100_003 + second.id);
   const impact = impactOf(first, second, at);
-  // under the launch bands, no higher than CEILING
-  const highest = impact.radius < FLOOR ? CEILING : Infinity;
-  const maxSpread = Math.max(0, Math.min(FRAGMENTS.maxSpread, highest - impact.radius));
+  // under the launch bands, falling from no higher than CEILING
+  const under = impact.radius < FLOOR;
+  const top = Math.min(impact.radius, CEILING);
   const fragments: Elements[] = [];
   for (const parent of [first, second]) {
     if (parent.kind === "debris") continue;
     for (let i = 0; i < FRAGMENTS.perObject; i++) {
-      const spread = Math.max(-1, Math.min(1, normal(random) / 2)) * maxSpread;
-      const radius = Math.max(Math.min(impact.radius + spread, highest), DECAY.endRadius + 0.01);
+      const spread = Math.max(-1, Math.min(1, normal(random) / 2)) * FRAGMENTS.maxSpread;
+      const radius = Math.max(under ? top - Math.abs(spread) : impact.radius + spread, DECAY.endRadius + 0.01);
       const phase = impact.angle + (random() * 2 - 1) * FRAGMENTS.angleSpread;
       const keep = random() < FRAGMENTS.keepDirection;
       fragments.push({
@@ -219,13 +226,16 @@ export function fragmentsOf<T extends Sized & { id: number }>(a: T, b: T, at: nu
   return fragments;
 }
 
-// Which meeting of two objects is the one that hits (1 for the first): drawn
-// from the pair's ids, so the same pair always gets the same answer.
-export function fatalMeeting(a: Sized & { id: number }, b: Sized & { id: number }): number {
+// Which meeting of two objects is the one that hits (1 for the first), or
+// null if none ever does: drawn from the pair's ids, so the same pair always
+// gets the same answer. A pass dead centre always hits.
+export function fatalMeeting(a: Sized & { id: number }, b: Sized & { id: number }): number | null {
   const start = Math.max(a.epoch, b.epoch);
   if (Math.abs(radiusAt(a, start) - radiusAt(b, start)) < hitDistance(a, b) * DEAD_CENTRE) return 1;
   const chance = directionOf(a) === directionOf(b) ? CHANCE.lapping : CHANCE.headOn;
   const [low, high] = a.id < b.id ? [a.id, b.id] : [b.id, a.id];
-  const draw = seeded(low * 100_003 + high + 0x5bd1e995)();
+  const random = seeded(low * 100_003 + high + 0x5bd1e995);
+  const draw = random();
+  if (random() >= CHANCE.ever) return null;
   return Math.max(1, Math.ceil(Math.log(1 - draw) / Math.log(1 - chance)));
 }
