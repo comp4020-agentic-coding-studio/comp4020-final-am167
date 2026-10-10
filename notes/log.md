@@ -3108,3 +3108,13 @@ settle; it came down to their own judgement. The README "Me:" note stays
 until the README is written. `pnpm check:evidence` green.
 
 Commit `035768e`.
+
+## 2026-10-10 — Crit 9 reflection
+
+Drafted `reflections/crit-9.md` with Advay, then cut to 169 words and
+reworded so it doesn't repeat `PROCESS.md`. The breakthrough: the app
+worked but gave a visitor no reason to care, until messages were heard by
+real people and a collision cost both owners their words. The change in
+them: a passing suite isn't proof the work is done; they use what they
+build before calling it finished. `PLAN.md`'s C9 list marks `PROCESS.md`
+and the reflection done. `pnpm check:evidence` green.

@@ -122,10 +122,9 @@ _Last updated 2026-10-10 (staged collisions keep to themselves; a close pair may
   review acted on. See `notes/log.md`.
 - **C9 cutoff:** Mon 12 Oct 2026, 12:00.
 - **Next, for C9 (write-ups only; nothing left to build):**
-  1. `PROCESS.md`: the C9 part (it stops at the C8 slice), from
-     `notes/log.md`, including the layout test as a harness
-     change (a correction Claude kept needing, made a check).
-  2. `reflections/crit-9.md` (Advay's).
+  1. ~~`PROCESS.md`: the C9 part~~ Done 2026-10-10, except the README
+     note, left until the README is written.
+  2. ~~`reflections/crit-9.md` (Advay's)~~ Done 2026-10-10.
   3. Before the cutoff: `pnpm check` against a fresh build, then preflight.
 - **The launchpad fits a desktop (fixed 2026-10-08, at Advay's request):**
   `pnpm test:layout` passes 12 of 12. The notices are one compact box, the
