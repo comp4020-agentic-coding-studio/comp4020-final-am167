@@ -587,6 +587,12 @@ flow, beacon rules, launch limits, bands.
   collisions per hour once orbits slowed.
 - **C10:** how fuel works, and whether it refills (moved with dodging;
   boosting needs none).
+- **C10:** whether to seed the sky with launches the server makes (resident
+  operators, PR 5, closed 2026-10-10 with its commits kept on the PR). The
+  balancing after PR 10 (ADRs 0019 and 0020) changed how often collisions
+  happen and how many satellites burn up, so seeding needs rethinking
+  against that balance, not merging as it was. Its proposed ADR was never
+  merged; the number it used (0015) has since gone to another record.
 - ~~**C9:** exact cooldown length~~: replaced by a one-minute gap between
   launches (2026-10-06).
 - ~~**Week 12 (or sooner):** whether to move the sky's rendering to
