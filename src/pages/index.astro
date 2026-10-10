@@ -1192,6 +1192,15 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     border-color: var(--amber-dim);
   }
 
+  /* A phone can't fit both readouts and the skip button on one row, so the
+     readouts stack, clear of the button. */
+  @media (max-width: 30rem) {
+    .hud-readouts {
+      flex-direction: column;
+      gap: 0;
+    }
+  }
+
   /* Without the scene, the drawn rocket lifts off and the ground falls away. */
   :global(body.launching:not(.has-scene)) .flame {
     opacity: 1;

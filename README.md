@@ -29,6 +29,7 @@ through limits; for strangers, the sky's rules are the limit.
 
 ## What is enforced and what is judged
 
+Enforced, and tested:
 
 - a launch reaches other sessions within a second, even without JavaScript
 - a minute between launches; at most 200 satellites up

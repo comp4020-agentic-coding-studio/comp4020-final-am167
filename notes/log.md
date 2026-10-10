@@ -3155,3 +3155,30 @@ container has no Chrome. The launchpad chunk is 13.4 KB gzipped of its
 14 KB budget, and the client 266.8 KB of 270 KB.
 
 Commit `12a2c2b`.
+
+## 2026-10-11 — Issue #12: the viewport review's two findings
+
+Issue #12 reviewed the app at both marking viewports and reported two
+faults. Both reproduced on a fresh build of `12a2c2b` before fixing.
+
+- **Phone: "Skip to the sky" covered the launch readout.** At 390x844 the
+  button (x 246 to 374) sat on the HUD's readout row (x 16 to 269), so
+  `VEL 0.00 km/s` read `VEL 0.00 km/`. Both are fixed to `bottom: 2rem`,
+  and the side-by-side readouts were too wide to fit beside the button.
+  Below 30rem the readouts now stack (ALT over VEL), so the HUD ends at
+  x 207, clear of the button; no HUD line overlaps it. Desktop is
+  unchanged (the HUD ends at x 293, the button starts at x 1752).
+- **README: the tested list had no lead-in.** Under "What is enforced and
+  what is judged" the first list followed the heading straight on, while
+  the second had "Judged, not tested:". Added "Enforced, and tested:",
+  which also shows on `/readme/`.
+
+- **`/readme/` sat in the left half of a desktop window.** Its column had
+  a max width but no auto margins, unlike `/why/` and `/kessler/`. It now
+  centres the same way. The column also widens from 42rem to 60rem, on
+  request, so paragraphs use more of a wide screen: 960px, centred,
+  at 1920x1080 and 1440x900, and full width with no sideways overflow on
+  a phone.
+
+`pnpm check` green (345 tests, 0 errors, 0 warnings); `pnpm test:layout`
+12 of 12.
