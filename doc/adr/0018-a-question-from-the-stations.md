@@ -1,6 +1,6 @@
 # 0018. The stations ask a question each day, and the app says what it's for
 
-**Status:** proposed (2026-10-07). Settles `PLAN.md`'s "A purpose" (2026-10-06),
+**Status:** accepted (2026-10-10; proposed 2026-10-07). Settles `PLAN.md`'s "A purpose" (2026-10-06),
 with ADRs 0016 and 0017.
 
 ## Context

@@ -1,6 +1,6 @@
 # 0016. A beacon is heard by people, and the sky keeps a log of what was heard
 
-**Status:** proposed (2026-10-07). Supersedes the beacon rules' 60
+**Status:** accepted (2026-10-10; proposed 2026-10-07). Supersedes the beacon rules' 60
 characters (`PLAN.md`, "Beacon rules", 2026-10-04) and, in part, ADR 0012's
 rule that a flying satellite's beacon is withheld from its history.
 

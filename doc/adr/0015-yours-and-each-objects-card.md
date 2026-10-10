@@ -1,6 +1,6 @@
 # 0015. Your satellites are managed from "Yours" and from each one's card
 
-**Status:** proposed (2026-10-07). Supersedes where ADR 0011 put the
+**Status:** accepted (2026-10-10; proposed 2026-10-07). Supersedes where ADR 0011 put the
 controls (the sky's station panel) and how ADR 0012 shows a history (a
 panel over the sky, and a page of its own).
 

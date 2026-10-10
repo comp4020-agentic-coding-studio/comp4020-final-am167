@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-10 (staged collisions keep to themselves; a close pair may never collide; staging irregular, 10 to 15 minutes apart; burn-ups told first; ADRs 0015–0020 still proposed)._
+_Last updated 2026-10-10 (staged collisions keep to themselves; a close pair may never collide; staging irregular, 10 to 15 minutes apart; burn-ups told first; ADRs 0015–0020 accepted; C10 leftovers sorted)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -65,7 +65,7 @@ _Last updated 2026-10-10 (staged collisions keep to themselves; a close pair may
     on the whole planet with a beacon panel per station, and the horizon
     over any station one click away.
   - Not built, though once listed for C9: conjunction alerts and dodging
-    (moved to C10).
+    (moved to C10; a maybe since 2026-10-10).
 - **Overnight round, 2026-10-07 (branch `claude/nifty-thompson-s7cine`, a
   PR for Advay; not on `main`):** Advay's list after playing with the app,
   each built, tested and logged in `notes/log.md`, the four design changes
@@ -134,7 +134,7 @@ _Last updated 2026-10-10 (staged collisions keep to themselves; a close pair may
   tiles). The tightest case (1440x790, just launched) has 21px to spare.
   Run it after any change to the launchpad or the sky.
 - **Staged collisions under the bands (2026-10-09, Advay: collisions felt
-  too forced, satellites never burned up; ADR 0019, proposed):** the
+  too forced, satellites never burned up; ADR 0019, accepted):** the
   collision staged for a watcher met in the low band's middle, and its
   debris took nearly every low launch (3% burned up, measured). It now
   meets at radius 1.1, under the bands, and keeps its fragments there: low
@@ -155,7 +155,7 @@ _Last updated 2026-10-10 (staged collisions keep to themselves; a close pair may
   like clockwork (about 85% of what a watcher sees); and the sky's news
   line barely told of a burn-up while collisions kept coming (30 seconds
   at most). Advay chose
-  (2026-10-10, ADR 0020, proposed, after a second Opus review): each close
+  (2026-10-10, ADR 0020, accepted, after a second Opus review): each close
   pair collides at all with a chance of 0.5; staging waits a random 10 to
   15 minutes (5 for someone who has just opened the sky); and the news
   line tells a person's burn-up before a collision that took nobody's
@@ -225,11 +225,11 @@ everyone a little?** See "What Kessler is for" below.
 | ~~Overhead (2026-10-04)~~ | ~~**One shared ground station**~~, a fixed point on the planet. A beacon shows to everyone when its satellite crosses that arc, so everyone reads the same line at the same moment. The station is the launchpad. |
 | Launch flow (2026-10-04) | The landing page is the **launchpad** with the launch form. Launching plays a rocket rising, then the camera **pans up** into the orbit view and the new satellite appears. C8 gets a simple version of the pan; the cinematic version is week 12 polish. Without JS the form still posts and redirects to the orbit view. |
 | ~~Beacon rules (2026-10-04)~~ | ~~**At most 60 characters**~~, plain text, no URLs, a small word blocklist. Shown in the sky while the satellite is live; the catalogue keeps it after. Length replaced by the row below. |
-| Beacon length (2026-10-07, ADR 0016, proposed) | **140 characters**: a thought, not a slogan, readable in the dozen seconds a low satellite is over a station. Several overhead take turns sized to the line (4 to 10 s). |
-| Heard by people (2026-10-07, ADR 0016, proposed) | **A pass over a station while people have the sky open is heard**: logged, and each listener who isn't the owner counted once ("heard by", people not tabs; cookies hashed). A **Heard** feed beside the sky; who's listening now. A beacon is public in the feed once heard (ADR 0012's withholding until it's gone is relaxed). |
-| The wreck keeps the words (2026-10-07, ADR 0017, proposed) | **Each fragment carries a run of words from each colliding line**, heard over the stations as static; "the wreck says" fades as fragments burn up; each owner gets the encounter in Yours. Replaces "fragments carrying words can come later". |
-| Question of the day (2026-10-07, ADR 0018, proposed) | **The stations ask one question a day** (fixed list, `src/lib/questions.ts`, turning at midnight in Canberra); a beacon can answer it (a box to tick, not ticked by default). Two answers that collide say so. |
-| Managing yours (2026-10-07, ADR 0015, proposed) | **Boost and bring down from Yours (`/catalogue/?show=mine`) and from each satellite's pop-up card**, never the station panel. Every object's history pops up as a card. |
+| Beacon length (2026-10-07, ADR 0016, accepted) | **140 characters**: a thought, not a slogan, readable in the dozen seconds a low satellite is over a station. Several overhead take turns sized to the line (4 to 10 s). |
+| Heard by people (2026-10-07, ADR 0016, accepted) | **A pass over a station while people have the sky open is heard**: logged, and each listener who isn't the owner counted once ("heard by", people not tabs; cookies hashed). A **Heard** feed beside the sky; who's listening now. A beacon is public in the feed once heard (ADR 0012's withholding until it's gone is relaxed). |
+| The wreck keeps the words (2026-10-07, ADR 0017, accepted) | **Each fragment carries a run of words from each colliding line**, heard over the stations as static; "the wreck says" fades as fragments burn up; each owner gets the encounter in Yours. Replaces "fragments carrying words can come later". |
+| Question of the day (2026-10-07, ADR 0018, accepted) | **The stations ask one question a day** (fixed list, `src/lib/questions.ts`, turning at midnight in Canberra); a beacon can answer it (a box to tick, not ticked by default). Two answers that collide say so. |
+| Managing yours (2026-10-07, ADR 0015, accepted) | **Boost and bring down from Yours (`/catalogue/?show=mine`) and from each satellite's pop-up card**, never the station panel. Every object's history pops up as a card. |
 | Launch limits (2026-10-04) | ~~One live satellite per person, plus a cooldown~~ (starting at 10 minutes) after your satellite dies or is deorbited, so relaunching costs something. Replaced 2026-10-06, below. |
 | Launch limits (2026-10-06) | **Any number up, one minute apart** (first a minute; Advay set five the same day, after one person launching nonstop took the sky from 2 collisions an hour to 60, and three filled it to its cap). Advay: "someone can send more satellites to send more messages but increase the risk of ruining it for all". Each launch is another beacon heard and another object everyone shares the sky with; the gap is between your launches, not after one dies. The sky cap (200 satellites) stays as the machine's backstop. Replaces "one each keeps it fair" (ADR 0002, superseded): the commons is now tested by how much each person takes, not rationed. |
 | Collisions scale with satellites (2026-10-06) | **A requirement from Advay:** the more satellites up, the more collisions. The model does this (more than linearly, the shape of a real cascade): measured with people's satellites held steady, 0 or 5 people up give 1 to 4 collisions an hour (the derelict floor of 20 dominates), 20 give about 20, 50 give about 130. Advay kept the floor at 20 (asked 2026-10-06), so the rise only shows once people outnumber it. Re-check whenever the tuning changes. **Re-checked 2026-10-10** with a close pair colliding at all half the time (ADR 0020): 0, 5, 20, 40 and 50 people's satellites held up give 0.1, 0.2, 0.6, 3.9 and 11.9 collisions an hour (0, 5, 20 and 50 gave 1.7, 0.5, 4.8 and 126 just before it): still rising, steeply once people outnumber the floor, but no longer a runaway. |
@@ -272,7 +272,7 @@ across each band.
   the people who have the sky open as it passes over a station, and each
   is counted; the sky page says how many are listening now. Your presence
   is someone else's audience.
-- **Conjunction alerts** (C10; once the likely C9 decision, replaced by ADR
+- **Conjunction alerts** (C10, a maybe; once the likely C9 decision, replaced by ADR
   0010 when dodging moved out): when two satellites are on a
   collision course, both owners are warned and either can spend limited fuel to
   dodge. If both are online, who moves? If an owner is offline, they can't
@@ -430,7 +430,10 @@ by the launch limits of 2026-10-06 (any number up, one minute apart)._
   The launchpad's intro now carries a one-line explanation ("in a crowded
   orbit one collision can set off the next: Kessler syndrome"), for Advay to
   confirm. The "not built yet" tags are gone now that all four are built.
-- **Seeing a burn-up on demand (added 2026-10-06, for later).** The shortest
+- ~~**Seeing a burn-up on demand (added 2026-10-06, for later).**~~ Won't do
+  (Advay, 2026-10-10): PR 10's balancing addressed it. Most satellites now
+  burn up (ADR 0020), the sky's news tells a burn-up first, and someone
+  coming back is told theirs burned up (`d85c1db`). The original note: the shortest
   lifetime is hours and everyone has one satellite, so a visitor (or a
   marker) only sees a re-entry if someone else's falls while they watch.
   Ideas: replay the latest burn-up on request, or a short "watch the last
@@ -438,9 +441,11 @@ by the launch limits of 2026-10-06 (any number up, one minute apart)._
 - **Boosting a satellite (added 2026-10-06; built 2026-10-07, ADR 0011).**
   The other half of deorbiting: an owner raises their own orbit one band,
   once, to stay up longer. No fuel; a boost is a new epoch for that object.
-- **C10 (week 11):** server-side logs as evidence (launches per band,
-  collisions, dodges, deorbits); conjunction alerts and dodging with fuel
-  (moved from C9). The catalogue's lineage was built in C9.
+- **C10 (week 11), sorted 2026-10-10 (Advay):** server-side logs as
+  evidence (launches per band, collisions, deorbits) will be done, just not
+  yet. Maybes: conjunction alerts and dodging with fuel (moved from C9), and
+  seeding the sky with resident operators (see "Open questions"). Won't do:
+  seeing a burn-up on demand. The catalogue's lineage was built in C9.
 - **Week 12:** visual polish (light trails, collision effects), README and
   PROCESS write-up.
 
@@ -585,9 +590,9 @@ flow, beacon rules, launch limits, bands.
 - ~~**C9:** collision radius~~: settled in ADR 0008 (hit distance and a 2%
   chance a meeting), with the head-on chance tripled in ADR 0013 to keep
   collisions per hour once orbits slowed.
-- **C10:** how fuel works, and whether it refills (moved with dodging;
+- **C10, a maybe:** how fuel works, and whether it refills (moved with dodging;
   boosting needs none).
-- **C10:** whether to seed the sky with launches the server makes (resident
+- **C10, a maybe:** whether to seed the sky with launches the server makes (resident
   operators, PR 5, closed 2026-10-10 with its commits kept on the PR). The
   balancing after PR 10 (ADRs 0019 and 0020) changed how often collisions
   happen and how many satellites burn up, so seeding needs rethinking
@@ -603,7 +608,7 @@ flow, beacon rules, launch limits, bands.
 - ~~**Before the C9 debris table:** how colliding beacons connect~~: a
   couplet; words on fragments later (see "Collisions that mean something").
 - ~~**Open:** which of the purpose ideas to adopt~~: all three, with the
-  wreck (ADRs 0016–0018, proposed; see "What Kessler is for").
+  wreck (ADRs 0016–0018, accepted; see "What Kessler is for").
 - **Open (2026-10-07):** whether static should take full turns at the
   stations in a cascade, or less; whether to archive answers per question
   in the catalogue; whether Yours should tell you about an encounter the

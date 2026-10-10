@@ -1,6 +1,6 @@
 # 0020. Fewer, less forced collisions: a close pair may never collide, staging is irregular, and a burn-up is told first
 
-**Status:** proposed (2026-10-10; revised the same day after its review).
+**Status:** accepted (2026-10-10; proposed and revised the same day after its review).
 Supersedes, in 0008, that a pair within the hit distance always collides
 in the end, and the staging rate (none staged in the last 5 minutes); the
 rest of 0008 (and 0013's head-on chance, and 0019) stands.

@@ -1,6 +1,6 @@
 # 0019. Staged collisions keep to themselves, under the launch bands
 
-**Status:** proposed (2026-10-09; revised 2026-10-10 after its review).
+**Status:** accepted (2026-10-10; proposed 2026-10-09, revised 2026-10-10 after its review).
 Supersedes the height of the staged collision in 0008; the rest of 0008
 (and 0013's head-on chance) stands.
 

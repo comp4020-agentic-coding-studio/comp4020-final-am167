@@ -1,6 +1,6 @@
 # 0017. When two beacons collide, the wreck keeps both their words
 
-**Status:** proposed (2026-10-07). Builds on the couplet (ADR 0008, 0010) and
+**Status:** accepted (2026-10-10; proposed 2026-10-07). Builds on the couplet (ADR 0008, 0010) and
 the nullable "words on fragments" that `PLAN.md` deferred ("Collisions that
 mean something", 2026-10-06).
 

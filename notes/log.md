@@ -3061,3 +3061,20 @@ before using a lighter model for a minor review. The memory note is
 dropped, since the harness now carries it.
 
 Commit `e3f9cb5`.
+
+## 2026-10-10 — ADRs 0015–0020 accepted; C10 leftovers sorted
+
+With the app essentially feature complete and the work moving to final
+touch-ups, Advay accepted the six records still proposed: 0015 (Yours and
+each object's card), 0016 (heard by people), 0017 (the wreck keeps the
+words), 0018 (the stations' daily question), 0019 (staged collisions under
+the bands) and 0020 (fewer, less forced collisions). All six were built and
+on `main`; from now on, changing one means a new record that supersedes it.
+
+The things `PLAN.md` had set aside for C10, decided: server-side logs as
+evidence will be done, just not yet; conjunction alerts and dodging with
+fuel, and seeding the sky with resident operators (PR 5, closed the same
+day), are maybes, the seeding to be rethought against PR 10's balance;
+seeing a burn-up on demand won't be done, since PR 10's balancing addressed
+it (most satellites now burn up, the news tells a burn-up first, and someone
+coming back is told theirs burned up).
