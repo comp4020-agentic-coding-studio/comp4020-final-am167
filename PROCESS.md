@@ -53,91 +53,70 @@ the sky zoomed in and out.
 
 ## The workflow
 
-<!-- ~150 words. Why this setup over the obvious alternative (one long chat;
-     parallel drafting agents), and what it cost. -->
+Each session starts fresh, so I decided to keep the whole project's memory in files rather than in
+a chat: `PLAN.md` holds what's agreed and what's next, and each decision gets
+a record in `doc/adr/` ([`10c86a5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/10c86a5), [`183d624`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/183d624)). An accepted record is
+never edited; a new one supersedes it, so the old reasoning stays visible.
+For each decision the agent laid out options and their trade-offs without
+recommending one, and I picked, as the week 8 lecture suggested
+([`9247b01`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/9247b01)).
 
-- Memory between sessions lives in files, not chat: `PLAN.md` (decisions,
-  status), `notes/log.md` (what happened and why) and `doc/adr/` (one record
-  per decision; an accepted record is never edited, only superseded)
-  ([`10c86a5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/10c86a5),
-  [`183d624`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/183d624)).
-  Superseded so far: 0002 by 0009, 0011's controls by 0015, 0008's staging
-  by 0019.
-- Options first, then I pick: the agent lays out options with trade-offs
-  without recommending (the week 8 lecture's approach)
-  ([`9247b01`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/9247b01)).
-- Long rounds run unattended in a worktree, ending in a PR I review in the
-  morning: the overnight round took seven asks, one commit each, design
-  changes as ADRs proposed for me to accept
-  ([PR #7](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/7)).
-  Cost: drift. The README fell further out of date, so I cleared it to write
-  it myself
-  ([`cce5e32`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/cce5e32)).
-- Subagents only for adversarial review, carried from assignment 2, where
-  parallel drafting agents stalled and contradicted each other.
-  Reviewers were Sonnet per CLAUDE.md; I switched to Opus for the work I
-  called critical (the object card, the staged collisions).
-  It lived only in agent memory, so new sessions still read "Sonnet" in
-  CLAUDE.md; now it's the rule there. Me: cite its commit once committed.
-- Test reports on a PR from a separate session found what the drafting agent's
-  tests missed
-  ([PR #10](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/10)).
-  Me: say which tool or session wrote it, and why you started doing this.
-- Parallel sessions brought a new failure: an agent found port 8080 held by
-  another worktree's server. Made it a rule: only kill what you started,
-  check uptime and working directory first
-  ([`c943797`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/c943797)).
+Bigger rounds or very large feature changes/implementations ran unattended in its own worktree during the night and came back as a pull request
+for me to review in the morning. The overnight round turned seven of my asks
+into five commits, with each design change written as a proposed ADR for me
+to accept or change ([PR #7](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/7)). 
+Running sessions side by side had a cost too: one agent found port 8080 held
+by another's server, so now an agent is told to only kill dev servers it started
+([`c943797`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/c943797)).
+
+Subagents only do adversarial review, a lesson from assignment 2, where
+parallel drafting agents stalled and contradicted each other. For the work I
+saw as critical, the object card and the staged collisions, I switched the
+reviewer from Sonnet to Opus, now a rule in CLAUDE.md.
+<!-- Me: cite the CLAUDE.md commit once it's committed. -->
+For the hardest change this week I also had a second agent, with none of the
+first one's context, test the pull request against a scratch server. It found
+what the first agent's own tests had missed
+([PR #10](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/10); more under the staged collisions below).
 
 ## Guiding the harness
 
-<!-- ~250 words. The main thread, as in A1/A2: a correction that kept
-     recurring, moved out of chat into CLAUDE.md or spec/. -->
+I started CLAUDE.md from the rules assignments 1 and 2 left me with
+([`f9497fe`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/f9497fe)); most of what I added since came from a
+correction I'd had to make more than once. The clearest was the layout. The
+launchpad and the sky are meant to fit one desktop window, and agents kept
+bringing scrolling back. Each fix tuned the
+page to that day's content, and the next feature undid it ([`69e92a0`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/69e92a0),
+[`455789e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/455789e), [`67b29a9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/67b29a9)). One change even accepted a 75px scroll
+because the page had already scrolled 62px before it ([`248469e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/248469e)). Telling
+the agent again wasn't holding, so the rule had to become a check.
 
-- Started from what assignments 1 and 2 taught me: scoped TDD, an adversarial
-  reviewer with none of the drafting context, pristine output, subagents only
-  for review
-  ([`f9497fe`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/f9497fe)).
-- **The layout test (the clearest case).** The launchpad and sky must fit one
-  desktop window. Agents kept bringing scrolling back, each fix tuning media
-  queries to that day's content
-  ([`69e92a0`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/69e92a0),
-  [`455789e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/455789e),
-  [`67b29a9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/67b29a9)).
-  One even logged a 75px scroll as acceptable "as it did 62px before"
-  ([`248469e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/248469e)).
-  - Thrown away: one agent's fix hid parts of the page at runtime until it
-    fit, put a Chrome test into `pnpm check` (CI has no Chrome), and changed
-    my commit rule in the same PR. Closed unmerged
-    ([PR #6](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/6)).
-    Me: why you closed it.
-  - Kept: `pnpm test:layout` outside `pnpm check`, failing on any vertical
-    scroll and on any control pushed off screen, so hiding the overflow can't
-    pass; a CLAUDE.md section saying to run it after any change to either page.
-    Left red (5 of 12) until I asked for the fix
-    ([`8aa68f3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/8aa68f3)).
-  - The fix got there partly by putting the bands side by side
-    ([`ade7d43`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/ade7d43)).
-    I thought it looked worse, so they went back to rows, found the space
-    elsewhere, and the test stayed green
-    ([`59480dd`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/59480dd)).
-    The test holds the constraint; whether it looks right is my call.
-- **Every log entry gets its hash.** Agents kept leaving hashes off, and an
-  entry without one is evidence `PROCESS.md` can't cite. Now a rule, with a
-  follow-up commit after each commit
-  ([`a52b08b`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/a52b08b)).
-- **Screenshots as the exception**, tightened before the build started
-  ([`1272c5c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/1272c5c)).
-  Me: why (too many in A1/A2?). Optional; cut if short on words.
-- **One instruction file.** `AGENTS.md` had drifted from CLAUDE.md; deleted
-  ([`8aa68f3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/8aa68f3)).
-- **Tests that pass with the feature broken.** A review found tests that
-  would pass with the feature deleted
-  ([`262e2b4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/262e2b4)),
-  and later the never-collide test passed with the rule reverted, because it
-  compared against the constant. Now it checks a fixed band (0.42–0.58)
-  ([`4e34a4a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/4e34a4a)).
-  Me: could become a CLAUDE.md line ("a new test must fail when the change
-  is reverted").
+The first attempt I threw away. One agent made the pages hide optional parts
+at runtime until they fit, put a Chrome test into `pnpm check` even though CI
+has no Chrome, and loosened my commit rule in the same pull request. It had
+gone off course and made the problem more complicated than it was, so I
+abandoned it ([PR #6](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/6)) and had it rebuilt more simply in a new one
+([PR #8](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/8)). There, `pnpm test:layout` drives Chrome against the
+running app at the marking desktop and two desktop sizes, for a new visitor
+and for someone who has just launched, and fails if either page scrolls or
+pushes a control off screen, so hiding the overflow can't pass. It stays out
+of `pnpm check`, and CLAUDE.md now says to run it after any change to either
+page, and to fix the layout rather than hiding the overflow. I left it
+failing, 5 of 12, until I was ready to ask for the fix ([`8aa68f3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/8aa68f3)). The
+same commit deleted `AGENTS.md`, which had drifted from CLAUDE.md, so there's
+one set of instructions.
+
+The fix passed partly by putting the altitude bands side by side
+([`ade7d43`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/ade7d43)). I thought it looked worse, so they went back to rows and the
+room came from tighter spacing instead, with the test still green
+([`59480dd`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/59480dd)). The test holds the constraint; whether the page looks right
+is still my call.
+
+The other lesson was about the tests themselves. A review found tests that
+would still pass with their feature broken ([`262e2b4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/262e2b4)), and later a test
+for the never-collide rule passed with the rule reverted, because it compared
+the result against the constant rather than a fixed expectation. It now
+checks a fixed band ([`4e34a4a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/4e34a4a)).
 
 ## Making the purpose clear
 
@@ -213,13 +192,36 @@ the sky zoomed in and out.
   band's middle: 3% of low satellites burned up, against 54% without staging.
   Of four levers I chose staging under the bands: 56%
   ([`a286df9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/a286df9), ADR 0019).
-- The PR test report showed that only moved the harm: every satellite falls
-  through that height to burn up, so watched satellites still never burned up
-  (0 of 80), staged pairs got broken up before they met, and most collisions
-  a watcher saw were knock-ons. Reproduced it first, then one rule: a staged collision
-  keeps to itself. 34 of 80 burned up, none lost to staged debris
-  ([PR #10](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/10),
-  [`4e34a4a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/4e34a4a)).
+
+That fix ([`a286df9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/a286df9)) passed all 328 tests, and its own
+simulation said low satellites now burned up 56% of the time. I had a second
+agent, with none of the first one's context, test
+[PR #10](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/10) against a scratch server. It went well past re-running
+the checks. It undid each part of the change in turn, to make sure the new
+tests failed without it. It drove the real server code through eight hours of
+sky at a time on throwaway databases, shuffling the ids so each run drew
+different collisions. And it watched a fresh sky in Chrome for forty minutes,
+where it caught a collision the sky had announced never happening: one of the
+pair was hit six seconds early by debris from the collision before.
+
+Its report showed the fix had only moved the harm. The first agent's
+simulation only put staged collisions before a satellite's launch, but
+staging carries on as long as anyone is watching, and the debris now sat
+exactly where every low satellite falls on its way to burning up. A satellite
+watched through its last 40 minutes burned up 4 times in 60, against 19 in 60
+with no staging: the fix had moved the kill from the start of a satellite's
+life to its end. A watcher also saw about 20 collisions an hour, most of them
+knock-ons between pieces of staged debris, the opposite of the less forced sky
+I'd asked for. The report ended with a judgement as well as numbers: which
+lever to pull next, and which one would backfire.
+
+The report wasn't taken on faith either. Before changing anything, the first
+agent rebuilt the tester's harness and reproduced its numbers, then fixed it
+with one rule: a staged collision keeps to itself. Watched satellites went
+from 0 of 80 burning up to 34, and none were lost to staged debris
+([`4e34a4a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/4e34a4a)). The lever the tester pointed to next, letting a close pair
+never collide, is the one I chose later (ADR 0020).
+
 - An Opus review said my complaint was only partly fixed: natural collisions
   still killed about 77% of satellites in a quiet sky, staging ran like a
   metronome every 5:00, and burn-ups barely made the sky's news line. It left
