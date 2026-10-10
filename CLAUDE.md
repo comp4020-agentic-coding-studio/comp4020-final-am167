@@ -86,9 +86,9 @@ status.
 - Work directly on `main`; avoid git worktrees unless an automated session's
   tooling requires one.
 - Don't spawn subagents except for adversarial review; they stall. Do
-  independent pieces one after another, then `pnpm check` once at the end. For
-  review subagents use only Sonnet (or Luna in Codex, `gpt-5.6-luna`), in its
-  largest-context variant.
+  independent pieces one after another, then `pnpm check` once at the end.
+  Review subagents run on Opus. If a review is
+  minor enough that a lighter model might do, ask me first.
 
 ### Visual verification
 
