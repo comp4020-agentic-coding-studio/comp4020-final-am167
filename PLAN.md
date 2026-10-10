@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-08 (the object card retold plainly; the launchpad fits a desktop, so `pnpm test:layout` passes; ADRs 0015–0018 still proposed)._
+_Last updated 2026-10-10 (staged collisions keep to themselves; a close pair may never collide; staging irregular, 10 to 15 minutes apart; burn-ups told first; ADRs 0015–0020 still proposed)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -134,6 +134,42 @@ _Last updated 2026-10-08 (the object card retold plainly; the launchpad fits a d
   stay the stacked rows they were (Advay preferred them to side-by-side
   tiles). The tightest case (1440x790, just launched) has 21px to spare.
   Run it after any change to the launchpad or the sky.
+- **Staged collisions under the bands (2026-10-09, Advay: collisions felt
+  too forced, satellites never burned up; ADR 0019, proposed):** the
+  collision staged for a watcher met in the low band's middle, and its
+  debris took nearly every low launch (3% burned up, measured). It now
+  meets at radius 1.1, under the bands, and keeps its fragments there: low
+  launches burn up about 56% of the time, as 0008 intended (`a286df9`).
+  **Revised 2026-10-10 after PR 10's test report:** that debris lay where
+  every satellite falls to burn up, so a satellite watched through its
+  last 40 minutes still almost never burned up; it also broke up the next
+  staged pair and set off more collisions than were staged. Now a staged
+  collision keeps to itself: it meets at 1.08, its wreck only falls (most
+  of it straight into the atmosphere), and it's only sent where nothing
+  else gets to its derelicts first and nothing up could meet its debris.
+  Measured: no satellite lost to staged material, no staged pair broken
+  up, no knock-ons; a watched sky has about 12 collisions an hour, not 25.
+  Not committed yet. **Opus review: partly resolved.** The three findings
+  are fixed, but natural collisions still destroy most satellites even in
+  a quiet sky (about 77% at 2 launches an hour, 95% at a crit), because
+  any close pair collides eventually; staging now fires every 5 minutes
+  like clockwork (about 85% of what a watcher sees); and the sky's news
+  line barely told of a burn-up while collisions kept coming (30 seconds
+  at most). Advay chose
+  (2026-10-10, ADR 0020, proposed, after a second Opus review): each close
+  pair collides at all with a chance of 0.5; staging waits a random 10 to
+  15 minutes (5 for someone who has just opened the sky); and the news
+  line tells a person's burn-up before a collision that took nobody's
+  satellite, or an older one. Measured: 55 to 58% of satellites burn up in
+  a quiet sky (was 17 to 23%), a third at a crit (was 7%); a watcher sees
+  half as many collisions (about 7 an hour in a quiet sky), but still
+  nearly all staged there; every burn-up watched is told (`4e34a4a`).
+  Then (Advay, 2026-10-10) someone coming back is told of theirs that
+  burned up, on the sky's notice and in Yours, as a collision already
+  was (`d85c1db`). Still open: the news line is mostly staged collisions while no
+  burn-up is fresh (drop them? their card tells them); the launchpad
+  tells no news of yours; crowding only bites once people outnumber the
+  derelict floor; `keepDerelicts` counts staged derelicts.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or
@@ -197,7 +233,7 @@ everyone a little?** See "What Kessler is for" below.
 | Managing yours (2026-10-07, ADR 0015, proposed) | **Boost and bring down from Yours (`/catalogue/?show=mine`) and from each satellite's pop-up card**, never the station panel. Every object's history pops up as a card. |
 | Launch limits (2026-10-04) | ~~One live satellite per person, plus a cooldown~~ (starting at 10 minutes) after your satellite dies or is deorbited, so relaunching costs something. Replaced 2026-10-06, below. |
 | Launch limits (2026-10-06) | **Any number up, one minute apart** (first a minute; Advay set five the same day, after one person launching nonstop took the sky from 2 collisions an hour to 60, and three filled it to its cap). Advay: "someone can send more satellites to send more messages but increase the risk of ruining it for all". Each launch is another beacon heard and another object everyone shares the sky with; the gap is between your launches, not after one dies. The sky cap (200 satellites) stays as the machine's backstop. Replaces "one each keeps it fair" (ADR 0002, superseded): the commons is now tested by how much each person takes, not rationed. |
-| Collisions scale with satellites (2026-10-06) | **A requirement from Advay:** the more satellites up, the more collisions. The model does this (more than linearly, the shape of a real cascade): measured with people's satellites held steady, 0 or 5 people up give 1 to 4 collisions an hour (the derelict floor of 20 dominates), 20 give about 20, 50 give about 130. Advay kept the floor at 20 (asked 2026-10-06), so the rise only shows once people outnumber it. Re-check whenever the tuning changes. |
+| Collisions scale with satellites (2026-10-06) | **A requirement from Advay:** the more satellites up, the more collisions. The model does this (more than linearly, the shape of a real cascade): measured with people's satellites held steady, 0 or 5 people up give 1 to 4 collisions an hour (the derelict floor of 20 dominates), 20 give about 20, 50 give about 130. Advay kept the floor at 20 (asked 2026-10-06), so the rise only shows once people outnumber it. Re-check whenever the tuning changes. **Re-checked 2026-10-10** with a close pair colliding at all half the time (ADR 0020): 0, 5, 20, 40 and 50 people's satellites held up give 0.1, 0.2, 0.6, 3.9 and 11.9 collisions an hour (0, 5, 20 and 50 gave 1.7, 0.5, 4.8 and 126 just before it): still rising, steeply once people outnumber the floor, but no longer a runaway. |
 | Sky cap (2026-10-04) | **At most 200 satellites in orbit at once**; launches are refused while it's full. Added after review: nothing leaves the sky in C8 and a cookieless client can launch without limit, so this protects the 256 MB machine. Revisit with decay in C9. |
 | Catalogue (2026-10-04) | **The "In orbit" table shows callsigns, not beacons.** A beacon is only heard as its satellite passes over the station, so flying low (heard more often) stays worth it. The reviewer pointed out that a permanent list of beacons made "be seen" pointless. |
 | Catalogue page (2026-10-05) | **The sky page keeps a short "Sky now" card; the full table moves to `/catalogue/`.** The card has counts per band and the latest launches, live; the catalogue lists what's in orbit or everything ever launched (a plain link), and is where debris and its lineage go. The table under the sky made the page scroll too far, and debris would make it far longer. The card is also where collisions out of view will be announced. |

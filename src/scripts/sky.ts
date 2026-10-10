@@ -1,8 +1,9 @@
 import { onAir } from "../lib/airtime.ts";
 import { ago, until } from "../lib/format.ts";
-import { BANDS, bandAt, climbing, plungeAt, radiusAt, reentryAt, type Band } from "../lib/orbit.ts";
+import { BANDS, bandAt, burnAt, climbing, plungeAt, radiusAt, reentryAt, type Band } from "../lib/orbit.ts";
 import { STATIONS, nextStation, stationOver, untilStation, type StationId } from "../lib/stations.ts";
 import { blame, couplet, headline, heardBy, listeningNow, passes, sharedQuestion, skyCount, staticFrom, type StoryParty } from "../lib/story.ts";
+import { freshBurnUp, storyToTell, type BurnUp } from "../lib/news.ts";
 import type { HeardItem } from "../lib/heard.ts";
 import type { WreckPiece } from "../lib/wreck.ts";
 import { countdown } from "./countdown.ts";
@@ -123,16 +124,6 @@ const hit = (sat: Satellite, time: number) => time >= (hitAt.get(sat.id) ?? Infi
 const up = (sat: Satellite, time = serverNow()) => time < reentryAt(sat) && !hit(sat, time);
 const flying = () => [...sky.values()].filter((sat) => up(sat));
 // Burn-ups this page has seen, by id, from the scene or the server's event.
-interface BurnUp {
-  callsign: string;
-  at: number;
-  mine: boolean;
-  // its owner brought it down (ADR 0011)
-  deorbited: boolean;
-  // or it didn't burn up: it was destroyed in a collision (only your own
-  // are kept, for your line under the stations)
-  destroyed?: boolean;
-}
 const burnUps = new Map<number, BurnUp>();
 // people's satellites only: wreckage burning up isn't news
 const burned = (sat: Satellite) => {
@@ -362,9 +353,12 @@ function news(time: number) {
   const down = satellites().find((sat) => sat.deorbitedAt !== null && plungeAt(sat, time) === null);
   const rising = satellites().find((sat) => climbing(sat, time));
   const last = latest();
-  const story = stories.reduce<Story | null>((a, b) => (a && a.at > b.at ? a : b), null);
-  const next = [...coming.values()].filter((c) => c.at > time).sort((a, b) => a.at - b.at)[0];
   const since = (at: number | undefined) => (at === undefined ? Infinity : time - at);
+  // a burn-up comes before a collision that took nobody's satellite, or an
+  // older one (src/lib/news.ts)
+  const fresh = freshBurnUp(burnUps.values(), falling ? burnAt(falling) : null, time);
+  const story = storyToTell(stories, fresh?.at ?? null);
+  const next = [...coming.values()].filter((c) => c.at > time).sort((a, b) => a.at - b.at)[0];
   let text = "";
   if (story && since(story.at) < 2 * 60_000) text = `${headline(story.parties)} ${ago(since(story.at))}.`;
   else if (falling)

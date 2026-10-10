@@ -5,13 +5,13 @@ import ManoeuvreDialogs from "../../components/ManoeuvreDialogs.astro";
 import ObjectCard from "../../components/ObjectCard.astro";
 import HeardCard from "../../components/HeardCard.astro";
 import { ago, embed } from "../../lib/format.ts";
-import { headline, listeningNow, skyCount } from "../../lib/story.ts";
+import { burnedUpNews, headline, listeningNow, skyCount } from "../../lib/story.ts";
 import { BANDS, bandAt, radiusAt, type Band } from "../../lib/orbit.ts";
 import { STATIONS } from "../../lib/stations.ts";
 import { audience } from "../../lib/events.ts";
 import { HEARD_FEED, heardCounts, listenerKey, recentlyHeard } from "../../lib/heard.ts";
 import { dayOf, questionOn } from "../../lib/questions.ts";
-import { conjunctions, encountersOf, isFirstLaunch, liveSky, recentCollisions, toPublic } from "../../lib/sky.ts";
+import { burnedUpSince, conjunctions, encountersOf, isFirstLaunch, liveSky, recentCollisions, toPublic } from "../../lib/sky.ts";
 import { MET_COOKIE, newsFrom } from "../../lib/seen.ts";
 
 // The shared sky. The server renders a summary of what's in orbit (counts per
@@ -38,9 +38,15 @@ const launched = sky.find((o) => o.id === launchedParam && o.mine) ?? null;
 const mine = sky.find((o) => o.mine) ?? null;
 // straight after someone's first launch ever, the sky explains itself
 const first = launched !== null && isFirstLaunch(viewer, launched.id);
-// an encounter of yours since you last looked at Yours, or dismissed the
-// notice of one (ADR 0017): news
-const met = launched ? null : (encountersOf(viewer, now, { since: newsFrom(Astro.cookies), limit: 1 })[0] ?? null);
+// news of yours since you last looked at Yours, or dismissed the notice of
+// it: the latest encounter (ADR 0017), and any that burned up (ADR 0020;
+// most do)
+const since = newsFrom(Astro.cookies);
+const met = launched ? null : (encountersOf(viewer, now, { since, limit: 1 })[0] ?? null);
+const burned = launched ? null : burnedUpSince(viewer, since, now);
+const gone = burned && burned.satellites.length > 0 ? burned : null;
+// when the newest of it happened, for the notice's dismissal to remember
+const newsAt = Math.max(met?.at ?? 0, gone?.satellites[0].at ?? 0);
 // how many of the latest launches the summary lists (sky.ts keeps it live):
 // people's, not the derelicts the server adds or debris
 const RECENT = 6;
@@ -93,9 +99,12 @@ const view = launched ? "canberra" : null;
            (ADR 0010); over the scene, or under it on a phone -->
       <div id="collision-card" class="collision-card" role="status" hidden></div>
 
-      {met && (
-        <p class="notice met" id="met-notice" role="status" data-at={met.at} data-cookie={MET_COOKIE}>
-          One of yours met something: {headline(met.parties)}. <a href="/catalogue/?show=mine#encounters-title">See it in Yours</a>.
+      {(met || gone) && (
+        <p class="notice met" id="met-notice" role="status" data-at={newsAt} data-cookie={MET_COOKIE}>
+          {gone && <>{burnedUpNews(gone, now)} </>}
+          {met && <>One of yours met something: {headline(met.parties)}. </>}
+          <a href={met ? "/catalogue/?show=mine#encounters-title" : "/catalogue/?show=mine"}>
+            See {met && gone ? "them" : "it"} in Yours</a>.
           <button type="button" class="notice-close" aria-label="Dismiss" hidden>×</button>
         </p>
       )}
@@ -464,7 +473,8 @@ const view = launched ? "canberra" : null;
     opacity: 0;
   }
 
-  /* news that waits to be dismissed (one of yours met something): it
+  /* news that waits to be dismissed (one of yours met something, or burned
+     up): it
      stays, so over the bottom left of the scene, clear of the view buttons
      and of a collision as it happens (on a phone, in the page like the
      others) */

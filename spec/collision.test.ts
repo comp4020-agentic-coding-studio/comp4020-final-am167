@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FRAGMENTS, HIT, SIZE, fatalMeeting, fragmentsOf, hitDistance, impactOf, nextMeeting } from "../src/lib/collide.ts";
-import { angleAt, periodAt, radiusAt, reentryAt, burnAt, type Orbit } from "../src/lib/orbit.ts";
+import { angleAt, bandReach, periodAt, radiusAt, reentryAt, burnAt, type Orbit } from "../src/lib/orbit.ts";
 
 // Collisions (ADR 0008). Orbits go either way round, and two objects collide
 // when their angles meet while their heights are within the hit distance. The
@@ -117,6 +117,18 @@ describe("predicting a meeting", () => {
     expect(draws.filter((n) => n === 1).length).toBeLessThan(10);
   });
 
+  // a close pair isn't doomed: otherwise a satellite with a neighbour in
+  // reach, given hours, almost never burns up (ADR 0020)
+  it("lets about half of close pairs never collide, the same answer every time, but never a dead-centre pass", () => {
+    const a = { ...orbit(1.3, 0), id: 11 };
+    const pairs = Array.from({ length: 2000 }, (_, i) => ({ ...orbit(1.3 + HIT.headOn / 2, 2, -1), id: 100 + i }));
+    const never = pairs.filter((b) => fatalMeeting(a, b) === null).length / pairs.length;
+    expect(never).toBeGreaterThan(0.42);
+    expect(never).toBeLessThan(0.58);
+    for (const b of pairs.slice(0, 50)) expect(fatalMeeting(b, a)).toBe(fatalMeeting(a, b));
+    expect(fatalMeeting(a, { ...orbit(1.3, 2, -1), id: 12 })).toBe(1);
+  });
+
   it("finds a meeting to well under a millisecond, at real clock times", () => {
     const epoch = 1_790_000_000_000;
     const a = orbit(1.3, 0, 1, epoch);
@@ -171,5 +183,37 @@ describe("the wreck", () => {
   it("sends a head-on wreck both ways", () => {
     const directions = new Set(fragmentsOf(a, b, at).map((f) => f.direction));
     expect(directions).toEqual(new Set([1, -1]));
+  });
+});
+
+// A collision under the launch bands (the server's staged ones, src/lib/sky.ts)
+// keeps its fragments under them, so its debris can't reach anything launched
+// since: heights keep their order as everything falls.
+describe("a wreck under the launch bands", () => {
+  const a = { ...orbit(1.1, 0), id: 4 };
+  const b = { ...orbit(1.1, 2, -1), id: 9 };
+  const at = nextMeeting(a, b, 0)!;
+  const fragments = fragmentsOf(a, b, at);
+  const floor = bandReach("low").min;
+
+  it("only falls: no fragment is thrown above the impact", () => {
+    const { radius } = impactOf(a, b, at);
+    for (const fragment of fragments) expect(fragment.radius).toBeLessThanOrEqual(radius);
+  });
+
+  it("throws no fragment within a hit of the lowest launch", () => {
+    const sat = { ...orbit(floor, 0), kind: "satellite" as const };
+    const reach = Math.max(hitDistance(sat, { ...sat, kind: "debris" }), hitDistance(sat, { ...sat, direction: -1, kind: "debris" }));
+    expect(fragments).toHaveLength(2 * FRAGMENTS.perObject);
+    for (const fragment of fragments) expect(fragment.radius).toBeLessThanOrEqual(floor - reach);
+  });
+
+  it("never meets a satellite launched after it", () => {
+    for (const fragment of fragments)
+      for (const direction of [1, -1] as const)
+        for (let phase = 0; phase < TAU; phase += 0.5) {
+          const sat = { ...orbit(floor, phase, direction, at), kind: "satellite" as const };
+          expect(nextMeeting(sat, { ...fragment, kind: "debris" }, at)).toBeNull();
+        }
   });
 });

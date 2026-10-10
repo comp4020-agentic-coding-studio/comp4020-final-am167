@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { DECAY, bandAt, burnAt, periodAt } from "../src/lib/orbit.ts";
+import { DECAY, bandAt, burnAt, periodAt, reentryAt } from "../src/lib/orbit.ts";
 import { OVERHEAD_HALF_WIDTH, STATIONS, stationOver } from "../src/lib/stations.ts";
 import { onAir } from "../src/lib/airtime.ts";
 import type { SkyEvent } from "../src/lib/events.ts";
@@ -179,6 +179,26 @@ describe("a beacon passing over a station", () => {
     heard.listen(T, T + 30_000, ears("bob"));
     expect([heard.heardBy(one.id), heard.heardBy(two.id)]).toEqual([1, 1]);
     expect(sky.newsSince("alice", T, T + 30_000).heardBy).toBe(1);
+  });
+
+  // most satellites burn up now (ADR 0020), but someone coming back was only
+  // ever told of a collision (its second review)
+  it("tells its owner which of theirs burned up since they last looked, newest first, and how many heard them", async () => {
+    const { sky, put, ears, hear } = await freshServer();
+    // a hit apart in height, so they burn up rather than meet
+    const low = DECAY.burnRadius + 0.01;
+    const one = put("alice", { radius: low });
+    const two = put("alice", { radius: low + 0.02 });
+    const theirs = put("bob", { radius: low + 0.04 });
+    const after = T + 50 * 60_000;
+    hear(T, after, ears("bob"));
+    const { burnedUp } = sky.newsSince("alice", T, after);
+    expect(burnedUp.satellites.map((s) => s.id)).toEqual([two.id, one.id]);
+    expect(burnedUp.satellites[0]).toMatchObject({ callsign: "SAT-alice", deorbited: false, at: Math.round(reentryAt({ ...two, direction: 1 })) });
+    // bob heard both: one person
+    expect(burnedUp.heardBy).toBe(1);
+    expect(sky.newsSince("bob", T, after).burnedUp.satellites.map((s) => s.id)).toEqual([theirs.id]);
+    expect(sky.newsSince("alice", after, after).burnedUp.satellites).toEqual([]);
   });
 
   it("credits at most a few hundred a pass, drawn at random, not the first to arrive", async () => {

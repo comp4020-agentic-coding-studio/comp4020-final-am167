@@ -23,7 +23,7 @@ import {
   type CatalogueQuery,
   type Sort,
 } from "../../lib/sky.ts";
-import { blame, collisionOf, couplet, describe, headline, sharedQuestion, staticFrom, titleOf } from "../../lib/story.ts";
+import { blame, collisionOf, couplet, describe, headline, listed, sharedQuestion, spelled, staticFrom, titleOf } from "../../lib/story.ts";
 
 // The record of everything launched (ADR 0003), as a table: filtered,
 // searched, sorted and paged by a plain GET form and links, so it works
@@ -57,6 +57,20 @@ const since = lastLooked(Astro.cookies);
 const news = yours ? newsSince(viewer, since, now, everyEncounter) : null;
 if (yours) looked(Astro.cookies, now, Astro.url, Astro.request.headers);
 const fresh = new Set(news?.encounters.map((e) => e.id) ?? []);
+// "7 people heard yours, EMBER burned up, and one of yours met something"
+const sinceParts = news
+  ? [
+      ...(news.heardBy > 0 ? [news.heardBy === 1 ? "one person heard yours" : `${news.heardBy} people heard yours`] : []),
+      ...(news.burnedUp.satellites.length === 1
+        ? [`${news.burnedUp.satellites[0].callsign ?? "one of yours"} burned up`]
+        : news.burnedUp.satellites.length > 1
+          ? [`${spelled(news.burnedUp.satellites.length)} of yours burned up`]
+          : []),
+      ...(news.encounters.length > 0
+        ? [`${news.encounters.length === 1 ? "one of yours" : `${spelled(news.encounters.length)} of yours`} met something (below)`]
+        : []),
+    ]
+  : [];
 // back from bringing one down or boosting it without JavaScript
 const yoursById = (name: string) => yoursUp.find((o) => o.id === Number(Astro.url.searchParams.get(name))) ?? null;
 // (in Yours, or on one's own address, which is this page with its card open)
@@ -164,13 +178,8 @@ const number = (n: number) => n.toLocaleString("en");
 
     {yours && (
       <section class="yours-up" aria-labelledby="yours-up-title">
-        {news && since > 0 && (news.encounters.length > 0 || news.heardBy > 0) && (
-          <p class="yours-notice yours-news">
-            Since you last looked:{" "}
-            {news.heardBy > 0 && <>{news.heardBy === 1 ? "one person heard yours" : `${news.heardBy} people heard yours`}</>}
-            {news.heardBy > 0 && news.encounters.length > 0 && ", and "}
-            {news.encounters.length > 0 && <>{news.encounters.length === 1 ? "one of yours" : `${news.encounters.length} of yours`} met something (below)</>}.
-          </p>
+        {news && since > 0 && sinceParts.length > 0 && (
+          <p class="yours-notice yours-news">Since you last looked: {listed(sinceParts)}.</p>
         )}
         {boosted && <p class="yours-notice" role="status"><strong>{boosted.callsign}</strong> is climbing a band. It stays up far longer.</p>}
         {!boosted && isRefusal(refused) && <p class="yours-notice" role="alert">{REFUSALS[refused]}</p>}
