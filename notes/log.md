@@ -3046,3 +3046,5 @@ iPhone 14, dismissing it stuck across a reload, and Yours read "Since you
 last looked: EMBER burned up." once. `pnpm check` green (345 tests, 0
 errors, 0 warnings) against a fresh build; `pnpm test:layout` 12 of 12;
 `pnpm check:evidence` green.
+
+Commit `d85c1db`.

@@ -166,7 +166,7 @@ _Last updated 2026-10-10 (staged collisions keep to themselves; a close pair may
   nearly all staged there; every burn-up watched is told (`4e34a4a`).
   Then (Advay, 2026-10-10) someone coming back is told of theirs that
   burned up, on the sky's notice and in Yours, as a collision already
-  was. Still open: the news line is mostly staged collisions while no
+  was (`d85c1db`). Still open: the news line is mostly staged collisions while no
   burn-up is fresh (drop them? their card tells them); the launchpad
   tells no news of yours; crowding only bites once people outnumber the
   derelict floor; `keepDerelicts` counts staged derelicts.
