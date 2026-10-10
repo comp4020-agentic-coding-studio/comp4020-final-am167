@@ -4,6 +4,8 @@
 // beacons side by side. Shared by the server render and the browser, so it
 // holds wording only.
 
+import { ago } from "./format.ts";
+
 type Kind = "satellite" | "derelict" | "debris";
 
 export interface StoryRoot {
@@ -31,7 +33,7 @@ const nameOf = (o: { kind: Kind; callsign: string | null }) =>
   o.kind === "derelict" || !o.callsign ? "a derelict" : o.callsign;
 
 // "ALPHA and BRAVO", "ALPHA, BRAVO and a derelict"
-const listed = (names: string[]) =>
+export const listed = (names: string[]) =>
   names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 
 // "two", "nine", "12": small counts spelled out, as a sentence says them
@@ -139,6 +141,27 @@ export function skyCount(sky: readonly { kind: Kind }[]): string {
 export function heardBy(n: number, mine: boolean): string {
   if (n === 0) return mine ? "Heard by nobody else yet" : "Heard by nobody yet";
   return `Heard by ${n} ${n === 1 ? "person" : "people"}`;
+}
+
+// "EMBER burned up on re-entry 2 h ago, heard by 7 people": what someone
+// coming back is told of theirs that burned up since they last looked
+// (sky.ts, burnedUpSince), newest first. Its owner isn't counted.
+export function burnedUpNews(
+  { satellites, heardBy }: { satellites: readonly { callsign: string | null; at: number; deorbited: boolean }[]; heardBy: number },
+  now: number,
+): string {
+  const several = satellites.length > 1;
+  const heard =
+    heardBy === 0 ? "heard by nobody else" : `heard by ${heardBy} ${heardBy === 1 ? "person" : "people"}${several ? " between them" : ""}`;
+  if (!several) {
+    const [one] = satellites;
+    const how = one.deorbited ? "was brought down, and burned up" : "burned up on re-entry";
+    return `${one.callsign ?? "One of yours"} ${how} ${ago(now - one.at)}, ${heard}.`;
+  }
+  const names = satellites.map((s) => s.callsign ?? "one of yours");
+  const rest = names.length - 3;
+  const parts = rest > 0 ? [...names.slice(0, 3), `${spelled(rest)} ${rest === 1 ? "other" : "others"}`] : names;
+  return `${listed(parts)} burned up since you last looked, ${heard}.`;
 }
 
 // "1 pass", "12 passes": how often the stations have heard it.

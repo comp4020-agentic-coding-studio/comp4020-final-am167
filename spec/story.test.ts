@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blame, couplet, headline, nobodys, skyCount, staticFrom, type StoryParty } from "../src/lib/story.ts";
+import { blame, burnedUpNews, couplet, headline, nobodys, skyCount, staticFrom, type StoryParty } from "../src/lib/story.ts";
 
 // How a collision is told on every screen and in the catalogue (ADR 0010):
 // both sides named, neither singled out, debris passing the blame back to
@@ -113,6 +113,29 @@ describe("telling a collision", () => {
       { callsign: "ALPHA", beacon: "hello from alpha" },
       { callsign: "a derelict, echoing LANTERN", beacon: "I was here for a while" },
     ]);
+  });
+});
+
+// what someone coming back is told of theirs that burned up (ADR 0020)
+describe("telling an owner theirs burned up", () => {
+  const HOUR = 3_600_000;
+  const now = 50 * HOUR;
+  const gone = (callsign: string, hoursAgo: number, deorbited = false) => ({ callsign, at: now - hoursAgo * HOUR, deorbited });
+
+  it("names one, says when and how, and who heard it", () => {
+    expect(burnedUpNews({ satellites: [gone("EMBER", 2)], heardBy: 7 }, now)).toBe("EMBER burned up on re-entry 2 h ago, heard by 7 people.");
+    expect(burnedUpNews({ satellites: [gone("EMBER", 2, true)], heardBy: 1 }, now)).toBe(
+      "EMBER was brought down, and burned up 2 h ago, heard by 1 person.",
+    );
+    expect(burnedUpNews({ satellites: [gone("EMBER", 2)], heardBy: 0 }, now)).toBe("EMBER burned up on re-entry 2 h ago, heard by nobody else.");
+  });
+
+  it("names a few together, and counts the rest", () => {
+    expect(burnedUpNews({ satellites: [gone("ALPHA", 1), gone("BRAVO", 3)], heardBy: 3 }, now)).toBe(
+      "ALPHA and BRAVO burned up since you last looked, heard by 3 people between them.",
+    );
+    const five = ["A1", "B2", "C3", "D4", "E5"].map((c, i) => gone(c, i));
+    expect(burnedUpNews({ satellites: five, heardBy: 0 }, now)).toBe("A1, B2, C3 and two others burned up since you last looked, heard by nobody else.");
   });
 });
 

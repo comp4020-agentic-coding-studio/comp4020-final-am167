@@ -6,8 +6,9 @@ import type { AstroCookies } from "astro";
 export const SEEN_COOKIE = "kessler_seen";
 const A_YEAR = 365 * 24 * 60 * 60;
 
-// The encounter the sky's notice told them of, by when it happened, once
-// they've dismissed it there: set by the page's script, so not httpOnly.
+// The news the sky's notice told them of (an encounter, or theirs burning
+// up), by when the newest of it happened, once they've dismissed it there:
+// set by the page's script, so not httpOnly.
 export const MET_COOKIE = "kessler_met";
 
 const timeIn = (cookies: AstroCookies, name: string) => {

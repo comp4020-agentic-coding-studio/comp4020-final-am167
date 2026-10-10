@@ -3004,3 +3004,45 @@ people outnumber the derelict floor; `keepDerelicts` counts staged
 derelicts.
 
 Commit `4e34a4a`.
+
+## 2026-10-10 — Telling someone who comes back that theirs burned up
+
+Advay: do decision 2 from the second review. Most satellites now burn
+up (ADR 0020), but someone coming back was only ever told if one of
+theirs was destroyed: the sky's dismissable notice ("One of yours met
+something") and Yours' "Since you last looked" had nothing for a burn-up.
+
+Now both tell it, the same way a collision is told:
+
+- `burnedUpSince` (sky.ts): the viewer's satellites that burned up, or
+  were brought down and burned up, since they last looked, newest first,
+  and how many people heard them (each person once). `newsSince` carries
+  it to Yours.
+- `burnedUpNews` (story.ts): "EMBER burned up on re-entry 2 h ago, heard
+  by 7 people." / "EMBER was brought down, and burned up …" / for
+  several, "ALPHA, BRAVO, CHARLIE and two others burned up since you last
+  looked, heard by 12 people between them." Its owner isn't counted, so
+  none reads "heard by nobody else".
+- The sky's notice tells burn-ups, then the latest encounter, with "See
+  it (them) in Yours"; its dismissal remembers the newest of either (the
+  same cookie, now "the news the notice told"). Yours: "Since you last
+  looked: 7 people heard yours, EMBER burned up and one of yours met
+  something (below)."
+
+Kept to where a collision is already told; the launchpad, where most
+people come back to, still says only what of theirs is up (its notice
+box is the tightest part of the layout test).
+
+TDD: a server test (two of alice's satellites burn up and bob hears
+them: both listed, newest first, heard by one person; bob's isn't hers;
+nothing after the last look) and wording tests for one, brought down,
+heard by nobody, and several; both failed first (no `burnedUp`; no
+`burnedUpNews`). The server test first put alice's two within a hit of
+each other, so they collided; spaced them a hit apart. Seen live on a
+fresh database: launched EMBER, looked at Yours, brought it down, waited
+for the burn-up; the sky read "EMBER was brought down, and burned up just
+now, heard by nobody else. See it in Yours." at 1920x1080 and on an
+iPhone 14, dismissing it stuck across a reload, and Yours read "Since you
+last looked: EMBER burned up." once. `pnpm check` green (345 tests, 0
+errors, 0 warnings) against a fresh build; `pnpm test:layout` 12 of 12;
+`pnpm check:evidence` green.

@@ -74,6 +74,13 @@ burn-up.**
   story.ts). An older collision is never told in its place. A collision
   coming is still announced first (25 seconds for a staged one), and its
   card still pops up.
+- Someone coming back is told of theirs that burned up, as they already
+  were of a collision (ADR 0017): on the sky, in the notice that waits to
+  be dismissed ("EMBER burned up on re-entry 2 h ago, heard by 7 people",
+  or the names of several, and how many people heard them between them),
+  and in Yours' "Since you last looked" (`burnedUpSince`, sky.ts;
+  `burnedUpNews`, story.ts). Added after the second review, at Advay's
+  request: most satellites now burn up, and were never mentioned.
 - 0.5 was chosen against 1 (as it was), 0.4, 0.3 and 0.25: 0.4 was the
   first round's value, and Advay asked for natural collisions a little
   more often.
@@ -121,5 +128,6 @@ the old news line):
   replay applies the same collisions; but a server deployed with this
   works out every pair again, so about half the natural collisions
   announced before a deploy won't happen.
-- Someone who comes back after hours is told if their satellite was
-  destroyed, but not that it burned up, though most now do.
+- Someone who comes back is told of each of theirs that burned up or was
+  destroyed since they last looked. The launchpad, where most people come
+  back to, tells neither: only what of theirs is still up.

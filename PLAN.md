@@ -163,11 +163,13 @@ _Last updated 2026-10-10 (staged collisions keep to themselves; a close pair may
   satellite, or an older one. Measured: 55 to 58% of satellites burn up in
   a quiet sky (was 17 to 23%), a third at a crit (was 7%); a watcher sees
   half as many collisions (about 7 an hour in a quiet sky), but still
-  nearly all staged there; every burn-up watched is told. Still open: the
-  news line is mostly staged collisions while no burn-up is fresh (drop
-  them? their card tells them); nothing tells someone who comes back that
-  theirs burned up; crowding only bites once people outnumber the derelict
-  floor; `keepDerelicts` counts staged derelicts.
+  nearly all staged there; every burn-up watched is told (`4e34a4a`).
+  Then (Advay, 2026-10-10) someone coming back is told of theirs that
+  burned up, on the sky's notice and in Yours, as a collision already
+  was. Still open: the news line is mostly staged collisions while no
+  burn-up is fresh (drop them? their card tells them); the launchpad
+  tells no news of yours; crowding only bites once people outnumber the
+  derelict floor; `keepDerelicts` counts staged derelicts.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or

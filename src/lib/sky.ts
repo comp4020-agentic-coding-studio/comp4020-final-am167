@@ -430,17 +430,49 @@ export interface Encounter extends CollisionStory {
   other: Party;
 }
 
+// Satellites of the viewer's that burned up (or were brought down, and
+// burned up) after `since`, newest first, and how many people heard them,
+// each once however many of them they heard. Most satellites end this way
+// (ADR 0020), so it's news, as a collision of theirs is.
+export interface BurnedUp {
+  id: number;
+  callsign: string | null;
+  at: number;
+  deorbited: boolean;
+}
+export function burnedUpSince(who: Who, since: number, now = Date.now()): { satellites: BurnedUp[]; heardBy: number } {
+  if (!viewerOf(who).person && viewerOf(who).operator === null) return { satellites: [], heardBy: 0 };
+  settle(now);
+  const satellites = db
+    .select({ id: objects.id, callsign: objects.callsign, at: objects.fateAt, fate: objects.fate })
+    .from(objects)
+    .where(and(ownerIs(who), eq(objects.kind, "satellite"), inArray(objects.fate, ["decayed", "deorbited"]), gt(objects.fateAt, since)))
+    .orderBy(desc(objects.fateAt), desc(objects.id))
+    .all()
+    .flatMap(({ id, callsign, at, fate }) => (at !== null && at <= now ? [{ id, callsign, at, deorbited: fate === "deorbited" }] : []));
+  const heardBy =
+    satellites.length === 0
+      ? 0
+      : (db
+          .select({ n: countDistinct(listens.listener) })
+          .from(listens)
+          .where(inArray(listens.object, satellites.map((s) => s.id)))
+          .get()?.n ?? 0);
+  return { satellites, heardBy };
+}
+
 // What happened to the viewer's satellites since `since` (their last look
-// at Yours): encounters, and how many people heard them (each once, however
-// many of theirs they heard). `known`: all their encounters, if the caller
-// already has them.
+// at Yours): encounters, which burned up, and how many people heard them
+// (each once, however many of theirs they heard). `known`: all their
+// encounters, if the caller already has them.
 export function newsSince(
   who: Who,
   since: number,
   now = Date.now(),
   known?: Encounter[],
-): { encounters: Encounter[]; heardBy: number } {
+): { encounters: Encounter[]; burnedUp: ReturnType<typeof burnedUpSince>; heardBy: number } {
   const encounters = (known ?? encountersOf(who, now, { since })).filter((e) => e.at > since);
+  const burnedUp = burnedUpSince(who, since, now);
   const ids = viewerOf(who).person
     ? db.select({ id: objects.id }).from(objects).where(ownerIs(who)).all().map((row) => row.id)
     : [];
@@ -452,7 +484,7 @@ export function newsSince(
           .from(listens)
           .where(and(inArray(listens.object, ids), gt(listens.at, since)))
           .get()?.n ?? 0);
-  return { encounters, heardBy };
+  return { encounters, burnedUp, heardBy };
 }
 
 // Every collision a satellite of the viewer's was in, newest first: those
