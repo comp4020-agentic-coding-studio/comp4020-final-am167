@@ -13,7 +13,7 @@ import { angleAt, burnAt, turnedAt, type Orbit } from "./orbit.ts";
 const TAU = 2 * Math.PI;
 const rad = Math.PI / 180;
 
-const SITES = [
+export const SITES = [
   { id: "canberra", name: "Canberra", lat: -35.4, lon: 148.98 },
   { id: "goldstone", name: "Goldstone", lat: 35.43, lon: -116.89 },
   { id: "madrid", name: "Madrid", lat: 40.43, lon: -4.25 },
