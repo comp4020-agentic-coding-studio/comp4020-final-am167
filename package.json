@@ -14,6 +14,7 @@
     "start": "node scripts/migrate.mjs && node dist/server/entry.mjs",
     "db:generate": "drizzle-kit generate",
     "coastline": "node scripts/coastline.mjs",
+    "land": "node scripts/land.mjs",
     "test:performance:budgets": "pnpm build && vitest run --config vitest.performance.config.ts",
     "test:performance:browser": "pnpm build && node scripts/performance/run.ts",
     "test:performance": "pnpm test:performance:budgets && node scripts/performance/run.ts"

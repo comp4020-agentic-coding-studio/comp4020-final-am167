@@ -9,6 +9,7 @@ import {
   ConeGeometry,
   CustomBlending,
   CylinderGeometry,
+  DataTexture,
   DirectionalLight,
   DoubleSide,
   DynamicDrawUsage,
@@ -17,6 +18,8 @@ import {
   HemisphereLight,
   InstancedMesh,
   LatheGeometry,
+  LinearFilter,
+  LinearMipmapLinearFilter,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
@@ -26,6 +29,7 @@ import {
   PointLight,
   Points,
   Quaternion,
+  RedFormat,
   Scene,
   ShaderMaterial,
   Shape,
@@ -37,6 +41,7 @@ import {
 } from "three";
 import { attachPerformanceProfiler, forcesContinuousRendering } from "./performance-profiler.ts";
 import { PLANET_COLOURS, STAR_COLOURS, seeded } from "./starfield.ts";
+import mask from "./land.json";
 
 // The launchpad at dusk: a rocket on its pad by a lattice tower, under
 // searchlights, with hills going dark against the afterglow. Launching plays
@@ -85,6 +90,10 @@ const R = 1000;
 const CENTRE = new Vector3(0, -R, 0);
 // a sun just under the western horizon: dusk at the pad, day higher up
 const SUN = new Vector3(-1, -0.09, -0.32).normalize();
+// the same sun as it lights the planet from orbit: still just under the pad's
+// horizon, but swung round towards the camera so that the ground the launch
+// looks down on is in daylight, with the terminator crossing the view
+const DAYLIGHT = new Vector3(-1, -0.09, 0.45).normalize();
 
 // The rocket, from the bottom of its nozzle to its nose, standing on the
 // mount; the tower's lightning mast is the tallest thing on the pad.
@@ -120,7 +129,6 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 // Shared GLSL: value noise and fractal noise.
 const NOISE = /* glsl */ `
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-  float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
   float noise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
@@ -320,22 +328,46 @@ function stars(): Points {
   return points;
 }
 
+// Where the real coast is, under the pad and out towards the camera
+// (scripts/land.mjs), as a texture: 1 on land, 0 at sea.
+function landMask(): DataTexture {
+  const { width, rows } = mask;
+  const data = new Uint8Array(width * rows.length);
+  rows.forEach((runs, j) => {
+    let i = j * width;
+    runs.forEach((run, k) => {
+      if (k % 2) data.fill(255, i, i + run);
+      i += run;
+    });
+  });
+  const texture = new DataTexture(data, width, rows.length, RedFormat);
+  texture.minFilter = LinearMipmapLinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 // The planet: dark land at the pad, lit by the engine and the searchlights'
-// spill; from orbit, a blue sphere with its day side to the west, a warm line
-// along the terminator and town lights on the night side.
+// spill; from orbit, the real one, with the pad at Canberra: Australia's red
+// interior and greener coast, a sea that catches the sun, and cloud over
+// both, lit gold along the terminator and going dark beyond it.
 function planet(): Mesh {
   const material = new ShaderMaterial({
     uniforms: {
-      sun: { value: SUN },
+      sun: { value: DAYLIGHT },
       air: { value: 1 },
       engine: { value: 0 },
       enginePos: { value: new Vector3() },
-      deep: { value: new Color(PLANET_COLOURS.deep) },
-      lit: { value: new Color(PLANET_COLOURS.lit) },
+      coast: { value: landMask() },
+      near: { value: mask.near },
       rim: { value: new Color(PLANET_COLOURS.rim) },
       land: { value: new Color("#0d1220") },
       haze: { value: new Color("#2c2440") },
-      town: { value: new Color("#ffb46a") },
+      sea: { value: new Color("#0b2f5c") },
+      desert: { value: new Color("#8a4526") },
+      scrub: { value: new Color("#3b4528") },
+      sky: { value: new Color("#5d9be0") },
     },
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
@@ -350,7 +382,9 @@ function planet(): Mesh {
       uniform float air;
       uniform float engine;
       uniform vec3 enginePos;
-      uniform vec3 deep, lit, rim, land, haze, town;
+      uniform sampler2D coast;
+      uniform float near;
+      uniform vec3 rim, land, haze, sea, desert, scrub, sky;
       varying vec3 vWorld;
       varying vec3 vNormal;
       ${NOISE}
@@ -362,9 +396,54 @@ function planet(): Mesh {
         float day = dot(n, sun);
 
         // from orbit
-        vec3 orbit = mix(deep, lit * 2.4, smoothstep(-0.04, 0.45, day));
-        orbit += vec3(1.0, 0.42, 0.18) * exp(-pow(day / 0.05, 2.0)) * 0.18;
-        orbit += rim * pow(1.0 - max(dot(n, v), 0.0), 5.0) * 0.6;
+        vec3 orbit = vec3(0.0);
+        if (air < 0.999) {
+          // daylight, softened across the terminator, and the gold along it
+          float light = smoothstep(-0.1, 0.4, day);
+          float dusk = exp(-pow((day + 0.01) / 0.05, 2.0));
+          vec3 sunColour = mix(vec3(1.0, 0.6, 0.35), vec3(1.0, 0.98, 0.95), smoothstep(-0.04, 0.1, day));
+
+          // the coast, looked up straight down from over the pad
+          vec2 uv = vec2(n.x * 0.5 + 0.5, (n.z - near) / (1.0 - near));
+          float inMask = step(0.0, uv.y) * step(0.0, n.y);
+          // (roughened, so the mask's cells don't show along it)
+          float grain = fbm(n.xz * 60.0) * 0.6 + fbm(n.xz * 9.0) * 0.6;
+          float rough = fbm(n.xz * 220.0) - 0.5;
+          float ground = smoothstep(0.3, 0.7, texture2D(coast, uv).r + rough * 0.5) * inMask;
+          // further from the sea, redder and drier
+          float inland = smoothstep(0.55, 0.95, texture2D(coast, uv, 3.0).r) * inMask;
+          float dry = clamp(inland + (grain - 0.6) * 1.2, 0.0, 1.0);
+          vec3 terrain = mix(scrub, desert, dry) * (0.55 + 0.7 * grain * grain);
+          // darker ranges and pale salt pans across the interior
+          terrain *= 0.65 + 0.6 * fbm(n.xz * 26.0 + 4.0);
+          terrain = mix(terrain, vec3(0.75, 0.68, 0.6), smoothstep(0.72, 0.8, fbm(n.xz * 40.0 + 9.0)) * dry * 0.6);
+
+          // the sea, catching the sun where it reflects towards the camera
+          float glint = pow(max(dot(n, normalize(sun + v)), 0.0), 90.0);
+          vec3 water = sea * (0.25 + 0.75 * light) + sunColour * glint * light * 1.4;
+
+          vec3 surface = mix(water, terrain * (0.08 + 0.92 * light), ground);
+          surface += vec3(1.0, 0.45, 0.2) * dusk * 0.08;
+
+          // cloud: swirled, thinning into streaks, and shadowing what's below
+          vec2 q = n.xz * 16.0;
+          q += vec2(fbm(q * 0.5 + 3.1), fbm(q * 0.5 + 8.7)) * 2.4;
+          // in fronts and clear spells, and fewer over the desert, but each
+          // cloud opaque, not a veil
+          float front = fbm(n.xz * 4.0 + 1.7) - 0.5;
+          float field = fbm(q * 1.8) + front * 0.35 - inland * 0.1;
+          float cloud = max(smoothstep(0.47, 0.58, field), smoothstep(0.4, 0.56, field) * 0.35);
+          // lumpy tops, brighter where they build up
+          float tops = 0.75 + 0.4 * fbm(q * 6.0 + 2.3);
+          surface *= 1.0 - cloud * 0.35;
+          vec3 cloudColour = sunColour * (0.05 + 1.25 * light) * tops + vec3(1.0, 0.42, 0.22) * dusk * 0.55;
+          orbit = mix(surface, cloudColour, cloud * 0.95);
+
+          // seen through more air towards the limb: bluer and paler
+          float slant = 1.0 - max(dot(n, v), 0.0);
+          orbit = mix(orbit, sky * (0.12 + 0.75 * light) + vec3(1.0, 0.5, 0.25) * dusk * 0.2, pow(slant, 12.0) * 0.75);
+          orbit += rim * pow(slant, 6.0) * 0.5;
+        }
 
         // on the ground: dark scrub with a little texture, hazing with distance
         vec3 colour = orbit;
@@ -377,19 +456,6 @@ function planet(): Mesh {
           colour = mix(orbit, ground, air);
         }
 
-        // town lights, away from the pad, on the night side
-        float pad = length(vWorld.xz);
-        vec3 q = vWorld / 4.0;
-        vec3 cell = floor(q);
-        float towns = smoothstep(0.45, 0.7, fbm(vWorld.xz * 0.006 + 3.0));
-        float r = hash3(cell);
-        if (pad > 45.0 && r > 0.93 - towns * 0.12) {
-          vec3 at = vec3(hash3(cell + 1.3), hash3(cell + 2.7), hash3(cell + 4.1));
-          float px = length(fwidth(q));
-          float size = max(0.12, px * 0.9);
-          float spot = smoothstep(size, 0.0, length(fract(q) - at)) * pow(0.12 / size, 2.0);
-          colour += town * spot * (0.5 + 1.5 * hash3(cell + 9.0)) * (1.0 - smoothstep(-0.05, 0.08, day));
-        }
         gl_FragColor = vec4(colour, 1.0);
         ${FINISH}
       }`,
@@ -430,9 +496,12 @@ function atmosphere(): Mesh {
         float down = -dot(o, d);
         float t = max(down, 0.0);
         // the height of the line of sight's lowest point, in planet radii / 6,
-        // the sky page's scale
+        // the sky page's scale; drawn a hair below the surface too, since the
+        // faceted sphere's outline falls just inside the true one and would
+        // leave a dotted seam on the limb
         float h = (length(o + d * t) - radius) / radius * 6.0;
-        if (h < 0.0) discard;
+        if (h < -0.004) discard;
+        h = max(h, 0.0);
         float line = exp(-pow((h - 0.07) / 0.022, 2.0)) * 0.5;
         float glow = exp(-h / 0.1) * 0.5 + exp(-h / 0.45) * 0.03;
         // from inside the air, looking up, there's no limb to see
