@@ -3049,19 +3049,6 @@ errors, 0 warnings) against a fresh build; `pnpm test:layout` 12 of 12;
 
 Commit `d85c1db`.
 
-## 2026-10-10 — PROCESS.md cleared and redrafted as dot points
-
-Advay asked to start the final `PROCESS.md`. The crit 8 version (the plan,
-the stack, the first slice) is gone; in its place, dot points for him to
-write up in his own words, drawn from this log, the CLAUDE.md history and
-his assignment 1 and 2 accounts: what was built, the stack and the replay
-constraint behind it, the workflow, guiding the harness (the layout test as
-the main case, PR 6 thrown away), making the purpose clear, and balancing
-the staged collisions, with a word budget per section and "Me:" prompts for
-what only he can say. `pnpm check:evidence` green (41 cited commits).
-
-Commit `32f6549`.
-
 ## 2026-10-10 — Review subagents run on Opus
 
 CLAUDE.md said review subagents were Sonnet only. Since 2026-10-08, when
@@ -3074,49 +3061,3 @@ before using a lighter model for a minor review. The memory note is
 dropped, since the harness now carries it.
 
 Commit `e3f9cb5`.
-
-## 2026-10-10 — PROCESS.md: "Making the purpose clear" written up
-
-The section's dot points are now prose. Advay asked for it to stress that
-this was the hardest part: a test can say a page scrolls, but not whether the
-app means anything, so it rested on their own judgement more than on directing
-the agent. Over a few rounds they had passages made plainer: the object history
-without the Ostrom reference, the review's findings as three short
-paragraphs, and the object card told as "hard to understand, and no test or
-reviewer picked it up". They confirmed the link to assignment 2's "slop" home
-page (a reviewer approved every number; it was still hard to follow), which
-closes the section. The README note stays a "Me:" comment.
-`pnpm check:evidence` green.
-
-Commit `099b47b`.
-
-## 2026-10-10 — PROCESS.md: staged collisions cut down, and a closing
-
-"Balancing the staged collisions" was dot points plus three long paragraphs
-on PR 10's tester, about twice its budget. Rewritten as one story of Advay
-struggling to balance two things that pull against each other: a quiet sky
-where most satellites burn up, and a marker who visits for ten minutes and
-should see a collision. Each round (`2dc518c`, `a286df9`, PR 10, the two
-Opus reviews behind `4e34a4a`, then `d85c1db`) pushed one side too far while
-the tests stayed green. Drawn from PR 10's description and the 9–10 October
-log entries; the tester's methods are cut to a sentence. About 400 words.
-
-A new closing section, in Advay's framing: the multi-user, real-time part of
-the spec was easy to meet and to test, but whether the app was good (the
-purpose, the object card, the sky's balance) no check or harness rule could
-settle; it came down to their own judgement. The README "Me:" note stays
-until the README is written. `pnpm check:evidence` green.
-
-Commit `035768e`.
-
-## 2026-10-10 — Crit 9 reflection
-
-Drafted `reflections/crit-9.md` with Advay, then cut to 169 words and
-reworded so it doesn't repeat `PROCESS.md`. The breakthrough: the app
-worked but gave a visitor no reason to care, until messages were heard by
-real people and a collision cost both owners their words. The change in
-them: a passing suite isn't proof the work is done; they use what they
-build before calling it finished. `PLAN.md`'s C9 list marks `PROCESS.md`
-and the reflection done. `pnpm check:evidence` green.
-
-Commit `a996c1b`.
