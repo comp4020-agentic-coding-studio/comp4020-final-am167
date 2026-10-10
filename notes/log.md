@@ -3048,3 +3048,42 @@ errors, 0 warnings) against a fresh build; `pnpm test:layout` 12 of 12;
 `pnpm check:evidence` green.
 
 Commit `d85c1db`.
+
+## 2026-10-10 — PROCESS.md cleared and redrafted as dot points
+
+Advay asked to start the final `PROCESS.md`. The crit 8 version (the plan,
+the stack, the first slice) is gone; in its place, dot points for him to
+write up in his own words, drawn from this log, the CLAUDE.md history and
+his assignment 1 and 2 accounts: what was built, the stack and the replay
+constraint behind it, the workflow, guiding the harness (the layout test as
+the main case, PR 6 thrown away), making the purpose clear, and balancing
+the staged collisions, with a word budget per section and "Me:" prompts for
+what only he can say. `pnpm check:evidence` green (41 cited commits).
+
+Commit `32f6549`.
+
+## 2026-10-10 — Review subagents run on Opus
+
+CLAUDE.md said review subagents were Sonnet only. Since 2026-10-08, when
+Advay stopped a Sonnet reviewer of the object card and asked for Opus
+instead (`d409ccf`), every review of critical work has been Opus (both
+staged-collision reviews, `4e34a4a`). That lived only in the agent's
+memory, so a fresh session reading CLAUDE.md would still pick Sonnet. The
+rule is now in CLAUDE.md: Opus (or Luna in Codex), largest context, and ask
+before using a lighter model for a minor review. The memory note is
+dropped, since the harness now carries it.
+
+Commit `e3f9cb5`.
+
+## 2026-10-10 — PROCESS.md: "Making the purpose clear" written up
+
+The section's dot points are now prose. Advay asked for it to stress that
+this was the hardest part: a test can say a page scrolls, but not whether the
+app means anything, so it rested on their own judgement more than on directing
+the agent. Over a few rounds they had passages made plainer: the object history
+without the Ostrom reference, the review's findings as three short
+paragraphs, and the object card told as "hard to understand, and no test or
+reviewer picked it up". They confirmed the link to assignment 2's "slop" home
+page (a reviewer approved every number; it was still hard to follow), which
+closes the section. The README note stays a "Me:" comment.
+`pnpm check:evidence` green.

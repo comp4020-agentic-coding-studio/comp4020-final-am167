@@ -120,59 +120,75 @@ checks a fixed band ([`4e34a4a`](https://github.com/comp4020-agentic-coding-stud
 
 ## Making the purpose clear
 
-<!-- ~200 words. Main thing this week #1. Not something a test can
-     check, so: what I noticed, what the agent proposed, what I chose. -->
+This was the hardest part of the project, and the part where I could direct
+the agent least. A test can tell me a page scrolls; nothing can tell me
+whether the app means anything. The agent could propose and review, but
+whether Kessler said what I wanted it to say came down to my own judgement,
+from playing it.
 
-- At crit 8 the mechanic was the argument (launching to be seen fills the sky),
-  but people didn't know what Kessler syndrome meant, so the name and the
-  argument didn't land. Built `/kessler/`; its reviewer caught overclaims and
-  stretched sources ("it has already started", Kessler 1978 misquoted)
-  ([`356e469`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/356e469)).
-- The app had an incentive (be seen) but no goal and nothing shared to lose.
-  I also wanted colliding messages to mean something (the crit 8 marker
-  raised it too). Parked both in the plan rather than building straight away
-  ([`3de1cc6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/3de1cc6),
-  [`028d2f5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/028d2f5)).
-- Asked what an object's history is *for* before building it: "the sky
-  remembers" (Ostrom: a commons survives when users can see what each takes),
-  so it tells what followed as well as where it came from
-  ([`93f8735`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/93f8735), ADR 0012).
-- After playing it, my worry: it felt less like a thought-provoking social
-  thing and more like a web app visualising Kessler syndrome. The agent's
-  diagnosis: the why has two halves, for a visitor and for the project, and
-  the app only ever said the second. Three answers, each an ADR for me to
-  accept:
-  - beacons heard by people, counted
-    ([`e0db217`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/e0db217))
-  - the wreck keeps both people's words and broadcasts them as static
-    ([`fd0a0df`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/fd0a0df))
-  - a question from the stations each day, and a Why page
-    ([`248469e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/248469e))
-  - Rejected: aiming a "reply" launch at someone (makes collisions chosen,
-    which breaks the argument) and matching collisions by meaning (the server
-    judging text).
-- The review found the purpose was partly faked. "Heard by" could be inflated
-  with five curl streams; a default-ticked box tagged "Second launch, mid
-  band." as an answer and manufactured "both were answering" connections; the
-  Why page promised things the code didn't do
-  ([`f262b7e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/f262b7e) →
-  [`1472389`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/1472389),
-  [`262e2b4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/262e2b4)).
-  Most collisions involved silent derelicts, so the wreck rarely kept anyone's
-  words; derelicts now carry a gone satellite's last words. Refused: staging
-  collisions between two people's satellites on purpose
-  ([`72a17dd`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/72a17dd)).
-- Two pages arguing the same thing: chose to trim `/kessler/` to the physics
-  and leave the argument to Why, with a test that it stays that way
-  ([`a3a6af2`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/a3a6af2)).
-- The object card: "very hard to read … detracts from the whole purpose". It
-  told a collision that never happened (a cascade's roots flattened into one),
-  the same lineage three ways, jargon left bare. Retold as one line, chips and
-  a timeline, with an Opus reviewer
-  ([`d409ccf`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/d409ccf)).
-  Me: this came from my own reading, not a test or a reviewer. Same lesson as
-  assignment 2's "slop" home page?
-- Me: the README is next, in my own words. Say where the purpose stands now.
+At crit 8 the mechanic was the argument: launching to be seen fills the sky.
+But people didn't know what Kessler syndrome was, so neither the name nor the
+argument landed. I had the agent build a `/kessler/` page which explained what it was to a new user
+([`356e469`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/356e469)).
+The app also had an incentive, being seen, but no goal and nothing shared to
+lose, and I wanted colliding messages to mean something, which the crit 8
+marker raised too. I parked both in the plan rather than building straight
+away
+([`3de1cc6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/3de1cc6),
+[`028d2f5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/028d2f5)).
+Every object in the sky was going to get a history, and before building it I
+asked what that was *for*. The answer: so people can see what each launch
+cost everyone else. That's why an object's history shows what it went on to
+cause, not just where it came from
+([`93f8735`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/93f8735), ADR 0012).
+
+When I actually played with it, I noted that it felt less like a thought provoking social thing and more
+like a web app visualising Kessler syndrome. The agent's diagnosis was that
+the why has two halves, one for a visitor and one for the project, and the
+app only ever said the second. It proposed three answers, each an ADR for me
+to accept: beacons counted as heard by people
+([`e0db217`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/e0db217)),
+a wreck that keeps both people's words and broadcasts them as static
+([`fd0a0df`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/fd0a0df)),
+and a daily question from the stations with a Why page
+([`248469e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/248469e)).
+I rejected aiming a "reply" launch at someone, which makes collisions chosen
+and breaks the argument, and matching collisions by meaning, which has the
+server judging text.
+
+An adversarial review agent then found that parts of the purpose were only
+for show. Anyone could inflate how many people had "heard" a satellite by
+opening a few fake connections. The box marking a launch as an answer to the
+day's question was ticked by default, so ordinary things counted as answers, and the app linked people as "both answering"
+when neither meant to. And the Why page promised things the app didn't do.
+All three were fixed
+([`f262b7e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/f262b7e) →
+[`1472389`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/1472389),
+[`262e2b4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/262e2b4)).
+
+The adversarial review also found that most collisions hit derelicts, dead satellites with no
+message, so a wreck rarely kept anyone's words. Derelicts now carry the last
+words of a satellite that has gone. The reviewer suggested staging collisions
+between two people's satellites instead; I refused, since that would mean the
+server destroying someone's satellite on purpose
+([`72a17dd`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/72a17dd)).
+
+
+The object card, the panel that opens when you click something in the sky,
+shows the limit of what I could hand off. It passed its tests, but when I read
+it, it was hard to understand what was going on, and that undermined the whole
+purpose. No test or reviewer picked this up; I only noticed by using it
+myself. I had it rewritten to tell an object's story simply, then reviewed by
+Opus
+([`d409ccf`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/d409ccf)).
+
+It was the same lesson as assignment 2, where a reviewer checked every number
+on my home page and approved it, and I still had to call it slop because it
+was hard to follow. Tests and reviewers can check that something is correct;
+only I could tell whether it made sense.
+
+<!-- Me: the README is next, in my own words: say where the purpose stands
+     now. -->
 
 ## Balancing the staged collisions
 
