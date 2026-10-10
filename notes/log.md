@@ -3078,3 +3078,5 @@ day), are maybes, the seeding to be rethought against PR 10's balance;
 seeing a burn-up on demand won't be done, since PR 10's balancing addressed
 it (most satellites now burn up, the news tells a burn-up first, and someone
 coming back is told theirs burned up).
+
+Commit `072c40d`.
