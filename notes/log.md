@@ -3080,3 +3080,31 @@ it (most satellites now burn up, the news tells a burn-up first, and someone
 coming back is told theirs burned up).
 
 Commit `072c40d`.
+
+## 2026-10-10 — The launch's planet no longer looks like stars
+
+Advay saw that at the end of the launch the planet read as a starfield.
+The dots were the planet shader's "town lights": one lit point in about 7%
+of every 4-unit cell across the whole night side, plus a few more in town
+patches. On the ground they're hidden by the hills, so they only ever
+showed in the last second or two of the pull-back. From there they were
+evenly scattered, star-sized and partly white after tone mapping, so they
+looked like the stars behind. The sky page that the launch hands off to has
+no town lights, so they're removed instead of reworked, and the last frame
+now matches the planet the sky page opens on.
+
+The same frame had a dotted dark seam along the limb. The sphere's
+polygon outline sits just inside the true radius that the atmosphere
+shader discards below, so a sliver at the edge got neither, showing space
+through in dots. The atmosphere now draws a hair below the surface (h down
+to -0.004, clamped to 0 for its colour), which fills the seam with haze.
+
+Found by keying screenshots to the HUD clock in headless Chromium
+(SwiftShader at 1000x496, with the page's ten-second fallback to the sky
+stubbed out). Before and after at T+6 s; top: speckle and seam, bottom:
+neither:
+
+![The launch at T+6 s, before (stars scattered over the planet, a dotted seam on the limb) and after (a clean blue planet)](screenshots/2026-10-10-launch-planet-speckle.png)
+
+`pnpm check` green against a fresh build (345 tests, 0 errors, 0
+warnings).

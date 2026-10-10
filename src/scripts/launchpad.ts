@@ -120,7 +120,6 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 // Shared GLSL: value noise and fractal noise.
 const NOISE = /* glsl */ `
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-  float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
   float noise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
@@ -321,8 +320,8 @@ function stars(): Points {
 }
 
 // The planet: dark land at the pad, lit by the engine and the searchlights'
-// spill; from orbit, a blue sphere with its day side to the west, a warm line
-// along the terminator and town lights on the night side.
+// spill; from orbit, a blue sphere with its day side to the west and a warm
+// line along the terminator, as the sky page draws it.
 function planet(): Mesh {
   const material = new ShaderMaterial({
     uniforms: {
@@ -335,7 +334,6 @@ function planet(): Mesh {
       rim: { value: new Color(PLANET_COLOURS.rim) },
       land: { value: new Color("#0d1220") },
       haze: { value: new Color("#2c2440") },
-      town: { value: new Color("#ffb46a") },
     },
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
@@ -350,7 +348,7 @@ function planet(): Mesh {
       uniform float air;
       uniform float engine;
       uniform vec3 enginePos;
-      uniform vec3 deep, lit, rim, land, haze, town;
+      uniform vec3 deep, lit, rim, land, haze;
       varying vec3 vWorld;
       varying vec3 vNormal;
       ${NOISE}
@@ -377,19 +375,6 @@ function planet(): Mesh {
           colour = mix(orbit, ground, air);
         }
 
-        // town lights, away from the pad, on the night side
-        float pad = length(vWorld.xz);
-        vec3 q = vWorld / 4.0;
-        vec3 cell = floor(q);
-        float towns = smoothstep(0.45, 0.7, fbm(vWorld.xz * 0.006 + 3.0));
-        float r = hash3(cell);
-        if (pad > 45.0 && r > 0.93 - towns * 0.12) {
-          vec3 at = vec3(hash3(cell + 1.3), hash3(cell + 2.7), hash3(cell + 4.1));
-          float px = length(fwidth(q));
-          float size = max(0.12, px * 0.9);
-          float spot = smoothstep(size, 0.0, length(fract(q) - at)) * pow(0.12 / size, 2.0);
-          colour += town * spot * (0.5 + 1.5 * hash3(cell + 9.0)) * (1.0 - smoothstep(-0.05, 0.08, day));
-        }
         gl_FragColor = vec4(colour, 1.0);
         ${FINISH}
       }`,
@@ -430,9 +415,12 @@ function atmosphere(): Mesh {
         float down = -dot(o, d);
         float t = max(down, 0.0);
         // the height of the line of sight's lowest point, in planet radii / 6,
-        // the sky page's scale
+        // the sky page's scale; drawn a hair below the surface too, since the
+        // faceted sphere's outline falls just inside the true one and would
+        // leave a dotted seam on the limb
         float h = (length(o + d * t) - radius) / radius * 6.0;
-        if (h < 0.0) discard;
+        if (h < -0.004) discard;
+        h = max(h, 0.0);
         float line = exp(-pow((h - 0.07) / 0.022, 2.0)) * 0.5;
         float glow = exp(-h / 0.1) * 0.5 + exp(-h / 0.45) * 0.03;
         // from inside the air, looking up, there's no limb to see
