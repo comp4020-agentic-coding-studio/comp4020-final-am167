@@ -3110,3 +3110,46 @@ neither:
 warnings).
 
 Commit `c20ac11`.
+
+## 2026-10-10 — The launch's planet, the real one
+
+With the speckle gone (above), Advay asked for the planet at the end of
+the launch to look more realistic. It was a plain blue gradient.
+
+- **Real land.** The pad now stands at Canberra on the real planet:
+  `scripts/land.mjs` (`pnpm land`) bakes where there's land, from the
+  same world-atlas data as the sky page's coastlines, into a 512x320 mask
+  over the hemisphere the launch looks down on. It's stored as run lengths
+  in `src/scripts/land.json` (6 KB, 2.3 KB gzipped). The frame is the sky
+  page's, tipped 8° so up runs through Canberra itself, since where
+  Canberra falls on the chart's plane is out to sea south of Tasmania.
+  From orbit, Australia's red interior spreads below the pad, the Tasman
+  Sea to one side.
+- **Land, sea and cloud.** The interior shades redder and drier away
+  from the coast, with darker ranges and pale salt pans. The sea catches
+  the sun. Cloud is domain-warped noise, opaque with wispy margins, in
+  fronts and clear spells, thinner over the desert. The coast's edge is
+  roughened so the mask's cells don't show. Haze builds only close to
+  the limb.
+- **Daylight.** The visible planet was all twilight, so it read as
+  murky. Its orbital shading now has its own sun: still under the pad's
+  horizon (dusk at the pad), but swung towards the camera, so the ground
+  the launch looks down on is lit and the terminator crosses the view.
+  The pad's dusk sky, hills and rocket keep the old sun, so the idle
+  launchpad is unchanged.
+- **HUD.** The readouts' shadow is now layered, so they stay readable over
+  white cloud.
+
+Tuned over about a dozen captures at 1920x1080 in headless Chromium,
+keyed to the HUD clock. Two dead ends: the first pass had the haze over
+everything (the whole sliver of planet is seen at a grazing angle), and
+clouds thinned by multiplying their opacity read as pink veils over the
+red desert, so cloud cover now varies by where cloud forms, not how
+opaque it is. Before (top) and after at T+6 s:
+
+![The launch at T+6 s: before, a plain blue planet; after, Australia's red interior, the Tasman Sea and white cloud below the pad](screenshots/2026-10-10-launch-planet-realistic.png)
+
+`pnpm check` green against a fresh build (345 tests, 0 errors, 0
+warnings). The layout test passes 12 of 12, run against Chromium since the
+container has no Chrome. The launchpad chunk is 13.4 KB gzipped of its
+14 KB budget, and the client 266.8 KB of 270 KB.
