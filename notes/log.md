@@ -2838,6 +2838,8 @@ up (one was destroyed); and among a dozen dead-centre fragments at the
 staging height, every staged collision happens as announced, and its
 derelicts and wreck are in no other collision (18 were).
 
+Commit `4e34a4a`.
+
 ### Opus review of the fix: partly resolved
 
 A fresh Opus reviewer (adversarial, read-only, its own harness in /tmp)
@@ -2879,6 +2881,8 @@ down from the flash" (many fragments start just over the ground), and
 "anything launched later starts higher" (not a later natural fragment or
 a manoeuvre). The levers (never-collide chance, staging cadence, the news
 line) are design decisions left for Advay.
+
+Commit `4e34a4a`.
 
 ## 2026-10-10 — A close pair may never collide; burn-ups shown on the sky
 
@@ -2930,6 +2934,8 @@ tests, 0 errors, 0 warnings) against a fresh build; `pnpm test:layout`
 Still open (not chosen): staging every 5 minutes is now nearly all a
 watcher sees (97% in a quiet sky; 59 of 60 marker sessions saw only
 staged collisions); `keepDerelicts` counts staged derelicts.
+
+Commit `4e34a4a`.
 
 ### Second Opus review, and the round after it
 
@@ -2996,3 +3002,5 @@ no burn-up is fresh (drop them? their card tells them); nothing tells
 someone who comes back that theirs burned up; crowding bites only once
 people outnumber the derelict floor; `keepDerelicts` counts staged
 derelicts.
+
+Commit `4e34a4a`.
