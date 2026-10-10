@@ -1,10 +1,5 @@
 # Process overview
 
-<!-- Target 900–1100 words total (not a hard limit - just a target);
-     rough budget per section in each heading's comment. Items marked
-     "Me:" need my own judgement or memory. Every hash is a link a marker can
-     follow; keep the link when rewriting the sentence around it. -->
-
 ## What I built
 
 Kessler is a shared space anyone can launch into. You send up a satellite
@@ -187,85 +182,70 @@ on my home page and approved it, and I still had to call it slop because it
 was hard to follow. Tests and reviewers can check that something is correct;
 only I could tell whether it made sense.
 
-<!-- Me: the README is next, in my own words: say where the purpose stands
+<!-- TODO: the README is next, in my own words: say where the purpose stands
      now. -->
 
 ## Balancing the staged collisions
 
-<!-- ~200 words. Main thing this week #2. Tests green throughout (328 → 345);
-     the evidence was measurement, and each round's measurement got checked. -->
+This was the second hardest part, and the one I went round the most times.
+Two things pulled against each other. In a quiet sky collisions should be
+rare, and most satellites should live long enough to burn up. But a marker
+visits for about ten minutes, and the crit 9 review said they would likely
+see no collision at all
+([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)).
+So when someone is watching, the server sends two derelicts at each other
+over a station
+([`2dc518c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/2dc518c)).
+Every fix after that pushed one side too far. The tests stayed green the
+whole time, because nothing was broken; it just felt wrong.
 
-- The tension: in a quiet sky collisions are rare (I chose the gentler tuning,
-  1–5 an hour), but a marker visits for ten minutes. The C9 review said a
-  marker would likely see none
-  ([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)).
-  Fix: when someone is watching, the server sends two derelicts at each other
-  over a station
-  ([`2dc518c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/2dc518c)).
-- Playing it on 9 Oct: collisions felt too frequent and forced, and satellites
-  never burned up. Asked for a measurement before any change. A Monte Carlo
-  over the real orbit code found the staged collision's debris sat in the low
-  band's middle: 3% of low satellites burned up, against 54% without staging.
-  Of four levers I chose staging under the bands: 56%
-  ([`a286df9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/a286df9), ADR 0019).
+During my own observation/testing of the website, I noticed that collisions felt too frequent and forced, and
+satellites never burned up. I asked for a measurement before any change. A
+simulation found the staged collision's debris sat in the middle of the low
+band, so only 3% of low satellites burned up, against 54% with no staging. I
+chose to stage collisions below the bands instead, and the agent's
+simulation said 56% would now burn up
+([`a286df9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/a286df9)).
 
-That fix ([`a286df9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/a286df9)) passed all 328 tests, and its own
-simulation said low satellites now burned up 56% of the time. I had a second
-agent, with none of the first one's context, test
-[PR #10](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/10) against a scratch server. It went well past re-running
-the checks. It undid each part of the change in turn, to make sure the new
-tests failed without it. It drove the real server code through eight hours of
-sky at a time on throwaway databases, shuffling the ids so each run drew
-different collisions. And it watched a fresh sky in Chrome for forty minutes,
-where it caught a collision the sky had announced never happening: one of the
-pair was hit six seconds early by debris from the collision before.
+That didn't hold up. A second agent, with none of the first one's context,
+tested the pull request against a real server
+([PR #10](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/10)).
+The fix had only moved the harm from the start of a satellite's life to its
+end, and a watcher now saw about 20 collisions an hour. The first agent
+reproduced this before fixing it: a staged collision now keeps to itself.
 
-Its report showed the fix had only moved the harm. The first agent's
-simulation only put staged collisions before a satellite's launch, but
-staging carries on as long as anyone is watching, and the debris now sat
-exactly where every low satellite falls on its way to burning up. A satellite
-watched through its last 40 minutes burned up 4 times in 60, against 19 in 60
-with no staging: the fix had moved the kill from the start of a satellite's
-life to its end. A watcher also saw about 20 collisions an hour, most of them
-knock-ons between pieces of staged debris, the opposite of the less forced sky
-I'd asked for. The report ended with a judgement as well as numbers: which
-lever to pull next, and which one would backfire.
+An Opus review then said my complaint was still only partly fixed: natural
+collisions killed about 77% of satellites in a quiet sky, and staged events ran
+repeatedly every five minutes. It left the choice to me. Over two
+rounds I chose to let half of all close pairs never collide, to stage at
+random every 10–15 minutes (5 for someone who has just arrived), and to show
+burn-ups in the sky's news (ADR 0020). The second review also caught the
+agent's own numbers being wrong again, and a test that passed with the rule
+removed
+([`4e34a4a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/4e34a4a)).
+In a quiet sky, burn-ups went from 17% to 58%, and 99% of newcomers still see
+a collision in their first ten minutes. Someone coming back is now told when
+theirs burned up
+([`d85c1db`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/d85c1db)).
 
-The report wasn't taken on faith either. Before changing anything, the first
-agent rebuilt the tester's harness and reproduced its numbers, then fixed it
-with one rule: a staged collision keeps to itself. Watched satellites went
-from 0 of 80 burning up to 34, and none were lost to staged debris
-([`4e34a4a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/4e34a4a)). The lever the tester pointed to next, letting a close pair
-never collide, is the one I chose later (ADR 0020).
-
-- An Opus review said my complaint was only partly fixed: natural collisions
-  still killed about 77% of satellites in a quiet sky, staging ran like a
-  metronome every 5:00, and burn-ups barely made the sky's news line. It left
-  the levers to me. I picked two: a close pair may never collide, and a
-  burn-up told before a collision that took nobody's satellite (ADR 0020).
-- A second Opus review found the agent's own baseline was wrong (it claimed
-  69 of 70 burn-ups went untold; really 27%), edge cases in the news line,
-  and a new test that passed with the rule reverted. My second round: a close
-  pair collides at all half the time, and staging every random 10–15
-  minutes, or 5 for someone who has just arrived, so a marker still sees one
-  ([`4e34a4a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/4e34a4a)).
-- Result: burn-ups in a quiet sky 17% → 58%, at a crit 7% → 33%; 99% of
-  newcomers still see a collision in their first ten minutes. Then someone
-  coming back is told theirs burned up
-  ([`d85c1db`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/d85c1db)).
-- Me: the lesson (A1's scroll resistance again? green tests, wrong feel), and
-  what's still open: the news line is mostly staged collisions.
+Every round's numbers looked right until someone else checked them, and only
+playing it told me whether it felt right. It still isn't finished: the sky's
+news is mostly staged collisions.
 
 ## What good means at this scale
 
 <!-- ~80 words. The brief asks for my position on the "good" readings here,
      not just a citation in the README. notes/reading.md has summaries. -->
 
-- Shirky, "Situated Software": visibility doing the work enforcement would,
-  like the blame and history that name who caused what (ADRs 0010, 0012),
-  with no moderation or voting.
-- Kazemi, *Run Your Own Social*: limits make small spaces work (the 200
-  satellite cap). Tension: his are screened friends; Kessler's sky is
-  strangers, so the rules are the boundary, not the people.
-- Sloan and Appleton (home-cooked software): more contrast than support.
-- Me: which of these I've actually read, and my position.
+<!-- TODO -->
+
+## Closing
+
+The multi-user, real-time part of the spec was the easy part to meet. The
+server, the live updates and the replay each had a clear answer, and a test
+could say whether they worked. The "good" part had no such test. No check,
+reviewer or rule in the harness could tell me whether Kessler made people
+think, whether the object card made sense, or whether the sky felt fair. Each
+time, the tests were green and something was still wrong, and the only way I
+found it was by using the app myself. The agents did most of the building,
+but whether it was good came down to my own judgement.

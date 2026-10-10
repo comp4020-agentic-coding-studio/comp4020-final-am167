@@ -3089,3 +3089,20 @@ closes the section. The README note stays a "Me:" comment.
 `pnpm check:evidence` green.
 
 Commit `099b47b`.
+
+## 2026-10-10 — PROCESS.md: staged collisions cut down, and a closing
+
+"Balancing the staged collisions" was dot points plus three long paragraphs
+on PR 10's tester, about twice its budget. Rewritten as one story of Advay
+struggling to balance two things that pull against each other: a quiet sky
+where most satellites burn up, and a marker who visits for ten minutes and
+should see a collision. Each round (`2dc518c`, `a286df9`, PR 10, the two
+Opus reviews behind `4e34a4a`, then `d85c1db`) pushed one side too far while
+the tests stayed green. Drawn from PR 10's description and the 9–10 October
+log entries; the tester's methods are cut to a sentence. About 400 words.
+
+A new closing section, in Advay's framing: the multi-user, real-time part of
+the spec was easy to meet and to test, but whether the app was good (the
+purpose, the object card, the sky's balance) no check or harness rule could
+settle; it came down to their own judgement. The README "Me:" note stays
+until the README is written. `pnpm check:evidence` green.
