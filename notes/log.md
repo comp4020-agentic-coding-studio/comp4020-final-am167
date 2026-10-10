@@ -3087,3 +3087,5 @@ reviewer picked it up". They confirmed the link to assignment 2's "slop" home
 page (a reviewer approved every number; it was still hard to follow), which
 closes the section. The README note stays a "Me:" comment.
 `pnpm check:evidence` green.
+
+Commit `099b47b`.
