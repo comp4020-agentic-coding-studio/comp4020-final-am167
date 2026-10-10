@@ -3106,3 +3106,5 @@ the spec was easy to meet and to test, but whether the app was good (the
 purpose, the object card, the sky's balance) no check or harness rule could
 settle; it came down to their own judgement. The README "Me:" note stays
 until the README is written. `pnpm check:evidence` green.
+
+Commit `035768e`.
