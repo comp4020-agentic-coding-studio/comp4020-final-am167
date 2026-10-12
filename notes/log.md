@@ -3416,3 +3416,31 @@ not run again: this round changed neither the launchpad nor the sky
 page.
 
 Commit `3469642`.
+
+## 2026-10-12 — The extras re-measured, being heard included
+
+Advay asked for the measurement stopped at `f5d1830` to be finished. The
+harness now also counts what being heard needs (ADR 0016): how many of
+people's passes over a station get at least one turn on air. All four
+scenarios were run again with and without extras (`scripts/balance/`; 40
+quiet-sky runs a side, 24 crit and busy, 16 watched), and the quiet sky and
+the crit pooled with the earlier round of the same code, since one run
+varies a lot (a quiet sky's burn-ups from about 30% to 80%; the two
+rounds' with-extras quiet skies came out 54% and 60%).
+
+| | without extras | with extras |
+|---|---|---|
+| People's satellites burned up: quiet, crit, busy | 62%, 31%, 26% | 57%, 29%, 23% |
+| People's passes with a turn on air: quiet, crit, busy | 96.5%, 87%, 83% | 89%, 84%, 80.5% |
+| Collisions a watcher sees an hour (natural) | 6.0 (0.5) | 6.1 (0.5) |
+| A newcomer sees a collision within 10 minutes | 100% | 99.5% |
+
+So in a quiet sky the extras cost people a little: five points of
+burn-ups, and about one pass in nine unheard instead of one in thirty. In
+a crowded sky they barely matter, since they make room and people crowd
+the stations themselves. Staging is untouched. The first version's "a
+watcher sees 1.4 natural collisions an hour with extras" didn't hold up
+(0.5 either way now). ADR 0021's table and consequences updated; the dial
+if being heard less is too much is `EXTRA_CAP` or `PER_HOUR` (giving way
+at the stations would need the browser to know whose satellites are the
+extras', which would give them away).

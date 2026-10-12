@@ -138,24 +138,25 @@ databases, the clock passed in, the derelict floor on, people launching
 into random bands, every run played out until every person's satellite had
 come down; nobody watching unless said), against the same runs without
 extras. The runs without extras match ADR 0020's own numbers within their
-spread. "On air" is how much of their time over a station people's
-beacons were the one broadcast, by the stations' own turn-taking
-(`airtime.ts`).
+spread. "Passes with a turn" is how many of people's passes over a
+station got at least one turn on air, by the stations' own turn-taking
+(`airtime.ts`): what being heard needs (ADR 0016). "On air" is how much of
+their time over a station they were the one broadcast. A single run varies
+a lot (a quiet sky's burn-ups from about 30% to 80%), so the quiet sky is
+pooled over two rounds of 40 runs each.
 
 | | without extras | with extras |
 |---|---|---|
-| People's satellites burned up, quiet sky (2 launches an hour for 12 hours; 40 runs each) | 62% | 54% |
-| the same, at a crit (60 launches in an hour; 24 runs each) | 31% | 31% |
-| the same, busy (10 an hour for 12 hours; 24 runs, and 16 of the first version) | 26% | 22%\* |
-| Collisions an hour, quiet sky, unwatched | 0.47 | 0.64 |
-| People's beacons on air, of their time over a station, quiet sky | 58% | 37% |
-| the same, at a crit | 30% | 25% |
-| Collisions a watcher sees an hour, quiet sky (staged, natural; 16 runs) | 5.9 (5.5, 0.4) | 6.8 (5.4, 1.4)\* |
-| A newcomer sees a collision within 10 minutes | 99% | 100%\* |
-
-\* Measured with the first version, before its review: the same rate and
-rules, but regulars only every other hour and a few different lines. To
-be measured again with `scripts/balance/`.
+| People's satellites burned up, quiet sky (2 launches an hour for 12 hours; 80 runs each) | 62% | 57% |
+| the same, at a crit (60 launches in an hour; 48 runs each) | 31% | 29% |
+| the same, busy (10 an hour for 12 hours; 48 and 24 runs) | 26% | 23% |
+| Collisions an hour, quiet sky, unwatched | 0.50 | 0.62 |
+| People's passes over a station with a turn on air, quiet sky (40 runs each) | 96.5% | 89% |
+| the same, at a crit (24 runs each) | 87% | 84% |
+| the same, busy (24 runs each) | 83% | 80.5% |
+| People's beacons on air, of their time over a station: quiet, crit, busy | 57%, 30%, 27% | 38%, 26%, 24% |
+| Collisions a watcher sees an hour, quiet sky (staged, natural; 16 runs each) | 6.0 (5.5, 0.5) | 6.1 (5.6, 0.5) |
+| A newcomer sees a collision within 10 minutes | 100% | 99.5% |
 
 - The sky has people in it at any hour: a day's launches on a first start,
   someone launching most hours of a Canberra evening, beacons over the
@@ -164,23 +165,27 @@ be measured again with `scripts/balance/`.
   holds about 17 of their launches, 1 to 12 of them still up (7 on
   average, over ten start times).
 - More satellites means more collisions, which is the app's own argument:
-  in a quiet sky, about half of people's satellites still burn up (54%,
-  against 62% without them, and ADR 0020's 56 to 58%); at a crit the
-  extras make room and nothing changes (31% either way). At the full default
+  in a quiet sky, more than half of people's satellites still burn up
+  (57%, against 62% without them, and ADR 0020's 56 to 58%); at a crit,
+  where the extras make room, 29% against 31%. At the full default
   rate without making room, a quiet sky dropped to about 48%, and a lower
   derelict floor didn't help (the extras added satellites mostly low and
   mid, where derelicts spread over all three bands); the rate and the room
   rule are what keep it near ADR 0020's tuning. `PER_HOUR` is the dial.
-- People's beacons get less airtime: the extras' beacons take turns over
-  the stations like anyone's (ADR 0016), so in a quiet sky a person's
-  beacon is on air for 37% of its time over a station, against 58%
-  without them (25% against 30% at a crit). What decides being heard is
-  getting a turn at all in a pass, which this doesn't measure yet; if
-  that falls as far, the extras should give way at the stations, or fly
-  fewer at once.
-- A watcher sees more natural collisions (1.4 an hour, against 0.4), so a
-  smaller share of what they see is staged (79%, against 93%); staging
-  itself is unchanged.
+- People are heard a little less: the extras' beacons take turns over the
+  stations like anyone's (ADR 0016). In a quiet sky, 89% of a person's
+  passes over a station get a turn on air, against 96.5% without them:
+  about one pass in nine goes unheard, not one in thirty. A satellite
+  passes a station many times, so its "heard by" still grows, a little
+  more slowly. In a crowded sky the extras barely change it (84% against
+  87% at a crit), since people crowd the stations themselves. If that's
+  too much, `EXTRA_CAP` (fewer of theirs up at once) or `PER_HOUR` is the
+  dial; having them give way at the stations would need the browser to
+  know which satellites are theirs, which would give them away.
+- A watcher sees as many collisions as before (6.1 an hour, against 6.0),
+  nearly all staged, and a newcomer still sees one within 10 minutes.
+  (The first version measured 1.4 natural collisions a watched hour with
+  extras; whether that was noise or its regulars, 16 runs can't tell.)
 - The app is no longer purely a record of what people did, and nothing on
   the page says which satellites aren't people's. Activity a visitor (or
   the marker) sees may be the extras', not other visitors'; the README

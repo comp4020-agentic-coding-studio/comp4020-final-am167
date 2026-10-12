@@ -7,8 +7,9 @@
 // People launch into random bands for `hours` (at random times, or evenly,
 // one after another, for a `burst` such as a crit). Unwatched, it then plays
 // out until every person's satellite has come down, and reports how many
-// burned up, collisions an hour, and how much of their time over a station
-// people's beacons were on air. `watched`: someone has the sky open for six
+// burned up, collisions an hour, how much of their time over a station
+// people's beacons were on air, and how many of their passes over a station
+// got a turn on air at all (which is what being heard needs, heard.ts). `watched`: someone has the sky open for six
 // hours after two of warming up, a newcomer arriving every half hour, and it
 // reports the collisions they saw. EXTRAS_PER_HOUR (0 for none) sets the
 // extras. Prints one line of JSON.
@@ -80,10 +81,19 @@ if (watched) {
   const counted = collisions.filter((c) => c.at > window.from && c.at <= window.to).length;
   // Airtime: every 2 s through the window, who each station broadcasts of
   // those overhead (airtime.ts), as heard.ts works it out; for each person's
-  // satellite overhead, whether it's on air.
+  // satellite overhead, whether it's on air, and for each of their passes
+  // (overhead at one station, with no gap), whether it got a turn. A turn is
+  // at least 4 s, so sampling every 2 s sees every one.
   const speaking = all.filter((o) => (o.kind === "satellite" && o.beacon) || (o.kind === "debris" && o.words));
   let over = 0;
   let onAirToo = 0;
+  const passes = new Map<string, { last: number; turn: boolean }>();
+  let passCount = 0;
+  let passTurns = 0;
+  const close = (pass: { turn: boolean }) => {
+    passCount++;
+    if (pass.turn) passTurns++;
+  };
   for (let at = window.from; at < window.to; at += 2000) {
     const overhead = new Map<string, { id: number; text: string; static: boolean; person: boolean }[]>();
     for (const o of speaking) {
@@ -95,15 +105,25 @@ if (watched) {
       here.push({ id: o.id, text: lineOf(o) ?? "", static: o.kind === "debris", person: o.kind === "satellite" && !isExtra(o.owner) });
       overhead.set(station.id, here);
     }
-    for (const here of overhead.values()) {
+    for (const [station, here] of overhead) {
       const speaker = onAir(here, at)?.speaker;
       for (const one of here) {
         if (!one.person) continue;
         over++;
         if (speaker?.id === one.id) onAirToo++;
+        const key = `${one.id}:${station}`;
+        let pass = passes.get(key);
+        if (!pass || at - pass.last > 4000) {
+          if (pass) close(pass);
+          pass = { last: at, turn: false };
+          passes.set(key, pass);
+        }
+        pass.last = at;
+        if (speaker?.id === one.id) pass.turn = true;
       }
     }
   }
+  for (const pass of passes.values()) close(pass);
   const byBand = Object.fromEntries(BANDS.map((band) => [band, burned(theirs.filter((o) => o.band === band))]));
   const extras = all.filter((o) => o.kind === "satellite" && isExtra(o.owner) && o.launchedAt >= start);
   console.log(
@@ -114,6 +134,7 @@ if (watched) {
       extras: extras.length,
       collisionsPerHour: counted / ((window.to - window.from) / HOUR),
       onAir: onAirToo / Math.max(1, over),
+      passesWithATurn: passTurns / Math.max(1, passCount),
     }),
   );
 }

@@ -187,7 +187,10 @@ _Last updated 2026-10-12 (extras: invented people seed the sky, ADR 0021; review
   fills in a day behind it; a deploy starts from the latest thing in the
   record. Rethought from PR 5's resident organisations, which were tuned
   before ADRs 0019 and 0020; measured with `scripts/balance/` (ADR
-  0021). For Advay: the README's new "An empty sky" line and the Why
+  0021): in a quiet sky people's satellites burn up 57% of the time (62%
+  without extras), and 89% of their passes over a station get a turn on
+  air (96.5%); at a crit 29% (31%) and 84% (87%). `EXTRA_CAP` or
+  `PER_HOUR` is the dial if being heard less is too much. For Advay: the README's new "An empty sky" line and the Why
   page's reworded line are in my words, not his; C10's evidence must
   leave the extras out (`isExtra`).
 - **Later (low priority, near the end of the project):** `README.md`,
