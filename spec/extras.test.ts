@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { AGAIN, ANSWERS, CALLSIGNS, LINES, REGULARS, textOf } from "../src/lib/extras-cast.ts";
+import { describe, expect, it, vi } from "vitest";
+import { AGAIN, ANSWERS, ANSWER_HOURS, CALLSIGNS, LINES, REGULARS, textOf, type Line } from "../src/lib/extras-cast.ts";
 import { EXTRA, HOUR, PER_HOUR, extrasBetween, isExtra, nextExtraAfter, type ExtraEvent, type ExtraLaunch } from "../src/lib/extras.ts";
 import { blocked, readLaunch } from "../src/lib/launch.ts";
 import { QUESTIONS, dayOf, questionOn } from "../src/lib/questions.ts";
@@ -27,9 +27,16 @@ const form = (fields: Record<string, string>) => {
 };
 const passes = (callsign: string, beacon: string) => readLaunch(form({ band: "low", callsign, beacon })).ok;
 
-// the hour of the day in Canberra
+// the hour of the day, and the month, in Canberra
 const hourIn = (time: number) =>
   Number(new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Sydney", hour: "numeric", hourCycle: "h23" }).format(time)) % 24;
+const monthIn = (time: number) => Number(new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Sydney", month: "numeric" }).format(time));
+const within = (hour: number, [from, to]: readonly [number, number]) => (from <= to ? hour >= from && hour < to : hour >= from || hour < to);
+const isRegular = (owner: string) => REGULARS.some((r) => owner === `${EXTRA}${r.key}`);
+// every line in the cast, by its text
+const LINE = new Map<string, Line>(
+  [...LINES, ...AGAIN, ...Object.values(ANSWERS).flat(), ...REGULARS.flatMap((r) => r.lines)].map((line) => [textOf(line), line]),
+);
 
 describe("the extras' cast", () => {
   it("only says what a person could have typed into the launch form", () => {
@@ -75,7 +82,7 @@ describe("the extras' schedule", () => {
 
   it("is a crowd of one-off visitors and a few regulars, mostly without a handle", () => {
     const owners = new Set(launches.map((l) => l.owner));
-    expect(owners.size).toBeGreaterThan(DAYS * 8);
+    expect(owners.size).toBeGreaterThan(DAYS * 6);
     const anonymous = launches.filter((l) => l.handle === null).length;
     expect(anonymous / launches.length).toBeGreaterThan(0.6);
     const handles = new Set(launches.flatMap((l) => (l.handle ? [l.handle] : [])));
@@ -114,23 +121,69 @@ describe("the extras' schedule", () => {
     }
   });
 
-  it("says what fits the hour: no '9pm' at lunchtime", () => {
-    const timed = new Map(
-      [...LINES, ...AGAIN, ...Object.values(ANSWERS).flat(), ...REGULARS.flatMap((r) => r.lines)].flatMap((line) =>
-        typeof line === "string" ? [] : [[line.text, line.hours] as const],
-      ),
-    );
-    expect(timed.size).toBeGreaterThan(20);
-    const within = (hour: number, [from, to]: readonly [number, number]) => (from <= to ? hour >= from && hour < to : hour >= from || hour < to);
-    let said = 0;
+  // a line that can be checked against the satellite's card is true of it
+  it("says what fits: no '9pm' at lunchtime, no 'going high' from the low band, no promise it won't keep", () => {
+    const fitted = [...LINE.values()].filter((line) => typeof line !== "string");
+    expect(fitted.length).toBeGreaterThan(40);
+    const said = { hours: 0, months: 0, bands: 0, does: 0 };
     for (const l of launches) {
-      const hours = timed.get(l.beacon);
-      if (!hours) continue;
-      said++;
-      expect(within(hourIn(l.at), hours), `"${l.beacon}" at ${hourIn(l.at)}:00`).toBe(true);
+      const line = LINE.get(l.beacon)!;
+      expect(line, l.beacon).toBeDefined();
+      if (typeof line === "string") continue;
+      const why = `"${l.beacon}" at ${hourIn(l.at)}:00 in month ${monthIn(l.at)}, ${l.band}`;
+      if (line.hours) expect(within(hourIn(l.at), line.hours), why).toBe(true), said.hours++;
+      if (line.months) expect(line.months, why).toContain(monthIn(l.at)), said.months++;
+      if (line.bands) expect(line.bands, why).toContain(l.band), said.bands++;
+      if (line.does) {
+        expect(manoeuvres.some((m) => m.type === line.does && m.owner === l.owner && m.launchedAt === l.at), why).toBe(true);
+        said.does++;
+      }
     }
-    // and they do get said, at their hours
-    expect(said).toBeGreaterThan(DAYS / 2);
+    // and they do get said, where they fit
+    for (const [what, n] of Object.entries(said)) expect(n, what).toBeGreaterThan(2);
+    // answers about today wait until there's been some of it
+    for (const l of launches) {
+      const hours = l.question && ANSWER_HOURS[l.question];
+      if (hours) expect(within(hourIn(l.at), hours), `"${l.question}" answered at ${hourIn(l.at)}:00`).toBe(true);
+    }
+  });
+
+  it("brings each regular at most once a day, at any hour of theirs, not by a pattern", () => {
+    for (const regular of REGULARS) {
+      const times = launches.filter((l) => l.owner === `${EXTRA}${regular.key}`).map((l) => l.at);
+      // a visit's launches are minutes apart; visits are hours apart
+      const starts = times.filter((t, i) => i === 0 || t - times[i - 1] > 40 * MINUTE);
+      for (let i = 1; i < starts.length; i++) expect(starts[i] - starts[i - 1], regular.key).toBeGreaterThan(2 * HOUR);
+      const hours = new Set(starts.map(hourIn));
+      const [from, to] = regular.hours;
+      const length = (to - from + 24) % 24 || 24;
+      expect(hours.size, `${regular.key} came at ${[...hours]}`).toBeGreaterThanOrEqual(Math.min(length, 3));
+      expect([...hours].some((h) => h % 2 === 0) && [...hours].some((h) => h % 2 === 1), `${regular.key} came at ${[...hours]}`).toBe(true);
+      for (const h of hours) expect(within(h, regular.hours), `${regular.key} at ${h}:00`).toBe(true);
+    }
+  });
+
+  it("numbers a visitor's second satellite after their first: Pebble, Pebble 2", () => {
+    const byOwner = new Map<string, ExtraLaunch[]>();
+    for (const l of launches) if (!isRegular(l.owner)) byOwner.set(l.owner, [...(byOwner.get(l.owner) ?? []), l]);
+    // "Pebble 2" is Pebble's 2; "Apollo 99" is nobody's
+    const numberOf = (callsign: string, first: string) => {
+      const rest = callsign.slice(first.length + 1);
+      return callsign.startsWith(first) && /^[ -]$/.test(callsign[first.length] ?? "") && /^\d+$/.test(rest) ? Number(rest) : null;
+    };
+    let numbered = 0;
+    for (const visit of byOwner.values()) {
+      const first = visit[0].callsign;
+      visit.forEach((l, j) => {
+        const n = numberOf(l.callsign, first);
+        if (n === null) return;
+        numbered++;
+        const before = visit.slice(0, j).filter((p) => p.callsign === first || numberOf(p.callsign, first) !== null);
+        expect(n, visit.map((v) => v.callsign).join(", ")).toBe(before.length + 1);
+      });
+    }
+    expect(numbered).toBeGreaterThan(5);
+    for (const l of launches) expect(l.regular).toBe(isRegular(l.owner) ? l.owner.slice(EXTRA.length) : null);
   });
 
   it("never says the same thing twice in three days", () => {
@@ -157,15 +210,18 @@ describe("the extras' schedule", () => {
     }
   });
 
-  it("is the same however it's asked, so every server agrees", () => {
+  it("is the same however it's asked, so every server agrees", async () => {
     const whole = extrasBetween(FROM, FROM + 3 * DAY, PER_HOUR);
     const cut = FROM + 37 * HOUR + 1234;
     const parts = [...extrasBetween(FROM, cut, PER_HOUR), ...extrasBetween(cut, FROM + 3 * DAY, PER_HOUR)];
     expect(parts).toEqual(whole);
     expect(extrasBetween(FROM, FROM + 3 * DAY, PER_HOUR)).toEqual(whole);
-    // asked about a later week first, then the start: no difference
-    const later = extrasBetween(FROM + 20 * DAY, FROM + 21 * DAY, PER_HOUR);
-    expect(later).toEqual(events.filter((e) => e.at > FROM + 20 * DAY && e.at <= FROM + 21 * DAY));
+    // a fresh server (nothing worked out yet) asked about a later week
+    // first, then the start: no difference
+    vi.resetModules();
+    const cold = await import("../src/lib/extras.ts");
+    expect(cold.extrasBetween(FROM + 20 * DAY, FROM + 21 * DAY, PER_HOUR)).toEqual(events.filter((e) => e.at > FROM + 20 * DAY && e.at <= FROM + 21 * DAY));
+    expect(cold.extrasBetween(FROM, FROM + 3 * DAY, PER_HOUR)).toEqual(whole);
   });
 
   it("knows when the next thing is due", () => {

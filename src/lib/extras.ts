@@ -1,5 +1,5 @@
 import { seeded } from "./collide.ts";
-import { AGAIN, ANSWERS, CALLSIGNS, LINES, REGULARS, textOf, type Line } from "./extras-cast.ts";
+import { AGAIN, ANSWERS, ANSWER_HOURS, CALLSIGNS, LINES, REGULARS, textOf, type Line } from "./extras-cast.ts";
 import type { Band } from "./orbit.ts";
 import { dayOf, questionOn } from "./questions.ts";
 
@@ -40,9 +40,12 @@ type Random = () => number;
 const SHAPE = [0.45, 0.3, 0.15, 0.1, 0.1, 0.15, 0.35, 0.65, 0.85, 0.9, 1, 1, 1.15, 1.1, 1, 1, 1.1, 1.25, 1.45, 1.75, 1.95, 1.9, 1.5, 0.95];
 const SHAPE_MEAN = SHAPE.reduce((sum, x) => sum + x, 0) / SHAPE.length;
 
-// the hour of the day in Canberra, summer time included
-const clock = new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Sydney", hour: "numeric", hourCycle: "h23" });
-const hourIn = (time: number): number => Number(clock.formatToParts(time).find((part) => part.type === "hour")?.value ?? 0) % 24;
+// the hour of the day and the month (1 to 12) in Canberra, summer time
+// included
+const clock = new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Sydney", hour: "numeric", hourCycle: "h23", month: "numeric" });
+const partOf = (time: number, type: "hour" | "month") => Number(clock.formatToParts(time).find((part) => part.type === type)?.value ?? 0);
+const hourIn = (time: number): number => partOf(time, "hour") % 24;
+const monthIn = (time: number): number => partOf(time, "month");
 
 // Some days are busier than others: 0.7 to 1.3 times as busy, by the day.
 const busyness = (hour: number) => 0.7 + 0.6 * seeded(Math.imul(Math.floor((hour + 10) / 24), 0x2c1b3c6d) ^ 0x6a09e667)();
@@ -122,15 +125,23 @@ function howMany(random: Random, mean: number): number {
 
 const within = (hour: number, [from, to]: [number, number]) => (from <= to ? hour >= from && hour < to : hour >= from || hour < to);
 
-// Whether a regular comes this hour: only in their hours, and only every
-// other hour, so one visit's launches can't run into the next's; as likely
-// in each of those as makes their visits a day.
-function comes(random: Random, i: number, hour: number, local: number, scale: number): boolean {
+// Whether a regular comes this hour: on about `perDay` days, once that day,
+// at any hour of their window, each as likely (so one visit's launches
+// can't run into the next's, and no hour of the window is skipped). The day
+// is the one their window starts on, so a window past midnight is one
+// visit, decided by its own generator.
+function comes(i: number, hour: number, local: number, scale: number): boolean {
   const regular = REGULARS[i];
-  if (!within(local, regular.hours) || (hour + i) % 2 !== 0) return false;
+  if (!within(local, regular.hours)) return false;
+  // an hour that comes twice as the clocks go back: the first only
+  if (hourIn((hour - 1) * HOUR + HOUR / 2) === local) return false;
   const [from, to] = regular.hours;
-  const hours = (to - from + 24) % 24 || 24;
-  return random() < (regular.perDay * scale * busyness(hour)) / (hours / 2);
+  const length = (to - from + 24) % 24 || 24;
+  const into = (local - from + 24) % 24;
+  const day = dayOf((hour - into) * HOUR + HOUR / 2);
+  const random = seeded(Math.imul(day, 0x27d4eb2d) ^ Math.imul(i + 1, 0x165667b1));
+  if (random() >= Math.min(1, regular.perDay * scale * busyness(hour - into))) return false;
+  return Math.floor(random() * length) === into;
 }
 
 // An hour's visits, in the order they come. Kept for a while: every settle
@@ -147,7 +158,7 @@ function plan(hour: number, rate: number): Visit[] {
     const local = hourIn(hour * HOUR + HOUR / 2);
     const scale = rate / PER_HOUR;
     // the regulars who come this hour, then however many one-offs
-    const who = REGULARS.flatMap((_, i) => (comes(random, i, hour, local, scale) ? [i] : []));
+    const who = REGULARS.flatMap((_, i) => (comes(i, hour, local, scale) ? [i] : []));
     const k = howMany(random, (ONE_OFFS * scale * SHAPE[local] * busyness(hour)) / SHAPE_MEAN);
     for (let n = 0; n < k; n++) who.push(-1);
     for (const [i, one] of who.entries()) {
@@ -232,14 +243,27 @@ function orderOf(pool: string, size: number, round: number): number[] {
 const dealt = <T>(pool: string, list: readonly T[], k: number): T =>
   list[orderOf(pool, list.length, Math.floor(k / list.length))[k % list.length]];
 
-// The next line dealt from a pool that suits the hour in Canberra: one that
-// doesn't ("9pm at the bus interchange", at lunchtime) is passed over, and
-// waits for the next time round.
-function say(pool: string, list: readonly Line[], deal: (pool: string) => number, local: number): string {
+// Where and when a launch says its line: the hour and month in Canberra,
+// its band, and what will become of it (extras-cast.ts, Fit).
+interface Moment {
+  local: number;
+  month: number;
+  band: Band;
+  does: "deorbit" | "boost" | null;
+}
+const fits = (line: Line, moment: Moment): boolean =>
+  typeof line === "string" ||
+  ((!line.hours || within(moment.local, line.hours)) &&
+    (!line.months || line.months.includes(moment.month)) &&
+    (!line.bands || line.bands.includes(moment.band)) &&
+    (!line.does || line.does === moment.does));
+
+// The next line dealt from a pool that fits the launch: one that doesn't
+// ("9pm at the bus interchange" at lunchtime, "going high" from the low
+// band) is passed over, and waits for the next time round.
+function say(pool: string, list: readonly Line[], deal: (pool: string) => number, moment: Moment): string {
   let line = dealt(pool, list, deal(pool));
-  for (let tries = 1; typeof line !== "string" && !within(local, line.hours) && tries < list.length; tries++) {
-    line = dealt(pool, list, deal(pool));
-  }
+  for (let tries = 1; !fits(line, moment) && tries < list.length; tries++) line = dealt(pool, list, deal(pool));
   return textOf(line);
 }
 
@@ -259,22 +283,23 @@ function lineFor(
   counts: Map<string, number>,
   deal: (pool: string) => number,
 ): { beacon: string; question: string | null } {
-  const local = hourIn(launch.at);
+  const moment: Moment = { local: hourIn(launch.at), month: monthIn(launch.at), band: launch.band, does: launch.manoeuvre?.type ?? null };
   const day = dayOf(launch.at);
   const question = questionOn(day);
   const answers = ANSWERS[question];
-  if (launch.answers && answers?.length) {
+  const hours = ANSWER_HOURS[question];
+  if (launch.answers && answers?.length && (!hours || within(moment.local, hours))) {
     const today = `answered:${day}`;
     while ((counts.get(today) ?? 0) < answers.length / 2) {
       counts.set(today, (counts.get(today) ?? 0) + 1);
       const line = dealt(`answers:${question}`, answers, deal(`answers:${question}`));
-      if (typeof line === "string" || within(local, line.hours)) return { beacon: textOf(line), question };
+      if (fits(line, moment)) return { beacon: textOf(line), question };
     }
   }
   const regular = visit.who >= 0 ? REGULARS[visit.who] : null;
-  if (launch.again) return { beacon: say("again", AGAIN, deal, local), question: null };
-  if (regular) return { beacon: say(`lines:${regular.key}`, regular.lines, deal, local), question: null };
-  return { beacon: say("lines", LINES, deal, local), question: null };
+  if (launch.again) return { beacon: say("again", AGAIN, deal, moment), question: null };
+  if (regular) return { beacon: say(`lines:${regular.key}`, regular.lines, deal, moment), question: null };
+  return { beacon: say("lines", LINES, deal, moment), question: null };
 }
 
 // How many each pool had dealt before an hour (counted by dealing them all,
@@ -293,7 +318,12 @@ function dealtBefore(hour: number, rate: number): Map<string, number> {
     }
   }
   for (let h = from; h < to; h++) {
-    if (h > START && (h - START) % 24 === 0) daily.set(`${rate}:${(h - START) / 24}`, new Map(counts));
+    if (h > START && (h - START) % 24 === 0) {
+      // a day's answers count only that day: forget the days gone
+      const today = dayOf(h * HOUR);
+      for (const key of counts.keys()) if (key.startsWith("answered:") && Number(key.slice(9)) < today - 1) counts.delete(key);
+      daily.set(`${rate}:${(h - START) / 24}`, new Map(counts));
+    }
     eventsIn(h, rate, counts);
   }
   return counts;
@@ -309,6 +339,10 @@ export interface ExtraLaunch {
   owner: string;
   // a regular's claimed handle, or null
   handle: string | null;
+  // which regular (their key), or null for a one-off. A regular's callsign
+  // here is what the schedule alone would number it; the server numbers it
+  // from the record (callsignOf), so it counts what was really launched.
+  regular: string | null;
   band: Band;
   callsign: string;
   beacon: string;
@@ -338,17 +372,21 @@ function eventsIn(hour: number, rate: number, counts: Map<string, number>): Extr
   };
   for (const visit of plan(hour, rate)) {
     const regular = visit.who >= 0 ? REGULARS[visit.who] : null;
+    // a one-off's first name, and how many of the visit's have had it
     let first = "";
+    let named = 0;
     visit.launches.forEach((launch, j) => {
       let callsign: string;
       if (regular) callsign = regular.callsign(deal(`callsign:${regular.key}`));
       else if (j === 0 || launch.fresh) callsign = dealt("callsigns", CALLSIGNS, deal("callsigns"));
-      // the first one numbered, or its name again if that won't do
-      else callsign = numberable(first) ? numbered(first, j + 1) : first;
+      // the first one numbered ("Pebble 2"), or its name again if that
+      // won't do
+      else callsign = numberable(first) ? numbered(first, named + 1) : first;
       if (j === 0) first = callsign;
+      if (j === 0 || (!regular && !launch.fresh)) named++;
       const { beacon, question } = lineFor(visit, launch, counts, deal);
       const { at, band, seed, manoeuvre } = launch;
-      events.push({ type: "launch", at, owner: visit.owner, handle: regular?.handle ?? null, band, callsign, beacon, question, seed });
+      events.push({ type: "launch", at, owner: visit.owner, handle: regular?.handle ?? null, regular: regular?.key ?? null, band, callsign, beacon, question, seed });
       if (manoeuvre) events.push({ ...manoeuvre, owner: visit.owner, launchedAt: at });
     });
   }
@@ -388,4 +426,11 @@ export function nextExtraAfter(from: number, rate = PER_HOUR): number {
     if (next <= (hour + 1) * HOUR) break;
   }
   return next;
+}
+
+// A regular's nth satellite's callsign, n counted from 0 in the record; a
+// one-off's as the schedule named it.
+export function callsignOf(launch: ExtraLaunch, launched: number): string {
+  const regular = launch.regular === null ? undefined : REGULARS.find((r) => r.key === launch.regular);
+  return regular ? regular.callsign(launched) : launch.callsign;
 }

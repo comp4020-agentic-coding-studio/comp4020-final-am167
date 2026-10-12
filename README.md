@@ -40,7 +40,8 @@ Enforced, and tested:
 Judged, not tested:
 
 - **Whether it makes anyone think.** I judge by playing; crits tell me more.
-- **Whether people crowd low.** Launch counts per band will show it.
+- **Whether people crowd low.** Launch counts per band, leaving out the
+  extras, will show it.
 - **Whether collisions feel earned.** Only watching tells me; most are still
   staged.
 
@@ -52,6 +53,11 @@ Judged, not tested:
   so one person can crowd everyone.
 - **Staged collisions between people.** Staging uses derelicts, so the server
   never destroys someone's satellite on purpose.
+- **An empty sky.** Invented people, the extras, launch about 18 satellites a
+  day at Canberra's hours, so a quiet sky still has someone in it. Nothing on
+  the page marks them; the record does, so anything said about people leaves
+  them out. They never listen, so "heard by" counts only people, and they hold
+  back while people are launching.
 
 ## Sources
 

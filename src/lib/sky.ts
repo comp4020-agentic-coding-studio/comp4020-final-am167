@@ -1,9 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { TransactionRollbackError, and, count, countDistinct, desc, eq, gt, inArray, isNotNull, isNull, like, lt, lte, max, ne, notLike, or, sql, type SQL } from "drizzle-orm";
+import { TransactionRollbackError, and, count, countDistinct, desc, eq, gt, inArray, isNotNull, isNull, lt, lte, max, ne, notLike, or, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { fatalMeeting, fragmentsOf, impactOf, nextMeeting, seeded } from "./collide.ts";
 import { listening, publish } from "./events.ts";
-import { EXTRA, HOUR, PER_HOUR, extrasBetween, isExtra, nextExtraAfter, type ExtraEvent, type ExtraLaunch, type ExtraManoeuvre } from "./extras.ts";
+import { EXTRA, HOUR, PER_HOUR, callsignOf, extrasBetween, isExtra, nextExtraAfter, type ExtraEvent, type ExtraLaunch, type ExtraManoeuvre } from "./extras.ts";
 import { FUEL, REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
@@ -63,9 +63,13 @@ export const DERELICT_MIN = Math.min(5, DERELICT_BASELINE);
 // launch while the sky is half full (SKY_CAP). A server that was stopped
 // launches what they missed, up to EXTRA_BACKFILL back. EXTRAS_PER_HOUR and
 // EXTRA_CAP override them for testing.
-const extrasPerHour = Number(process.env.EXTRAS_PER_HOUR ?? PER_HOUR);
-export const EXTRAS_RATE = Number.isFinite(extrasPerHour) && extrasPerHour >= 0 ? extrasPerHour : PER_HOUR;
-export const EXTRA_CAP = Number(process.env.EXTRA_CAP ?? 20);
+// (an empty or unreadable setting is no setting)
+const setting = (name: string, fallback: number) => {
+  const value = Number(process.env[name] || fallback);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+};
+export const EXTRAS_RATE = setting("EXTRAS_PER_HOUR", PER_HOUR);
+export const EXTRA_CAP = setting("EXTRA_CAP", 20);
 export const EXTRA_ROOM = 4;
 export const EXTRA_BACKFILL = 24 * HOUR;
 // A launch or manoeuvre older than this when it's made (a stopped server
@@ -744,8 +748,8 @@ export function keepDerelicts(now = Date.now(), baseline = DERELICT_BASELINE, le
 
 // A regular's operator, made the first time they launch: marked as an
 // extra's, with a passphrase nobody has, so nobody can sign in as one, and
-// their handle is taken. A handle a person claimed first stays theirs, and
-// that regular launches without one.
+// their handle is taken. A handle a person claimed first stays theirs
+// (null here), and that regular never launches.
 const extraOperators = new Map<string, number | null>();
 function extraOperator(handle: string, at: number): number | null {
   const known = extraOperators.get(handle);
@@ -773,19 +777,24 @@ function extraOperator(handle: string, at: number): number | null {
 // that was running all along (a collision's outcome is drawn from its
 // objects' ids), and moves extrasThrough on past what it has dealt with.
 //
-// On a start, extrasThrough is the latest thing in the record, if they've
-// launched before: the server was up until then, and what was due before it
-// was launched then (or held back), so a redeploy that changes the schedule
-// doesn't fill in behind it what nobody saw happen. A first start goes back
-// EXTRA_BACKFILL, so the record has a day of people in it from the first
-// visit.
+// On a start, extrasThrough is the latest thing the record shows happening
+// (a launch, a collision, a manoeuvre, a beacon heard): the server was up
+// until then, and people may have watched, so nothing is filled in before
+// it, and a redeploy (the first with extras, or one that changes their
+// schedule) never rewrites what people saw. Only an empty sky, a new
+// database, goes back EXTRA_BACKFILL, so the record has a day of people in
+// it from the first visit.
 let extrasThrough: number | null = null;
 function extrasDue(now: number): ExtraEvent[] {
   if (EXTRAS_RATE <= 0) return [];
   if (extrasThrough === null) {
-    const theirs = db.select({ id: objects.id }).from(objects).where(like(objects.owner, `${EXTRA}%`)).limit(1).get();
-    const latest = db.select({ at: max(objects.launchedAt) }).from(objects).get()?.at ?? null;
-    extrasThrough = theirs && latest !== null ? latest : -Infinity;
+    const latest = Math.max(
+      db.select({ at: max(objects.launchedAt) }).from(objects).get()?.at ?? -Infinity,
+      db.select({ at: max(collisions.at) }).from(collisions).get()?.at ?? -Infinity,
+      db.select({ at: max(manoeuvres.at) }).from(manoeuvres).get()?.at ?? -Infinity,
+      db.select({ at: max(transmissions.at) }).from(transmissions).get()?.at ?? -Infinity,
+    );
+    extrasThrough = latest;
   }
   const from = Math.max(extrasThrough, now - EXTRA_BACKFILL);
   if (nextExtraAfter(from, EXTRAS_RATE) > now) return [];
@@ -800,8 +809,11 @@ const upAt = (o: Recorded, t: number) =>
   o.launchedAt <= t && (o.fate === "live" ? reentryAt(o) > t : (o.fateAt ?? Infinity) > t);
 
 // An extra's launch, at the time it was due, like anyone's: unless it's in
-// the record already (a restart), or there was no room for it then (people
-// busy launching, EXTRA_CAP of theirs up, or the sky half full).
+// the record already (a restart), there was no room for it then (people
+// busy launching, EXTRA_CAP of theirs up, or the sky half full), or it's a
+// regular whose handle a person holds (they'd seem to be that person). A
+// regular's callsign counts their satellites in the record, so a changed
+// schedule or a launch held back never repeats or skips a number.
 function launchExtra(launch: ExtraLaunch, now: number): SkyObject | null {
   const already = db
     .select({ id: objects.id })
@@ -830,14 +842,17 @@ function launchExtra(launch: ExtraLaunch, now: number): SkyObject | null {
     .map(toObject)
     .filter((o) => upAt(o, launch.at));
   if (up.length >= SKY_CAP / 2 || up.filter((o) => isExtra(o.owner)).length >= EXTRA_CAP) return null;
+  const operator = launch.handle === null ? null : extraOperator(launch.handle, launch.at);
+  if (launch.handle !== null && operator === null) return null;
+  const launched = launch.regular === null ? 0 : (db.select({ n: count() }).from(objects).where(eq(objects.owner, launch.owner)).get()?.n ?? 0);
   const object = toObject(
     db
       .insert(objects)
       .values({
         kind: "satellite",
         owner: launch.owner,
-        operator: launch.handle === null ? null : extraOperator(launch.handle, launch.at),
-        callsign: launch.callsign,
+        operator,
+        callsign: callsignOf(launch, launched),
         beacon: launch.beacon,
         question: launch.question,
         band: launch.band,

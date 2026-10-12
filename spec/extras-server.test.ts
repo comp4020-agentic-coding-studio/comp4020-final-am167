@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { and, eq, like } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import type { SkyEvent } from "../src/lib/events.ts";
+import { REGULARS } from "../src/lib/extras-cast.ts";
 import { extrasBetween, type ExtraEvent, type ExtraLaunch } from "../src/lib/extras.ts";
 
 // The server's side of the extras (ADR 0021): it launches what the schedule
@@ -16,7 +17,7 @@ import { extrasBetween, type ExtraEvent, type ExtraLaunch } from "../src/lib/ext
 
 // no derelicts, and no cap, unless a test asks: they'd change the sky
 process.env.DERELICTS = "0";
-const CLEAN = { EXTRAS_PER_HOUR: undefined, EXTRA_CAP: "1000", DERELICTS: "0", SKY_CAP: undefined };
+const CLEAN = { EXTRAS_PER_HOUR: undefined, EXTRA_CAP: "1000", DERELICTS: "0", SKY_CAP: undefined } as Record<string, string | undefined>;
 
 const dirs: string[] = [];
 afterAll(() => {
@@ -53,13 +54,33 @@ async function freshServer(env: Record<string, string | undefined> = {}) {
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 // in the future, so the server's own wake-up timers never fire mid-test
-const T = Math.floor(Date.now() / HOUR) * HOUR + 10 * DAY + 17 * 60_000;
+const NOW = Math.floor(Date.now() / HOUR) * HOUR + 10 * DAY + 17 * 60_000;
 
 const launchesIn = (from: number, to: number, rate?: number) =>
   extrasBetween(from, to, rate).filter((e): e is ExtraLaunch => e.type === "launch");
-const asLaunched = (l: ExtraLaunch) => [l.owner, l.at, l.callsign, l.beacon, l.band, l.question];
+// The first time from `from`, an hour at a time, whose last day has
+// something in it (the schedule follows the real date, so a test can't
+// count on any one day having, say, a regular)
+function dayWith(test: (events: ExtraEvent[]) => boolean, from = NOW): number {
+  let t = from;
+  while (!test(extrasBetween(t - DAY, t))) t += HOUR;
+  return t;
+}
+// a day with a regular who has a handle in it
+const T = dayWith((events) => events.some((e) => e.type === "launch" && e.handle !== null));
+
+// a regular's callsign is numbered from the record, not the schedule
+const isRegular = (owner: string | null) => REGULARS.some((r) => owner === `extra:${r.key}`);
+const asLaunched = (l: ExtraLaunch) => [l.owner, l.at, l.regular ? "numbered" : l.callsign, l.beacon, l.band, l.question];
 const asRow = (r: { owner: string | null; launchedAt: number; callsign: string | null; beacon: string | null; band: string; question: string | null }) =>
-  [r.owner, r.launchedAt, r.callsign, r.beacon, r.band, r.question];
+  [r.owner, r.launchedAt, isRegular(r.owner) ? "numbered" : r.callsign, r.beacon, r.band, r.question];
+// each regular's satellites, in the order launched, numbered from their first
+function expectNumbered(rows: { owner: string | null; callsign: string | null }[]) {
+  for (const regular of REGULARS) {
+    const theirs = rows.filter((r) => r.owner === `extra:${regular.key}`).map((r) => r.callsign);
+    expect(theirs, regular.key).toEqual(theirs.map((_, n) => regular.callsign(n)));
+  }
+}
 
 describe("the extras, on the server", () => {
   it("launches the last day's on a fresh start, at the times they were due, and tells nobody of the old ones", async () => {
@@ -69,6 +90,7 @@ describe("the extras, on the server", () => {
     expect(due.length).toBeGreaterThan(5);
     const rows = extras();
     expect(rows.map(asRow)).toEqual(due.map(asLaunched));
+    expectNumbered(rows);
     for (const row of rows) expect(row.kind).toBe("satellite");
     const told = new Set(heard.flatMap((e) => (e.type === "launch" ? [e.object.id] : [])));
     for (const row of rows) if (T - row.launchedAt > 60_000) expect(told.has(row.id)).toBe(false);
@@ -98,6 +120,7 @@ describe("the extras, on the server", () => {
     second.sky.settle(T + 3 * HOUR);
     const rows = second.extras();
     expect(rows.map(asRow)).toEqual(launchesIn(T - DAY, T + 3 * HOUR).map(asLaunched));
+    expectNumbered(rows);
     // a redeploy that changes the schedule: what's due from the latest thing
     // in the record on is the new schedule's, and nothing before it is
     // filled in (it was the old schedule's, and people may have watched it)
@@ -109,6 +132,39 @@ describe("the extras, on the server", () => {
     expect(after.map(asRow)).toEqual(launchesIn(latest, T + 5 * HOUR, 3).map(asLaunched));
     const keys = third.extras().map((r) => `${r.owner}@${r.launchedAt}`);
     expect(new Set(keys).size).toBe(keys.length);
+    // and a regular's numbers carry on, never repeating
+    expectNumbered(third.extras());
+  });
+
+  it("ends up with the same sky whether it ran all along or caught up after a stop", async () => {
+    const along = await freshServer();
+    const stopped = await freshServer();
+    along.sky.settle(T);
+    stopped.sky.settle(T);
+    for (let t = T; t <= T + 12 * HOUR; t += 30 * 60_000) along.sky.settle(t);
+    stopped.sky.settle(T + 12 * HOUR);
+    const all = (server: typeof along) => server.db.select().from(server.schema.objects).orderBy(server.schema.objects.id).all();
+    expect(all(stopped)).toEqual(all(along));
+    expect(stopped.db.select().from(stopped.schema.collisions).all()).toEqual(along.db.select().from(along.schema.collisions).all());
+    expect(stopped.db.select().from(stopped.schema.manoeuvres).all()).toEqual(along.db.select().from(along.schema.manoeuvres).all());
+    expect(along.extras().length).toBeGreaterThan(launchesIn(T - DAY, T).length);
+  });
+
+  it("fills in nothing behind a sky people have used: a first deploy starts from the latest thing in the record", async () => {
+    const before = await freshServer({ EXTRAS_PER_HOUR: "0" });
+    for (let i = 0; i < 6; i++) {
+      const person = `8d2f1e0c-0000-4000-8000-${String(200 + i).padStart(12, "0")}`;
+      before.sky.launch(person, { band: "high", callsign: `USED ${i}`, beacon: "people were here", question: null }, T - 10 * HOUR + i * HOUR);
+    }
+    const people = () => before.db.select().from(before.schema.objects).where(like(before.schema.objects.callsign, "USED%")).all();
+    const was = people();
+    const deployed = await server(before.path);
+    deployed.sky.settle(T);
+    const latest = T - 5 * HOUR;
+    expect(deployed.extras().every((r) => r.launchedAt > latest)).toBe(true);
+    expect(deployed.extras().map(asRow)).toEqual(launchesIn(latest, T).map(asLaunched));
+    // nothing people had up was changed behind them
+    expect(people().filter((p) => p.fateAt !== null && p.fateAt <= latest)).toEqual(was.filter((p) => p.fateAt !== null && p.fateAt <= latest));
   });
 
   it("gives a regular their handle, which nobody can sign in as or claim", async () => {
@@ -129,16 +185,15 @@ describe("the extras, on the server", () => {
     expect(claim.ok).toBe(false);
   });
 
-  it("leaves a handle a person claimed first theirs: the regular launches without it", async () => {
+  it("leaves a handle a person claimed first theirs: that regular never launches, so nobody seems to be them", async () => {
     const regular = launchesIn(T - DAY, T).find((l) => l.handle !== null)!;
     const { sky, operators, extras } = await freshServer();
     const person = "8d2f1e0c-0000-4000-8000-000000000003";
     const claimed = await operators.claim(person, { action: "claim", handle: regular.handle!, passphrase: "a person's own passphrase" }, "127.0.0.1", T - 2 * DAY);
     expect(claimed.ok).toBe(true);
     sky.settle(T);
-    const theirs = extras().filter((r) => r.owner === regular.owner);
-    expect(theirs.length).toBeGreaterThan(0);
-    for (const row of theirs) expect(row.operator).toBeNull();
+    expect(extras().filter((r) => r.owner === regular.owner)).toEqual([]);
+    expect(extras().length).toBeGreaterThan(0);
   });
 
   it("keeps no more of theirs up than its cap, and none in a half-full sky", async () => {
@@ -176,12 +231,9 @@ describe("the extras, on the server", () => {
     expect(extras().some((r) => r.launchedAt === later.at && r.owner === later.owner)).toBe(true);
   });
 
-  it("brings theirs down, and boosts them, when the schedule says", async () => {
-    // a day with both in it
-    let end = T;
-    const has = (type: string) => extrasBetween(end - DAY, end).some((e) => e.type === type);
-    while (!(has("deorbit") && has("boost"))) end += HOUR;
-    const { sky, db, schema, extras } = await freshServer();
+  it("brings theirs down, and boosts them, when the schedule says, telling everyone only of fresh ones", async () => {
+    const end = dayWith((events) => events.some((e) => e.type === "deorbit") && events.some((e) => e.type === "boost"), T);
+    const { sky, db, schema, extras, heard } = await freshServer();
     sky.settle(end);
     const planned = extrasBetween(end - DAY, end).filter((e): e is Exclude<ExtraEvent, ExtraLaunch> => e.type !== "launch");
     let done = 0;
@@ -189,8 +241,9 @@ describe("the extras, on the server", () => {
       const row = extras().find((r) => r.owner === m.owner && r.launchedAt === m.launchedAt);
       if (!row) continue;
       const moves = db.select().from(schema.manoeuvres).where(and(eq(schema.manoeuvres.object, row.id), eq(schema.manoeuvres.at, m.at))).all();
-      // gone before it was due: nothing to do
-      if (row.fateAt !== null && row.fateAt <= m.at) {
+      // gone before it was due: nothing to do; and one already in its
+      // last 30 seconds' plunge can't be (ADR 0011)
+      if (row.fateAt !== null && row.fateAt - m.at <= 30_000) {
         expect(moves).toHaveLength(0);
         continue;
       }
@@ -199,11 +252,42 @@ describe("the extras, on the server", () => {
       done++;
     }
     expect(done).toBeGreaterThan(0);
+    // all of those were long past: nobody was told
+    expect(heard.filter((e) => e.type === "manoeuvre" && planned.every((m) => end - m.at > 60_000))).toEqual([]);
+    // a live one is told, once
+    const next = extrasBetween(end, end + 2 * DAY).find(
+      (e): e is Exclude<ExtraEvent, ExtraLaunch> => e.type !== "launch" && e.launchedAt <= end && extras().some((r) => r.owner === e.owner && r.launchedAt === e.launchedAt && r.fate === "live"),
+    );
+    if (next) {
+      sky.settle(next.at);
+      const row = extras().find((r) => r.owner === next.owner && r.launchedAt === next.launchedAt)!;
+      const told = heard.filter((e) => e.type === "manoeuvre" && e.object.id === row.id);
+      const moved = db.select().from(schema.manoeuvres).where(and(eq(schema.manoeuvres.object, row.id), eq(schema.manoeuvres.at, next.at))).all();
+      expect(told).toHaveLength(moved.length);
+    }
   });
 
   // the extras' satellites count towards the derelicts' baseline, so they
   // could otherwise take every derelict's place
-  it("keeps a few derelicts in the sky however many satellites are up", async () => {
+  it("keeps a few derelicts by default, however many satellites are up, topped up a gap apart", async () => {
+    const { sky, db, schema } = await freshServer({ EXTRAS_PER_HOUR: "0", DERELICTS: "20" });
+    for (let i = 0; i < 22; i++) {
+      const person = `8d2f1e0c-0000-4000-8000-${String(300 + i).padStart(12, "0")}`;
+      expect(sky.launch(person, { band: "high", callsign: `UP ${i}`, beacon: "here", question: null }, T).ok).toBe(true);
+    }
+    // the first settle filled the empty sky with derelicts: take them away
+    db.update(schema.objects).set({ fate: "decayed", fateAt: T }).where(eq(schema.objects.kind, "derelict")).run();
+    const derelicts = () =>
+      db.select().from(schema.objects).where(and(eq(schema.objects.fate, "live"), eq(schema.objects.kind, "derelict"))).all().length;
+    sky.keepDerelicts(T + 10 * 60_000);
+    expect(derelicts()).toBe(1);
+    sky.keepDerelicts(T + 60 * 60_000);
+    expect(derelicts()).toBe(5);
+    sky.keepDerelicts(T + 3 * 60 * 60_000);
+    expect(derelicts()).toBe(5);
+  });
+
+  it("keeps however few derelicts it's asked to", async () => {
     const { sky, db, schema } = await freshServer({ EXTRAS_PER_HOUR: "0" });
     for (let i = 0; i < 22; i++) {
       const person = `8d2f1e0c-0000-4000-8000-${String(i).padStart(12, "0")}`;
