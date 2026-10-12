@@ -22,6 +22,8 @@ import type { Conjunction } from "../src/lib/sky.ts";
 
 // no derelicts unless a test asks for them: they're placed at random
 process.env.DERELICTS = "0";
+// nor extras (ADR 0021): they launch on a schedule
+process.env.EXTRAS_PER_HOUR = "0";
 
 const dirs: string[] = [];
 afterAll(() => {

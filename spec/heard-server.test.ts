@@ -16,6 +16,8 @@ import type { SkyEvent } from "../src/lib/events.ts";
 // clock passed in, as the collision tests are.
 
 process.env.DERELICTS = "0";
+// nor extras (ADR 0021): they launch on a schedule
+process.env.EXTRAS_PER_HOUR = "0";
 
 const dirs: string[] = [];
 afterAll(() => {

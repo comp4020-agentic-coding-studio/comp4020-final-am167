@@ -27,3 +27,4 @@ be edited until it's accepted.
 | [0018](0018-a-question-from-the-stations.md) | The stations ask a question each day, and the app says what it's for | accepted |
 | [0019](0019-staged-collisions-under-the-bands.md) | Staged collisions keep to themselves, under the launch bands | accepted |
 | [0020](0020-fewer-less-forced-collisions.md) | Fewer, less forced collisions: a close pair may never collide, staging is irregular, and a burn-up is told first | accepted |
+| [0021](0021-extras.md) | Extras: invented people who launch like anyone, so a quiet sky isn't empty | accepted |

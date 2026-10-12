@@ -5,9 +5,9 @@ import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from
 
 // Every object that has ever been in the sky, kept forever (ADR 0003). The
 // live sky is the rows whose fate is `live`; the catalogue is all of them.
-// A satellite is launched by a person; a derelict is a dead satellite the
-// server keeps in the sky so it's never empty; debris comes from a
-// collision (ADR 0008).
+// A satellite is launched by a person (or by an extra, ADR 0021, whose owner
+// is "extra:" and a key); a derelict is a dead satellite the server keeps in
+// the sky so it's never empty; debris comes from a collision (ADR 0008).
 export const objects = sqliteTable(
   "objects",
   {
@@ -66,6 +66,7 @@ export const objects = sqliteTable(
 // Operators (ADR 0009): a handle anyone can claim, with a passphrase, so a
 // person's satellites (and the blame for them) follow them across devices.
 // No email, no real names: the passphrase is kept only as an scrypt hash.
+// An extra's (ADR 0021) is marked: nobody can sign in as one.
 export const operators = sqliteTable(
   "operators",
   {
@@ -76,6 +77,8 @@ export const operators = sqliteTable(
     salt: text("salt").notNull(),
     hash: text("hash").notNull(),
     createdAt: integer("created_at").notNull(),
+    // a regular among the extras (src/lib/extras.ts), not a person
+    extra: integer("extra", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [uniqueIndex("operators_handle_key").on(t.handleKey)],
 );

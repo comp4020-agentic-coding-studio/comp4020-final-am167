@@ -3184,3 +3184,120 @@ faults. Both reproduced on a fresh build of `12a2c2b` before fixing.
 12 of 12.
 
 Commit `a862d23`.
+
+## 2026-10-12 — Extras: invented people seed the sky (ADR 0021)
+
+Advay approved seeding the sky with "fake, but realistic users", on the
+condition that they look realistic and natural. `PLAN.md` had this as a C10
+maybe: PR 5 (resident operators, closed 2026-10-10) seeded the sky with
+sixteen invented *organisations* at about two launches an hour, and was
+left unmerged because ADRs 0019 and 0020 had since changed the balance it
+was tuned against. Rebuilt rather than revived: the app is about people
+saying one thing to each other, and PR 5's lines read as companies
+("Frame 4021 of the south coast, 30% cloud").
+
+**What was built** (`src/lib/extras.ts`, `src/lib/extras-cast.ts`, the
+server's part in `src/lib/sky.ts`; ADR 0021, accepted):
+
+- **A cast of people**, called extras, like a film's: fourteen regulars
+  with their own hours, visits a day, bands, naming habits and a dozen lines
+  each (a night owl, a student dodging an essay, an over-eager low-band
+  launcher, a careful one who brings theirs down, a hiker, a radio amateur,
+  a parent, a grump, someone in Edinburgh, a retiree; twelve with handles),
+  and a crowd of one-off visitors (three launches in five) who never claim
+  one. About 110 lines a visitor might write, two dozen for a second
+  launch, and a dozen answers to each of the stations' 21 questions.
+- **When they come** is a pure function of the clock, seeded by the hour:
+  a Canberra day's rhythm (busy evenings, near nothing at 4am, some days
+  busier), one to three launches a visit at least 70 s apart, a quarter
+  answering the day's question, a few brought down or boosted later. About
+  18 launches a day.
+- **Launched like anyone's**: heard, collided, blamed, met in Yours.
+  Nothing on the page tells them apart; the record does (owner `extra:…`,
+  which no browser can present; `operators.extra`, migration
+  `0010_extras`, so nobody can sign in as a regular). They never listen,
+  so "heard by" is still only people.
+- **Caught up like collisions**: launched and manoeuvred at their due
+  times inside `settle`; a first start fills in the last day; later starts
+  go back to the latest thing in the record; nothing launched twice;
+  only what's under a minute old announced.
+
+**Making it read as people** took several passes, each found by looking
+at a printed day of the schedule or by a test:
+
+- The first draft dealt lines from a shuffle per pool, and a line could
+  come straight back at the seam between two shuffles. Each round now
+  keeps the last round's halves apart, so anything comes round at least
+  half a pool later. A question's dozen answers could still run out on a
+  busy day, so a day deals at most half of them (counting ones passed
+  over).
+- Lines tied to a time came out at the wrong hour ("Woden bus
+  interchange, 9pm" at 2pm, "great night" at 11am). Forty-eight lines now
+  carry the hours they fit and are only said then.
+- One visitor answered the question twice in two minutes; a later launch
+  in a visit now answers a quarter as often.
+- Regulars with long hours crowded out the rest (the student 2.2 launches
+  a day, the hiker once in nine days); each regular now has their own
+  visits a day.
+- Counting what each pool had dealt disagreed with the dealing when a
+  callsign couldn't be numbered (the "same however it's asked" test
+  caught it); counting now deals everything, so the two can't drift.
+- Seen in the running app: callsigns "Static", "Echo" and "BEACON" read as
+  the app's own words, so they're gone; three lines named October and
+  would be wrong in November.
+
+**The balance.** A scratch harness drove the real server code (clock passed
+in, derelict floor on, people launching into random bands, every run
+played out until every person's satellite came down). Without extras it
+reproduced ADR 0020's own numbers within their spread, so it was trusted.
+The first default (0.75 visits an hour, no other rule) cut a quiet sky's
+people's satellites burning up from 62% to about 48%. A lower derelict
+floor didn't help: derelicts were already down at their minimum, and the
+extras simply add satellites, mostly low and mid. What did: a lighter rate
+(0.6), and making room for people (no extra launches in an hour people
+have launched four in). Now 54% in a quiet sky (62% without extras), 24% at
+a crit (27%), 22% busy (26%). Staging is unchanged (5.4 staged collisions a
+watched hour against 5.5); a watcher sees more natural collisions (1.4 an
+hour against 0.4), and a newcomer still sees one within 10 minutes 100% of
+the time. The sky also keeps at least five derelicts, since the extras
+count towards the derelicts' floor. Numbers and runs are in ADR 0021.
+
+**Tests, each failing first for the reason expected:**
+`spec/extras.test.ts` (14: every line and callsign passes the launch form,
+a dozen answers per question, the rate and Canberra rhythm, mostly
+one-offs without a handle with regulars back on many days, a minute
+between anyone's launches, bands, answers only to that day's question,
+lines only at their hours, nothing said twice in three days, manoeuvres
+after their launch and no boost from the high band, the same schedule
+however it's asked, next-due, off at 0) and `spec/extras-server.test.ts`
+(10: a fresh start's day launched at its times and not announced, a live
+one launched once and announced, nothing twice across a restart, a launch
+or a changed schedule, a regular's handle nobody can sign in as or claim,
+a handle a person claimed first stays theirs, the cap and the half-full
+rule, making room for people, manoeuvres when due, the derelict minimum,
+off at 0). The five server tests that need an exact sky set
+`EXTRAS_PER_HOUR=0`, as they set `DERELICTS=0`.
+
+**Review.** Done in this session rather than by a fresh subagent: the user's
+own instructions require subagents to run on Luna, which this harness's
+agent tool can't select. Read the whole server diff as a reviewer and
+checked what the extras could give away: nothing lists operators, an
+extra's owner never reaches a client, "heard by" stays people, and nothing
+in the README becomes false (being heard still needs other people;
+staging still never destroys a person's satellite). Found and fixed the
+month-bound lines and the callsigns above. Left for Advay: the README
+doesn't say the sky is seeded, and the app is marked on whether the two
+agree; C10's evidence (launches per band, "do people crowd low?") must
+leave the extras out (`isExtra`).
+
+![The sky minutes after a fresh start with extras: static from Tiny Moon
+and Big Truck's collision (a one-off's satellite and a regular's, met in
+the day the start filled in), "test" answering the day's question, "Starling" on being heard
+over each other. Every satellite here is an extra's.](screenshots/2026-10-12-sky-with-extras.png)
+
+`pnpm check` green (369 tests, 0 errors, 0 warnings) against a fresh
+build on a fresh scratch database; `pnpm check:evidence` green;
+`pnpm test:layout` 12 of 12 (run against agent-browser's Chrome with
+`--no-sandbox`, since the container has no installed Chrome). Checked by
+eye at 1920x1080 (the catalogue and the sky) and on an iPhone 14 (no
+sideways overflow).

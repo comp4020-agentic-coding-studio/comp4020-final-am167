@@ -1,7 +1,9 @@
-import { TransactionRollbackError, and, count, countDistinct, desc, eq, gt, inArray, isNotNull, isNull, lt, max, ne, or, sql, type SQL } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
+import { TransactionRollbackError, and, count, countDistinct, desc, eq, gt, inArray, isNotNull, isNull, like, lt, lte, max, ne, notLike, or, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
-import { fatalMeeting, fragmentsOf, impactOf, nextMeeting } from "./collide.ts";
+import { fatalMeeting, fragmentsOf, impactOf, nextMeeting, seeded } from "./collide.ts";
 import { listening, publish } from "./events.ts";
+import { EXTRA, HOUR, PER_HOUR, extrasBetween, isExtra, nextExtraAfter, type ExtraEvent, type ExtraLaunch, type ExtraManoeuvre } from "./extras.ts";
 import { FUEL, REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
 import type { LaunchErrors, LaunchInput } from "./launch.ts";
@@ -48,6 +50,28 @@ export const LIVE_CAP = Number(process.env.LIVE_CAP ?? 600);
 // testing.
 export const DERELICT_BASELINE = Number(process.env.DERELICTS ?? 20);
 export const DERELICT_GAP = 10 * 60_000;
+// However many satellites are up (the extras' count towards the baseline,
+// and could take every derelict's place), the sky keeps at least this many
+// derelicts: real orbit is never without its dead.
+export const DERELICT_MIN = Math.min(5, DERELICT_BASELINE);
+
+// The extras (ADR 0021, extras.ts): invented people who launch like anyone,
+// about EXTRAS_PER_HOUR visits an hour across a day (0 for none), so a
+// quiet sky isn't empty. They make room for people: none launch in an hour
+// in which people have launched EXTRA_ROOM satellites (a crit, a busy
+// evening), no more than EXTRA_CAP of theirs are up at once, and none
+// launch while the sky is half full (SKY_CAP). A server that was stopped
+// launches what they missed, up to EXTRA_BACKFILL back. EXTRAS_PER_HOUR and
+// EXTRA_CAP override them for testing.
+const extrasPerHour = Number(process.env.EXTRAS_PER_HOUR ?? PER_HOUR);
+export const EXTRAS_RATE = Number.isFinite(extrasPerHour) && extrasPerHour >= 0 ? extrasPerHour : PER_HOUR;
+export const EXTRA_CAP = Number(process.env.EXTRA_CAP ?? 20);
+export const EXTRA_ROOM = 4;
+export const EXTRA_BACKFILL = 24 * HOUR;
+// A launch or manoeuvre older than this when it's made (a stopped server
+// catching up) isn't announced: a page opening then gets what's still up
+// in its snapshot, and shouldn't be told of what's long past as news.
+const EXTRA_NEWS = 60_000;
 
 export type Kind = "satellite" | "derelict" | "debris";
 
@@ -700,31 +724,163 @@ export function stageCollision(now = Date.now()): Conjunction | null {
 }
 
 // Tops the sky up with derelicts, each in a random band, towards `baseline`
-// satellites and derelicts: one for every DERELICT_GAP since the last one
-// went up, so an empty sky (or one the server slept through) fills at once
-// and a busy one only slowly.
-export function keepDerelicts(now = Date.now(), baseline = DERELICT_BASELINE): void {
-  const up = db.select({ n: count() }).from(objects).where(and(eq(objects.fate, "live"), ne(objects.kind, "debris"))).get();
+// satellites and derelicts, and to at least `least` derelicts however many
+// satellites are up: one for every DERELICT_GAP since the last one went up,
+// so an empty sky (or one the server slept through) fills at once and a
+// busy one only slowly.
+export function keepDerelicts(now = Date.now(), baseline = DERELICT_BASELINE, least = Math.min(DERELICT_MIN, baseline)): void {
+  const live = eq(objects.fate, "live");
+  const up = db.select({ n: count() }).from(objects).where(and(live, ne(objects.kind, "debris"))).get()?.n ?? 0;
+  const derelicts = db.select({ n: count() }).from(objects).where(and(live, eq(objects.kind, "derelict"))).get()?.n ?? 0;
   const last = db.select({ at: max(objects.launchedAt) }).from(objects).where(eq(objects.kind, "derelict")).get();
   const due = last?.at == null ? Infinity : Math.floor((now - last.at) / DERELICT_GAP);
   const bands = Object.keys(BANDS) as Band[];
-  for (let n = 0; n < Math.min(baseline - (up?.n ?? 0), due); n++) {
+  for (let n = 0; n < Math.min(Math.max(baseline - up, least - derelicts), due); n++) {
     addDerelict(placeInBand(bands[Math.floor(Math.random() * bands.length)], now), now);
   }
 }
 
+// ── the extras (ADR 0021) ─────────────────────────────────────────────────
+
+// A regular's operator, made the first time they launch: marked as an
+// extra's, with a passphrase nobody has, so nobody can sign in as one, and
+// their handle is taken. A handle a person claimed first stays theirs, and
+// that regular launches without one.
+const extraOperators = new Map<string, number | null>();
+function extraOperator(handle: string, at: number): number | null {
+  const known = extraOperators.get(handle);
+  if (known !== undefined) return known;
+  db.insert(operators)
+    .values({
+      handle,
+      handleKey: handle.toLowerCase(),
+      salt: randomBytes(16).toString("hex"),
+      hash: randomBytes(64).toString("hex"),
+      createdAt: at,
+      extra: true,
+    })
+    .onConflictDoNothing()
+    .run();
+  const row = db.select({ id: operators.id, extra: operators.extra }).from(operators).where(eq(operators.handleKey, handle.toLowerCase())).get();
+  const id = row?.extra ? row.id : null;
+  extraOperators.set(handle, id);
+  return id;
+}
+
+// What of the extras' has come due since the last time, in time order.
+// settle launches each in turn, between the collisions before and after it,
+// so every object gets its id in the order things happened, as on a server
+// that was running all along (a collision's outcome is drawn from its
+// objects' ids), and moves extrasThrough on past what it has dealt with.
+//
+// On a start, extrasThrough is the latest thing in the record, if they've
+// launched before: the server was up until then, and what was due before it
+// was launched then (or held back), so a redeploy that changes the schedule
+// doesn't fill in behind it what nobody saw happen. A first start goes back
+// EXTRA_BACKFILL, so the record has a day of people in it from the first
+// visit.
+let extrasThrough: number | null = null;
+function extrasDue(now: number): ExtraEvent[] {
+  if (EXTRAS_RATE <= 0) return [];
+  if (extrasThrough === null) {
+    const theirs = db.select({ id: objects.id }).from(objects).where(like(objects.owner, `${EXTRA}%`)).limit(1).get();
+    const latest = db.select({ at: max(objects.launchedAt) }).from(objects).get()?.at ?? null;
+    extrasThrough = theirs && latest !== null ? latest : -Infinity;
+  }
+  const from = Math.max(extrasThrough, now - EXTRA_BACKFILL);
+  if (nextExtraAfter(from, EXTRAS_RATE) > now) return [];
+  return extrasBetween(from, now, EXTRAS_RATE);
+}
+
+// Up at `t`, going by the record as it stands mid-catch-up: anything still
+// marked live is up until it burns up (burn-ups are marked after the
+// catch-up), anything gone until it went.
+type Recorded = SkyObject & { fate: Fate; fateAt: number | null };
+const upAt = (o: Recorded, t: number) =>
+  o.launchedAt <= t && (o.fate === "live" ? reentryAt(o) > t : (o.fateAt ?? Infinity) > t);
+
+// An extra's launch, at the time it was due, like anyone's: unless it's in
+// the record already (a restart), or there was no room for it then (people
+// busy launching, EXTRA_CAP of theirs up, or the sky half full).
+function launchExtra(launch: ExtraLaunch, now: number): SkyObject | null {
+  const already = db
+    .select({ id: objects.id })
+    .from(objects)
+    .where(and(eq(objects.owner, launch.owner), eq(objects.launchedAt, launch.at)))
+    .get();
+  if (already) return null;
+  const people = db
+    .select({ n: count() })
+    .from(objects)
+    .where(
+      and(
+        eq(objects.kind, "satellite"),
+        gt(objects.launchedAt, launch.at - HOUR),
+        lte(objects.launchedAt, launch.at),
+        or(isNull(objects.owner), notLike(objects.owner, `${EXTRA}%`)),
+      ),
+    )
+    .get();
+  if ((people?.n ?? 0) >= EXTRA_ROOM) return null;
+  const up = db
+    .select({ ...columns, fate: objects.fate, fateAt: objects.fateAt })
+    .from(objects)
+    .where(and(eq(objects.kind, "satellite"), lte(objects.launchedAt, launch.at), or(eq(objects.fate, "live"), gt(objects.fateAt, launch.at))))
+    .all()
+    .map(toObject)
+    .filter((o) => upAt(o, launch.at));
+  if (up.length >= SKY_CAP / 2 || up.filter((o) => isExtra(o.owner)).length >= EXTRA_CAP) return null;
+  const object = toObject(
+    db
+      .insert(objects)
+      .values({
+        kind: "satellite",
+        owner: launch.owner,
+        operator: launch.handle === null ? null : extraOperator(launch.handle, launch.at),
+        callsign: launch.callsign,
+        beacon: launch.beacon,
+        question: launch.question,
+        band: launch.band,
+        launchedAt: launch.at,
+        ...placeInBand(launch.band, launch.at, seeded(launch.seed)),
+      })
+      .returning(columns)
+      .get(),
+  );
+  if (now - launch.at <= EXTRA_NEWS) publish({ type: "launch", object });
+  return object;
+}
+
+// An extra bringing theirs down, or boosting it, when it was due: if it's
+// still up then and can (ADR 0011), as anyone's would.
+function manoeuvreExtra(move: ExtraManoeuvre, now: number): SkyObject | null {
+  const row = db
+    .select(columns)
+    .from(objects)
+    .where(and(eq(objects.owner, move.owner), eq(objects.launchedAt, move.launchedAt), eq(objects.kind, "satellite"), eq(objects.fate, "live")))
+    .get();
+  if (!row || reentryAt(toObject(row)) <= move.at) return null;
+  const result =
+    move.type === "deorbit" ? bringDown(toObject(row), move.at, reorbit) : boostUp(toObject(row), move.at, seeded(move.seed), reorbit);
+  if (!result.ok) return null;
+  if (now - move.at <= EXTRA_NEWS) told(move.type, result.object);
+  return result.object;
+}
+
 // ── keeping the sky up to date ────────────────────────────────────────────
 
-// Brings the sky up to `now`: every collision that has come, in order (each
-// one's fragments can hit something sooner, so the schedule is worked out
-// again after each), then every burn-up, then the derelicts topped up.
+// Brings the sky up to `now`: every collision, and everything the extras
+// did (ADR 0021), that has come, in order (each one's fragments, or a new
+// orbit, can hit something sooner, so the schedule is worked out again
+// after each), then every burn-up, then the derelicts topped up.
 // Every read of the sky runs this first, so a server that was stopped catches
 // up before it answers; a timer runs it as each event comes while it's
 // running.
 //
 // Most reads come between events, with nothing to do: until the next
-// collision or burn-up (and at least every QUIET_MS, for the derelicts),
-// settling returns at once. A launch or a new derelict ends the quiet.
+// collision, burn-up or extra's launch (and at least every QUIET_MS, for the
+// derelicts), settling returns at once. A launch or a new derelict ends the
+// quiet.
 const QUIET_MS = 15_000;
 let quietFrom = Infinity;
 let quietUntil = -Infinity;
@@ -784,10 +940,33 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
   }
   if (now >= quietFrom && now < quietUntil) return { decayed: [], collisions: [] };
   const applied: CollisionReport[] = [];
+  const due = extrasDue(now);
+  // how far the extras have been dealt with: all of it, unless something
+  // fails to be written
+  let through = now;
   let sky = live();
   refreshMeetings(sky);
   for (;;) {
     const next = nextHit();
+    // something an extra does at the moment of a collision goes first, as
+    // it would have on a server that was running
+    if (due.length > 0 && (!next || due[0].at <= next.at)) {
+      const event = due.shift()!;
+      try {
+        const changed = event.type === "launch" ? launchExtra(event, now) : manoeuvreExtra(event, now);
+        if (changed) {
+          sky = sky.some((o) => o.id === changed.id) ? sky.map((o) => (o.id === changed.id ? changed : o)) : sky.concat(changed);
+          refreshMeetings(sky);
+        }
+      } catch (error) {
+        // one that can't be written (a busy or full disk) is tried again on
+        // the next settle, with everything after it
+        console.error(`${event.owner}'s ${event.type} due at ${event.at} failed:`, error);
+        through = event.at - 1;
+        due.length = 0;
+      }
+      continue;
+    }
     if (!next || next.at > now) break;
     try {
       const report = collide(next, sky);
@@ -802,13 +981,14 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
     }
     refreshMeetings(sky);
   }
+  extrasThrough = Math.max(extrasThrough ?? -Infinity, through);
   const decayed = markDecayed(now);
   keepDerelicts(now);
   // only for someone watching: a collision staged for nobody is just debris
   if (DERELICT_BASELINE > 0 && listening() > 0) stageCollision(now);
   refreshMeetings(live());
   announce(now);
-  const next = wakeForNext();
+  const next = wakeForNext(now);
   quietFrom = now;
   quietUntil = Math.min(next, now + QUIET_MS);
   return { decayed, collisions: applied };
@@ -816,13 +996,13 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
 
 export const settleDecay = (now = Date.now()): SkyObject[] => settle(now).decayed;
 
-// Wakes for the next burn-up or collision, or within a minute regardless,
-// so a timer never sleeps past a launch that burns up sooner.
-// Returns when the next one is.
+// Wakes for the next burn-up, collision or thing an extra does after `now`,
+// or within a minute regardless, so a timer never sleeps past a launch that
+// burns up sooner. Returns when the next one is.
 let wake: ReturnType<typeof setTimeout> | undefined;
-function wakeForNext(): number {
+function wakeForNext(now = Date.now()): number {
   clearTimeout(wake);
-  let next = nextHit()?.at ?? Infinity;
+  let next = Math.min(nextHit()?.at ?? Infinity, nextExtraAfter(now, EXTRAS_RATE));
   for (const object of live()) next = Math.min(next, reentryAt(object));
   const wait = Math.min(Math.max(next - Date.now(), 0) + 5, 60_000);
   wake = setTimeout(() => {
@@ -1423,18 +1603,20 @@ function yours(who: Who, id: number, now: number): SkyObject | null {
   return reentryAt(object) > now ? object : null;
 }
 
-// A new orbit for an object, from `now`: stored, recorded, its collisions
-// worked out again, and everyone told. Only if `allowed` still holds in the
-// database as it's written (a boost not yet used, a satellite not already
-// coming down), so no way of asking twice can do it twice; null if not.
-function manoeuvre(
+// A new orbit for an object, from `now`: stored and recorded, and its
+// meetings forgotten, to be worked out again. Only if `allowed` still holds
+// in the database as it's written (a boost not yet used, a satellite not
+// already coming down), so no way of asking twice can do it twice; null if
+// not.
+type Move = (
   object: SkyObject,
   kind: ManoeuvreKind,
   orbit: Required<Orbit>,
   now: number,
   extra: Partial<typeof objects.$inferInsert>,
   allowed: SQL,
-): SkyObject | null {
+) => SkyObject | null;
+const reorbit: Move = (object, kind, orbit, now, extra, allowed) => {
   const after = db.transaction((tx) => {
     const row = tx
       .update(objects)
@@ -1459,22 +1641,36 @@ function manoeuvre(
   // coming that everyone was told of, then work them out again
   for (const key of meetingsOf.get(object.id) ?? []) announced.delete(key);
   forget(object.id);
-  publish({ type: "manoeuvre", manoeuvre: kind, object: after, operator: partyOf(after).operator });
+  return after;
+};
+
+const told = (kind: ManoeuvreKind, object: SkyObject) =>
+  publish({ type: "manoeuvre", manoeuvre: kind, object, operator: partyOf(object).operator });
+
+// A manoeuvre as an owner makes it: a new orbit, everyone told, and its
+// collisions worked out again and announced.
+const manoeuvre: Move = (object, kind, orbit, now, extra, allowed) => {
+  const after = reorbit(object, kind, orbit, now, extra, allowed);
+  if (!after) return null;
+  told(kind, after);
   unquiet();
   refreshMeetings(live());
   announce(now);
   wakeForNext();
   return after;
-}
+};
 
 // Bring your satellite down (ADR 0011): it falls to the top of the
 // atmosphere in two minutes, then burns up, and ends `deorbited`.
 export function deorbit(who: Who, id: number, now = Date.now()): ManoeuvreResult {
   const object = yours(who, id, now);
-  if (!object) return refuse("not-yours");
+  return object ? bringDown(object, now) : refuse("not-yours");
+}
+
+function bringDown(object: SkyObject, now: number, move = manoeuvre): ManoeuvreResult {
   const why = canManoeuvre(object, now).deorbit;
   if (why) return refuse(why);
-  const after = manoeuvre(object, "deorbit", descend(object, now), now, { deorbitedAt: now }, isNull(objects.deorbitedAt));
+  const after = move(object, "deorbit", descend(object, now), now, { deorbitedAt: now }, isNull(objects.deorbitedAt));
   return after ? { ok: true, object: after } : refuse("coming-down");
 }
 
@@ -1482,7 +1678,10 @@ export function deorbit(who: Who, id: number, now = Date.now()): ManoeuvreResult
 // next band, picked like a launch's, using its one tank of fuel.
 export function boost(who: Who, id: number, now = Date.now(), random = Math.random): ManoeuvreResult {
   const object = yours(who, id, now);
-  if (!object) return refuse("not-yours");
+  return object ? boostUp(object, now, random) : refuse("not-yours");
+}
+
+function boostUp(object: SkyObject, now: number, random: () => number, move = manoeuvre): ManoeuvreResult {
   const { boost: why, to } = canManoeuvre(object, now);
   if (why || !to) return refuse(why ?? "top-band");
   // a height in the next band up, like a launch's, but not short of its
@@ -1490,7 +1689,7 @@ export function boost(who: Who, id: number, now = Date.now(), random = Math.rand
   let target = placeInBand(to, now, random).radius;
   for (let tries = 0; target < BANDS[to].minRadius && tries < 20; tries++) target = placeInBand(to, now, random).radius;
   target = Math.max(target, BANDS[to].minRadius);
-  const after = manoeuvre(object, "boost", climb(object, now, target), now, { boosts: object.boosts + 1 }, and(lt(objects.boosts, FUEL), isNull(objects.deorbitedAt))!);
+  const after = move(object, "boost", climb(object, now, target), now, { boosts: object.boosts + 1 }, and(lt(objects.boosts, FUEL), isNull(objects.deorbitedAt))!);
   return after ? { ok: true, object: after } : refuse("no-fuel");
 }
 
