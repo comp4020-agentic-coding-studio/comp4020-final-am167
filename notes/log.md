@@ -3414,3 +3414,5 @@ extras; ADR 0021 has the table):
 build on a fresh database; `pnpm check:evidence` green. `pnpm test:layout`
 not run again: this round changed neither the launchpad nor the sky
 page.
+
+Commit `3469642`.
