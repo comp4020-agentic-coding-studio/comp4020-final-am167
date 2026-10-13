@@ -6,7 +6,8 @@ import { listening, publish } from "./events.ts";
 import { EXTRA, HOUR, PER_HOUR, callsignOf, extrasBetween, isExtra, nextExtraAfter, type ExtraEvent, type ExtraLaunch, type ExtraManoeuvre } from "./extras.ts";
 import { FUEL, REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
-import type { LaunchErrors, LaunchInput } from "./launch.ts";
+import { readLaunch, type LaunchErrors, type LaunchInput } from "./launch.ts";
+import { clip, iso, log, whoIs } from "./log.ts";
 import { STATIONS, nextStation, type Station } from "./stations.ts";
 import { lineOf, shardsOf, type WreckPiece } from "./wreck.ts";
 import {
@@ -132,6 +133,23 @@ export const toPublic = ({ owner, operator, ...object }: SkyObject, who: Who): P
   ...object,
   mine: ownedBy({ owner, operator }, who),
 });
+
+// Who someone is in the server's record (log.ts): a viewer by their cookie
+// and handle. An object by whoever owns it (ADR 0009): an operator's by the
+// handle alone, since it's theirs on every device; otherwise the cookie
+// that launched it, an extra by their `extra:` owner, and a derelict or
+// debris, nobody's, as "nobody".
+const handleOf = (operator: number | null) => (operator === null ? null : (handles([operator]).get(operator) ?? null));
+export const whoOf = (who: Who): string => {
+  const viewer = viewerOf(who);
+  return whoIs(viewer.person, handleOf(viewer.operator));
+};
+export const whoOwns = (object: { owner: string | null; operator: number | null }): string =>
+  object.owner === null
+    ? "nobody"
+    : isExtra(object.owner)
+      ? object.owner
+      : (handleOf(object.operator) ?? whoIs(object.owner, null));
 
 // The objects a viewer owns, as a query condition.
 const ownerIs = (who: Who) => {
@@ -360,6 +378,14 @@ function collide({ a, b, at }: Hit, sky: SkyObject[]): CollisionReport {
   const wreck = report.fragments.flatMap((f) => (f.words ? [{ id: f.id, words: f.words, up: true }] : []));
   const named = { ...report, objects: both, parties, wreck };
   publish({ type: "collision", collision: named });
+  const side = (key: "a" | "b", object: SkyObject) => ({
+    [key]: object.id,
+    [`${key}_kind`]: object.kind,
+    [`${key}_owner`]: whoOwns(object),
+    [`${key}_callsign`]: object.callsign,
+    [`${key}_from`]: object.sourceCollision === null ? null : `collision:${object.sourceCollision}`,
+  });
+  log("collision", { at: iso(at), id: report.id, ...side("a", both[0]), ...side("b", both[1]), fragments: report.fragments.length });
   return named;
 }
 
@@ -552,17 +578,43 @@ export const collisionLog = (): CollisionRow[] => db.select().from(collisions).o
 function markDecayed(now: number): SkyObject[] {
   const gone = live().filter((object) => reentryAt(object) <= now);
   if (gone.length > 0) {
-    db.transaction((tx) => {
-      for (const object of gone) {
-        tx.update(objects)
-          .set({ fate: object.deorbitedAt === null ? "decayed" : "deorbited", fateAt: Math.round(reentryAt(object)) })
-          .where(and(eq(objects.id, object.id), eq(objects.fate, "live")))
-          .run();
-      }
-    });
+    // only what this marked, so nothing is logged twice
+    const marked = db.transaction((tx) =>
+      gone.filter(
+        (object) =>
+          tx
+            .update(objects)
+            .set({ fate: object.deorbitedAt === null ? "decayed" : "deorbited", fateAt: Math.round(reentryAt(object)) })
+            .where(and(eq(objects.id, object.id), eq(objects.fate, "live")))
+            .run().changes > 0,
+      ),
+    );
     for (const object of gone) publish({ type: "decay", object });
+    logBurnUps(marked);
   }
   return gone;
+}
+
+// Each satellite or derelict that burned up is a line, when it burned up;
+// debris, which a staged collision makes a dozen of every few minutes, is
+// one line for all of it.
+function logBurnUps(gone: SkyObject[]): void {
+  const debris = gone.filter((object) => object.kind === "debris");
+  for (const object of gone) {
+    if (object.kind === "debris") continue;
+    log("burn-up", {
+      at: iso(reentryAt(object)),
+      sat: object.id,
+      kind: object.kind,
+      owner: whoOwns(object),
+      callsign: object.callsign,
+      fate: object.deorbitedAt === null ? "decayed" : "deorbited",
+    });
+  }
+  if (debris.length > 0) {
+    const at = (pick: (...n: number[]) => number) => iso(pick(...debris.map(reentryAt)));
+    log("burn-up", { at: at(Math.max), kind: "debris", count: debris.length, first: at(Math.min) });
+  }
 }
 
 // ── derelicts (ADR 0008) ──────────────────────────────────────────────────
@@ -701,6 +753,7 @@ export function stageCollision(now = Date.now()): Conjunction | null {
   // it keeps to itself; if there's none it comes out again, and the next
   // settle tries again.
   let pair: SkyObject[];
+  let over: Station;
   try {
     pair = db.transaction((tx) => {
       const [a, b] = [way, -way as 1 | -1].map((direction) =>
@@ -711,6 +764,7 @@ export function stageCollision(now = Date.now()): Conjunction | null {
         const sent = [a, b].map((object) => ({ ...object, ...orbit(station, object.direction) }));
         if (!keepsToItself(sent[0], sent[1], sky, now)) continue;
         for (const object of sent) tx.update(objects).set({ phase: object.phase }).where(eq(objects.id, object.id)).run();
+        over = station;
         return sent;
       }
       return tx.rollback();
@@ -724,6 +778,7 @@ export function stageCollision(now = Date.now()): Conjunction | null {
   arrived(pair, now);
   const [a, b] = pair;
   const hit = meetings.get(`${Math.min(a.id, b.id)}:${Math.max(a.id, b.id)}`);
+  log("staged", { at: iso(now), a: a.id, b: b.id, due: hit ? iso(hit.at) : null, over: over!.name });
   return hit ? toConjunction(hit) : null;
 }
 
@@ -740,7 +795,8 @@ export function keepDerelicts(now = Date.now(), baseline = DERELICT_BASELINE, le
   const due = last?.at == null ? Infinity : Math.floor((now - last.at) / DERELICT_GAP);
   const bands = Object.keys(BANDS) as Band[];
   for (let n = 0; n < Math.min(Math.max(baseline - up, least - derelicts), due); n++) {
-    addDerelict(placeInBand(bands[Math.floor(Math.random() * bands.length)], now), now);
+    const object = addDerelict(placeInBand(bands[Math.floor(Math.random() * bands.length)], now), now);
+    log("derelict", { at: iso(now), sat: object.id, band: object.band, echo: object.echo });
   }
 }
 
@@ -863,6 +919,7 @@ function launchExtra(launch: ExtraLaunch, now: number): SkyObject | null {
       .get(),
   );
   if (now - launch.at <= EXTRA_NEWS) publish({ type: "launch", object });
+  logLaunch(launch.owner, object, launch.at);
   return object;
 }
 
@@ -878,6 +935,7 @@ function manoeuvreExtra(move: ExtraManoeuvre, now: number): SkyObject | null {
   const result =
     move.type === "deorbit" ? bringDown(toObject(row), move.at, reorbit) : boostUp(toObject(row), move.at, seeded(move.seed), reorbit);
   if (!result.ok) return null;
+  logMove(move.type, move.owner, toObject(row), result.object, move.at, true);
   if (now - move.at <= EXTRA_NEWS) told(move.type, result.object);
   return result.object;
 }
@@ -1493,7 +1551,7 @@ export function historyOf(id: number, who: Who, now = Date.now()): History | nul
 
 // ── launching ─────────────────────────────────────────────────────────────
 
-type LaunchResult = { ok: true; object: SkyObject } | { ok: false; errors: LaunchErrors };
+type LaunchResult = { ok: true; object: SkyObject } | { ok: false; errors: LaunchErrors; why?: "gap" | "sky-full" };
 
 // When a person can next launch: a gap after their last launch, or now.
 // (Per operator when signed in, so a second device doesn't double it.)
@@ -1518,10 +1576,50 @@ export function waitFor(ms: number): string {
 // "You can launch again in 4 min 05 s."
 export const waitMessage = (ms: number): string => `You can launch again in ${waitFor(ms)}.`;
 
+// A launch line: who, the satellite, its callsign, band and words. The
+// extras' carry the moment each was due (`at`), since a server catching up
+// launches them late.
+function logLaunch(who: string, object: SkyObject, at?: number): void {
+  log("launch", {
+    who,
+    at: at === undefined ? null : iso(at),
+    sat: object.id,
+    callsign: object.callsign,
+    band: object.band,
+    beacon: object.beacon,
+    answering: object.question === null ? null : "yes",
+  });
+}
+
+// The launchpad's form, as posted (null if it couldn't be read): read,
+// launched, and logged either way.
+export function launchFrom(who: Viewer, form: FormData | null, now = Date.now()): LaunchResult {
+  if (!form) {
+    log("launch-refused", { who: whoOf(who), reason: "unreadable" });
+    return { ok: false, errors: { form: "That launch form couldn't be read. Fill it in and try again." } };
+  }
+  const read = readLaunch(form, now);
+  if (read.ok) return launch(who, read.input, now);
+  const { values, errors } = read;
+  log("launch-refused", {
+    who: whoOf(who),
+    reason: Object.keys(errors).map((field) => `bad-${field}`).join(","),
+    detail: Object.values(errors).join(" "),
+    band: clip(values.band),
+    callsign: clip(values.callsign),
+    beacon: clip(values.beacon),
+  });
+  return read;
+}
+
 export function launch(who: Viewer | string, input: LaunchInput, now = Date.now(), random = Math.random): LaunchResult {
   settle(now);
   const result = checkAndInsert(viewerOf(who), input, now, random);
-  if (result.ok) {
+  if (!result.ok) {
+    const { band, callsign, beacon } = input;
+    log("launch-refused", { who: whoOf(who), reason: result.why, detail: result.errors.form, band, callsign, beacon });
+  } else {
+    logLaunch(whoOf(who), result.object);
     publish({ type: "launch", object: result.object });
     unquiet();
     refreshMeetings(live());
@@ -1538,13 +1636,14 @@ const liveSatellites = and(eq(objects.fate, "live"), eq(objects.kind, "satellite
 function checkAndInsert(viewer: Viewer, input: LaunchInput, now: number, random: () => number): LaunchResult {
   return db.transaction((tx) => {
     const ready = nextLaunchAt(viewer, now);
-    if (ready > now) return { ok: false as const, errors: { form: waitMessage(ready - now) } };
+    if (ready > now) return { ok: false as const, errors: { form: waitMessage(ready - now) }, why: "gap" as const };
 
     const inOrbit = tx.select({ n: count() }).from(objects).where(liveSatellites).get();
     if ((inOrbit?.n ?? 0) >= SKY_CAP)
       return {
         ok: false as const,
         errors: { form: `The sky is full: ${SKY_CAP} satellites in orbit, the most it holds.` },
+        why: "sky-full" as const,
       };
 
     const object = tx
@@ -1675,11 +1774,47 @@ const manoeuvre: Move = (object, kind, orbit, now, extra, allowed) => {
   return after;
 };
 
+// Why a satellite isn't yours to manoeuvre: it was, but it has gone (a
+// page left open past its burn-up or collision), or it never was.
+function whyNot(who: Who, id: number): Refusal {
+  const target = objectById(id);
+  return target?.kind === "satellite" && ownedBy(target, who) ? "gone" : "not-yours";
+}
+
 // Bring your satellite down (ADR 0011): it falls to the top of the
 // atmosphere in two minutes, then burns up, and ends `deorbited`.
 export function deorbit(who: Who, id: number, now = Date.now()): ManoeuvreResult {
   const object = yours(who, id, now);
-  return object ? bringDown(object, now) : refuse("not-yours");
+  const result = object ? bringDown(object, now) : refuse(whyNot(who, id));
+  logAsked("deorbit", who, id, object, result, now);
+  return result;
+}
+
+// A manoeuvre made: who, the satellite, and the bands it goes from and to.
+function logMove(kind: ManoeuvreKind, who: string, before: SkyObject, after: SkyObject, at: number, late = false): void {
+  log(kind, {
+    who,
+    at: late ? iso(at) : null,
+    sat: after.id,
+    callsign: after.callsign,
+    from: bandAt(radiusAt(before, at)),
+    to: kind === "boost" ? bandAt(radiusAt(after, after.until ?? at)) : null,
+  });
+}
+
+// A manoeuvre someone asked for: made, or refused with why, naming the
+// satellite and whose it is, so someone touching another's shows as that.
+function logAsked(kind: ManoeuvreKind, who: Who, id: number, object: SkyObject | null, result: ManoeuvreResult, now: number): void {
+  if (result.ok && object) return logMove(kind, whoOf(who), object, result.object, now);
+  if (result.ok) return;
+  const target = objectById(id);
+  log(`${kind}-refused`, {
+    who: whoOf(who),
+    sat: id,
+    owner: target ? whoOwns(target) : "none",
+    callsign: target?.callsign,
+    reason: result.why,
+  });
 }
 
 function bringDown(object: SkyObject, now: number, move = manoeuvre): ManoeuvreResult {
@@ -1693,7 +1828,9 @@ function bringDown(object: SkyObject, now: number, move = manoeuvre): ManoeuvreR
 // next band, picked like a launch's, using its one tank of fuel.
 export function boost(who: Who, id: number, now = Date.now(), random = Math.random): ManoeuvreResult {
   const object = yours(who, id, now);
-  return object ? boostUp(object, now, random) : refuse("not-yours");
+  const result = object ? boostUp(object, now, random) : refuse(whyNot(who, id));
+  logAsked("boost", who, id, object, result, now);
+  return result;
 }
 
 function boostUp(object: SkyObject, now: number, random: () => number, move = manoeuvre): ManoeuvreResult {

@@ -1,10 +1,10 @@
 ---
 import Base from "../layouts/Base.astro";
 import { every, lasting } from "../lib/format.ts";
-import { BEACON_MAX, CALLSIGN_MAX, readLaunch, type LaunchErrors, type LaunchValues } from "../lib/launch.ts";
+import { BEACON_MAX, CALLSIGN_MAX, valuesOf, type LaunchErrors, type LaunchValues } from "../lib/launch.ts";
 import { BANDS, lifetimeRange, type Band } from "../lib/orbit.ts";
 import { dayOf, questionOn } from "../lib/questions.ts";
-import { SKY_CAP, launch, nextLaunchAt, satellitesOf, skyIsFull, waitFor } from "../lib/sky.ts";
+import { SKY_CAP, launchFrom, nextLaunchAt, satellitesOf, skyIsFull, waitFor } from "../lib/sky.ts";
 
 // The launchpad. The form posts here and works without JavaScript: a launch
 // redirects to the sky, a refusal re-renders the form with the reasons. The
@@ -18,36 +18,24 @@ let errors: LaunchErrors = {};
 // default tick tagged every line as an answer)
 let values: LaunchValues = { band: "low", callsign: "", beacon: "", answering: "" };
 
-let form: FormData | undefined;
+let form: FormData | null = null;
 if (Astro.request.method === "POST") {
   try {
     form = await Astro.request.formData();
   } catch {
-    errors = { form: "That launch form couldn't be read. Fill it in and try again." };
-    if (wantsJson) return Response.json({ errors }, { status: 400 });
-    Astro.response.status = 400;
+    // unreadable: refused below, and logged
   }
-}
-
-if (form) {
-  const read = readLaunch(form);
-  const result = read.ok ? launch(viewer, read.input) : read;
+  const result = launchFrom(viewer, form);
   if (result.ok) {
     const redirect = `/sky/?launched=${result.object.id}`;
     if (wantsJson) return Response.json({ id: result.object.id, redirect }, { status: 201 });
     return Astro.redirect(redirect, 303);
   }
-  if (wantsJson) return Response.json({ errors: result.errors }, { status: 422 });
+  const status = form ? 422 : 400;
+  if (wantsJson) return Response.json({ errors: result.errors }, { status });
   errors = result.errors;
-  if (!read.ok) values = read.values;
-  else
-    values = {
-      band: read.input.band,
-      callsign: read.input.callsign,
-      beacon: read.input.beacon,
-      answering: form.get("answering") ? "1" : "",
-    };
-  Astro.response.status = 422;
+  if (form) values = valuesOf(form);
+  Astro.response.status = status;
 }
 
 // you can have any number up, a short gap apart (PLAN.md, "Launch limits")

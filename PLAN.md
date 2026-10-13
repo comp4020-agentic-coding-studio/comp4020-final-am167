@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-13 (extras merged: invented people seed the sky, ADR 0021, reviewed and revised; C10's logging reframed against the crit 10 spec: who did what, server-side, readable live from `flyctl logs`)._
+_Last updated 2026-10-13 (C10's logging built: one stdout line per thing a person does or is refused, and per thing the server does, ADR 0022 proposed; extras merged before it, ADR 0021)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -197,31 +197,30 @@ _Last updated 2026-10-13 (extras merged: invented people seed the sky, ADR 0021,
   below, in his words. C10's evidence must leave the extras out
   (`isExtra`), and C10's log lines will show the extras' launches and
   manoeuvres alongside people's (their owner is `extra:…`).
-- **Next, for C10 (week 11; crit 10, "Fly by instruments"):** the spec
-  asks that the app **logs who did what, server-side, and the logging
-  outlives the crit**. At the crit two of the pod use the deployed app from
-  its URL alone, each in their own Chrome profile, while Advay narrates
-  from `flyctl logs -a <repo>` without touching the app; if the logs can't
-  tell them apart, or one can change the other's, that's the finding. So:
-  - One log line per action a person takes: visit (new cookie), launch,
-    deorbit, boost, claim and sign-in, a beacon heard. Each names **who**
-    (handle and a short operator or cookie id, so two anonymous visitors
-    are told apart) and **what** it touched (object id, band, callsign).
-  - Refusals logged too, with the reason: a launch refused, a deorbit or
-    boost of someone else's satellite, a claim that fails.
-  - Server-driven events logged for the narration: collisions (and whose
-    satellites), burn-ups, staged collisions, derelict top-ups.
-  - Plain lines on stdout, so `flyctl logs` shows them; nothing to set up.
-    Today the server only logs errors (`console.error` in `middleware.ts`,
-    `sky.ts`, `heard.ts`).
-  - The spec also wants what each person may see and change **checked on
-    the server and written down with why**. ADRs 0002, 0009, 0010 and 0011
-    cover most of it; check they say plainly what the server refuses, and
-    write a record if they don't.
+- **C10 (week 11; crit 10, "Fly by instruments"), the logging built
+  (2026-10-13, on a branch for Advay's review):** the spec asks that the
+  app **logs who did what, server-side, and the logging outlives the
+  crit**; at the crit two of the pod use the deployed app in their own
+  Chrome profiles while Advay narrates from `flyctl logs -a <repo>` alone.
+  Built: one plain stdout line per event (`src/lib/log.ts`, `event
+  key=value`): `visit`, `launch`, `deorbit`, `boost`, `claim`, `sign-in`,
+  `sign-out`, each refusal as `<event>-refused` with its reason (a
+  stranger's manoeuvre names the satellite and its owner), and the
+  server's own `collision`, `burn-up`, `staged`, `derelict` and the
+  extras' launches and manoeuvres (`who=extra:…`), each with its own time
+  and never twice. Who is a handle or `anon` plus six hex digits of a hash
+  of the cookie. No passphrases, no cookies, no beacons heard. What each
+  person may see and change, and why, is written down in ADR 0022
+  (proposed: Advay to accept). Rehearsed locally with two browser
+  sessions (`notes/log.md`, 2026-10-13). Known gap: a form posted from
+  another site is refused by Astro before the app's code runs, so it
+  isn't logged.
+  - **Still for C10:** accept or revise ADR 0022; deploy and try
+    `flyctl logs` against the real app; `reflections/crit-10.md` and
+    `PROCESS.md` for the crit. Maybes, as before: conjunction alerts and
+    dodging with fuel.
   - Aggregate figures (launches per band, collisions, deorbits, several
-    cookies per human) come from these lines later if wanted; they're no
-    longer the point of the logging.
-  - Plus `reflections/crit-10.md` and `PROCESS.md` for the crit.
+    cookies per human) can be counted from these lines if wanted.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or

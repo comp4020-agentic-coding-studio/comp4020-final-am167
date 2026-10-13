@@ -10,10 +10,11 @@ export const FUEL = 1;
 export type Manoeuvrable = Orbit & { deorbitedAt: number | null; boosts: number };
 
 // why one is refused, for a page to say without JavaScript
-export type Refusal = "not-yours" | "coming-down" | "burning" | "no-fuel" | "top-band";
+export type Refusal = "not-yours" | "gone" | "coming-down" | "burning" | "no-fuel" | "top-band";
 
 export const REFUSALS: Record<Refusal, string> = {
   "not-yours": "That isn't one of your satellites in orbit.",
+  gone: "It isn't in orbit any more.",
   "coming-down": "It's already coming down.",
   burning: "It's already burning up on re-entry.",
   "no-fuel": `It has no fuel left: a satellite can boost ${FUEL === 1 ? "once" : `${FUEL} times`}.`,

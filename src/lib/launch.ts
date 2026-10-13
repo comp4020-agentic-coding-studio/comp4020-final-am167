@@ -75,16 +75,19 @@ export const blocked = (text: string) =>
       ANYWHERE.some((bad) => word.includes(bad)),
   );
 
+// What a launch form holds, tidied as it's read: to check, or to give back.
+export const valuesOf = (form: FormData): LaunchValues => ({
+  band: String(form.get("band") ?? ""),
+  callsign: String(form.get("callsign") ?? "").trim(),
+  beacon: String(form.get("beacon") ?? "").trim().replace(/\s+/g, " "),
+  answering: form.get("answering") ? "1" : "",
+});
+
 export function readLaunch(
   form: FormData,
   now = Date.now(),
 ): { ok: true; input: LaunchInput } | { ok: false; errors: LaunchErrors; values: LaunchValues } {
-  const values: LaunchValues = {
-    band: String(form.get("band") ?? ""),
-    callsign: String(form.get("callsign") ?? "").trim(),
-    beacon: String(form.get("beacon") ?? "").trim().replace(/\s+/g, " "),
-    answering: form.get("answering") ? "1" : "",
-  };
+  const values = valuesOf(form);
   const errors: LaunchErrors = {};
 
   if (!isBand(values.band)) errors.band = "Pick an altitude band.";

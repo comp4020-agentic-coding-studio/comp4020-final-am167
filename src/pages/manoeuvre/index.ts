@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
-import { boost, deorbit, toPublic } from "../../lib/sky.ts";
+import { log } from "../../lib/log.ts";
+import { boost, deorbit, toPublic, whoOf } from "../../lib/sky.ts";
 
 // Bringing your satellite down, or boosting it up a band (ADR 0011). A plain
 // form posts here from "Yours" in the catalogue or from the satellite's own
@@ -21,12 +22,14 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   try {
     form = await request.formData();
   } catch {
+    log("manoeuvre-refused", { who: whoOf(viewer), reason: "unreadable" });
     return Response.json({ error: "That form couldn't be read." }, { status: 400 });
   }
   const id = Number(form.get("id"));
   const action = form.get("action");
   const back = BACK.get(String(form.get("back") ?? "")) ?? BACK.get("yours")!;
   if (!Number.isInteger(id) || id <= 0 || (action !== "deorbit" && action !== "boost")) {
+    log("manoeuvre-refused", { who: whoOf(viewer), reason: "not-a-manoeuvre" });
     if (wantsJson) return Response.json({ error: "That isn't a manoeuvre." }, { status: 400 });
     return redirect("/catalogue/?show=mine", 303);
   }
