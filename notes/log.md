@@ -3620,6 +3620,8 @@ signing in again ada's satellite still shows `owner=ada#ecfa42`; the
 handle is what matches. No passphrase (the refused "tiny", ada's, or bo's
 guess) appears anywhere in the server's output.
 
+Commit `eca1ae7`.
+
 ## 2026-10-13 — C10 logging: the adversarial review, and what changed
 
 A fresh Opus agent reviewed the logging against the crit 10 spec, told to
@@ -3707,3 +3709,5 @@ on a fresh scratch database; `pnpm check:evidence` green. `pnpm
 test:layout` not run: neither the launchpad's nor the sky's layout, CSS
 or content changed (the launchpad's form handling moved into `launchFrom`,
 same responses).
+
+Commit `eca1ae7`.
