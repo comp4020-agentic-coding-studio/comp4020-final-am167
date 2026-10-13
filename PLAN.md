@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-10 (staged collisions keep to themselves; a close pair may never collide; staging irregular, 10 to 15 minutes apart; burn-ups told first; ADRs 0015–0020 accepted; C10 leftovers sorted)._
+_Last updated 2026-10-12 (C10's logging reframed against the crit 10 spec: who did what, server-side, readable live from `flyctl logs`)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -169,6 +169,31 @@ _Last updated 2026-10-10 (staged collisions keep to themselves; a close pair may
   burn-up is fresh (drop them? their card tells them); the launchpad
   tells no news of yours; crowding only bites once people outnumber the
   derelict floor; `keepDerelicts` counts staged derelicts.
+- **Next, for C10 (week 11; crit 10, "Fly by instruments"):** the spec
+  asks that the app **logs who did what, server-side, and the logging
+  outlives the crit**. At the crit two of the pod use the deployed app from
+  its URL alone, each in their own Chrome profile, while Advay narrates
+  from `flyctl logs -a <repo>` without touching the app; if the logs can't
+  tell them apart, or one can change the other's, that's the finding. So:
+  - One log line per action a person takes: visit (new cookie), launch,
+    deorbit, boost, claim and sign-in, a beacon heard. Each names **who**
+    (handle and a short operator or cookie id, so two anonymous visitors
+    are told apart) and **what** it touched (object id, band, callsign).
+  - Refusals logged too, with the reason: a launch refused, a deorbit or
+    boost of someone else's satellite, a claim that fails.
+  - Server-driven events logged for the narration: collisions (and whose
+    satellites), burn-ups, staged collisions, derelict top-ups.
+  - Plain lines on stdout, so `flyctl logs` shows them; nothing to set up.
+    Today the server only logs errors (`console.error` in `middleware.ts`,
+    `sky.ts`, `heard.ts`).
+  - The spec also wants what each person may see and change **checked on
+    the server and written down with why**. ADRs 0002, 0009, 0010 and 0011
+    cover most of it; check they say plainly what the server refuses, and
+    write a record if they don't.
+  - Aggregate figures (launches per band, collisions, deorbits, several
+    cookies per human) come from these lines later if wanted; they're no
+    longer the point of the logging.
+  - Plus `reflections/crit-10.md` and `PROCESS.md` for the crit.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or
@@ -441,9 +466,10 @@ by the launch limits of 2026-10-06 (any number up, one minute apart)._
 - **Boosting a satellite (added 2026-10-06; built 2026-10-07, ADR 0011).**
   The other half of deorbiting: an owner raises their own orbit one band,
   once, to stay up longer. No fuel; a boost is a new epoch for that object.
-- **C10 (week 11), sorted 2026-10-10 (Advay):** server-side logs as
-  evidence (launches per band, collisions, deorbits) will be done, just not
-  yet. Maybes: conjunction alerts and dodging with fuel (moved from C9), and
+- **C10 (week 11), sorted 2026-10-10 (Advay):** server-side logs will be
+  done; first framed as evidence (launches per band, collisions, deorbits),
+  reframed 2026-10-12 against the crit 10 spec as a live record of who did
+  what (see "Status and next steps"). Maybes: conjunction alerts and dodging with fuel (moved from C9), and
   seeding the sky with resident operators (see "Open questions"). Won't do:
   seeing a burn-up on demand. The catalogue's lineage was built in C9.
 - **Week 12:** visual polish (light trails, collision effects), README and

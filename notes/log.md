@@ -3184,3 +3184,20 @@ faults. Both reproduced on a fresh build of `12a2c2b` before fixing.
 12 of 12.
 
 Commit `a862d23`.
+
+## 2026-10-12 — C10's logging reframed against the crit 10 spec
+
+`PLAN.md` had C10's logging as aggregate evidence (launches per band,
+collisions, deorbits) to judge design questions later. Checked against the
+actual crit 10 spec ("Fly by instruments"), that's not what it asks: the app
+must log **who did what, server-side**, and keep doing so after the crit. At
+the crit two of the pod use the deployed app in separate Chrome profiles
+while Advay narrates from `flyctl logs` without touching the app. So the
+plan now calls for one stdout line per action (visit, launch, deorbit,
+boost, claim, beacon heard) naming the operator and what it touched,
+refusals with reasons, and server events (collisions, burn-ups, staging) for
+the narration. The aggregates can be derived from those lines if still
+wanted. The spec's other half, what each person may see and change checked
+on the server and written down with why, is mostly in ADRs 0002, 0009, 0010
+and 0011; to be checked for whether they say plainly what the server
+refuses. Today the server logs only errors.
