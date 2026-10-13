@@ -14,6 +14,8 @@ import { reentryAt } from "../src/lib/orbit.ts";
 // no derelicts, and launches placed by a seeded generator, so nothing here
 // collides (collisions have their own tests)
 process.env.DERELICTS = "0";
+// nor extras (ADR 0021): they launch on a schedule
+process.env.EXTRAS_PER_HOUR = "0";
 let seed = 7;
 const random = () => {
   seed = (seed * 1664525 + 1013904223) % 4294967296;

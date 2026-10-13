@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-12 (C10's logging reframed against the crit 10 spec: who did what, server-side, readable live from `flyctl logs`)._
+_Last updated 2026-10-13 (extras merged: invented people seed the sky, ADR 0021, reviewed and revised; C10's logging reframed against the crit 10 spec: who did what, server-side, readable live from `flyctl logs`)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -169,6 +169,34 @@ _Last updated 2026-10-12 (C10's logging reframed against the crit 10 spec: who d
   burn-up is fresh (drop them? their card tells them); the launchpad
   tells no news of yours; crowding only bites once people outnumber the
   derelict floor; `keepDerelicts` counts staged derelicts.
+- **Extras (2026-10-12, Advay approved seeding the sky with "fake, but
+  realistic users"; ADR 0021, accepted; merged 2026-10-13, PR 13):**
+  built on branch `claude/extras` (`df4014c`, then the review's fixes; see
+  `notes/log.md`). Invented people launch like anyone so a quiet sky isn't
+  empty: fourteen regulars (twelve with handles) with their own hours,
+  names and voices, each coming on some days at any hour of theirs, and a
+  crowd of one-off visitors without one; about 18 launches a day on a
+  Canberra day's rhythm, a fifth answering the day's question, some
+  brought down or boosted later; never the same line twice in a day, and
+  nothing said that the satellite's card contradicts. Nothing on the page
+  tells them apart; the record does (owner `extra:…`, `operators.extra`),
+  nobody can sign in as one, and they never listen,
+  so "heard by" is still people. They make room for people (none in an
+  hour people have launched four in, none in a half-full sky, at most 20
+  up), and the sky keeps at least five derelicts. Only a new database
+  fills in a day behind it; a deploy starts from the latest thing in the
+  record. Rethought from PR 5's resident organisations, which were tuned
+  before ADRs 0019 and 0020; measured with `scripts/balance/` (ADR
+  0021): in a quiet sky people's satellites burn up 57% of the time (62%
+  without extras), and 89% of their passes over a station get a turn on
+  air (96.5%); at a crit 29% (31%) and 84% (87%). `EXTRA_CAP` or
+  `PER_HOUR` is the dial if being heard less is too much. At the merge
+  Advay dropped the PR's README bullet ("An empty sky") and its Why page
+  rewording, so the README doesn't yet say the sky is seeded and the Why
+  page still says "real people's words": both wait for the README rewrite
+  below, in his words. C10's evidence must leave the extras out
+  (`isExtra`), and C10's log lines will show the extras' launches and
+  manoeuvres alongside people's (their owner is `extra:…`).
 - **Next, for C10 (week 11; crit 10, "Fly by instruments"):** the spec
   asks that the app **logs who did what, server-side, and the logging
   outlives the crit**. At the crit two of the pod use the deployed app from
@@ -268,6 +296,7 @@ everyone a little?** See "What Kessler is for" below.
 | Collision geometry (2026-10-06) | **Mixed directions, plus near misses.** Orbits are flat and the period depends only on height, so two objects going the same way at the same height never close in, and decay keeps the gap in radius³ fixed. So each object gets a direction (prograde or retrograde): opposite-direction objects at similar heights cross head-on twice a lap. Same-direction objects can still collide when one creeps up on another within a (larger) hit distance. Rejected: hidden 3D inclinations (rewrites the rendering). Needs a decision record. |
 | Collision mechanics (2026-10-06, draft) | **Predicted by the server, broadcast ahead.** Positions are closed-form, so the server solves each pair's next crossing, keeps a queue of upcoming hits and sets a timer for the next (as decay does for burn-ups). A `conjunction` event gives every screen the impact time in advance, so all screens draw it at the same moment. At impact both objects are `destroyed` and seeded fragments spawn near the point, mostly keeping their parent's direction, so a head-on hit leaves debris going both ways. Catch-up after a restart runs the queue forward in time order (decays and collisions, new debris colliding inside the gap). New `collisions` table; `objects` gains direction and source collision (the lineage of ADR 0003). |
 | Seeding (2026-10-06) | **The server keeps a baseline of derelicts**: dead, ownerless satellites and old debris, as real orbit has, so collisions can happen when only the marker's two sessions are open. |
+| Extras (2026-10-12, ADR 0021, accepted) | **Invented people launch like anyone**, so a quiet sky isn't empty: regulars and one-off visitors, about 18 launches a day at Canberra's hours, answering the day's question, never repeating themselves in a day. Not marked on the page; the record knows (`extra:` owners), and the README says so. They don't listen ("heard by" stays people) and make room for people (none in an hour people launched four in). At least five derelicts kept. Rethought from PR 5's resident organisations. |
 | Identity (2026-10-06) | **Optional claim on top of the cookie.** You still launch anonymously within seconds (ADR 0002's reason holds); you can claim a unique operator handle with a passphrase, which keeps your record and blame across devices. No email, no personal data; passphrases hashed with Node's `scrypt`. Supersedes ADR 0002, so needs a new record. Rejected: required sign-up (marker friction), GitHub OAuth (secrets, personal data, marker needs an account), handle without a password (no cross-device). |
 | Blame (2026-10-06) | **Worked out from lineage, not stored.** Every fragment traces through its collision to the satellites at the root; their operators are who to blame. |
 | C9 scope (2026-10-06) | **Collisions + login.** Collisions, debris, lineage and blame by operator, and the optional claim. Conjunction alerts and dodging wait for C10. The C9 written decision is who sees the blame (ADR 0010). |
@@ -467,11 +496,13 @@ by the launch limits of 2026-10-06 (any number up, one minute apart)._
   The other half of deorbiting: an owner raises their own orbit one band,
   once, to stay up longer. No fuel; a boost is a new epoch for that object.
 - **C10 (week 11), sorted 2026-10-10 (Advay):** server-side logs will be
-  done; first framed as evidence (launches per band, collisions, deorbits),
-  reframed 2026-10-12 against the crit 10 spec as a live record of who did
-  what (see "Status and next steps"). Maybes: conjunction alerts and dodging with fuel (moved from C9), and
-  seeding the sky with resident operators (see "Open questions"). Won't do:
-  seeing a burn-up on demand. The catalogue's lineage was built in C9.
+  done; first framed as evidence (launches per band, collisions, deorbits,
+  leaving the extras out, ADR 0021), reframed 2026-10-12 against the crit
+  10 spec as a live record of who did what (see "Status and next steps").
+  Maybes: conjunction alerts and dodging with fuel (moved from C9).
+  Seeding the sky: built as the extras (2026-10-12, ADR 0021; merged
+  2026-10-13). Won't do: seeing a burn-up on demand. The catalogue's
+  lineage was built in C9.
 - **Week 12:** visual polish (light trails, collision effects), README and
   PROCESS write-up.
 
@@ -618,12 +649,10 @@ flow, beacon rules, launch limits, bands.
   collisions per hour once orbits slowed.
 - **C10, a maybe:** how fuel works, and whether it refills (moved with dodging;
   boosting needs none).
-- **C10, a maybe:** whether to seed the sky with launches the server makes (resident
-  operators, PR 5, closed 2026-10-10 with its commits kept on the PR). The
-  balancing after PR 10 (ADRs 0019 and 0020) changed how often collisions
-  happen and how many satellites burn up, so seeding needs rethinking
-  against that balance, not merging as it was. Its proposed ADR was never
-  merged; the number it used (0015) has since gone to another record.
+- ~~**C10, a maybe:** whether to seed the sky with launches the server makes (resident
+  operators, PR 5, closed 2026-10-10 with its commits kept on the PR)~~:
+  yes, as invented people rather than organisations, rethought against
+  ADRs 0019 and 0020 (Advay, 2026-10-12; ADR 0021).
 - ~~**C9:** exact cooldown length~~: replaced by a one-minute gap between
   launches (2026-10-06).
 - ~~**Week 12 (or sooner):** whether to move the sky's rendering to

@@ -3185,6 +3185,268 @@ faults. Both reproduced on a fresh build of `12a2c2b` before fixing.
 
 Commit `a862d23`.
 
+## 2026-10-12 — Extras: invented people seed the sky (ADR 0021)
+
+Advay approved seeding the sky with "fake, but realistic users", on the
+condition that they look realistic and natural. `PLAN.md` had this as a C10
+maybe: PR 5 (resident operators, closed 2026-10-10) seeded the sky with
+sixteen invented *organisations* at about two launches an hour, and was
+left unmerged because ADRs 0019 and 0020 had since changed the balance it
+was tuned against. Rebuilt rather than revived: the app is about people
+saying one thing to each other, and PR 5's lines read as companies
+("Frame 4021 of the south coast, 30% cloud").
+
+**What was built** (`src/lib/extras.ts`, `src/lib/extras-cast.ts`, the
+server's part in `src/lib/sky.ts`; ADR 0021, accepted):
+
+- **A cast of people**, called extras, like a film's: fourteen regulars
+  with their own hours, visits a day, bands, naming habits and a dozen lines
+  each (a night owl, a student dodging an essay, an over-eager low-band
+  launcher, a careful one who brings theirs down, a hiker, a radio amateur,
+  a parent, a grump, someone in Edinburgh, a retiree; twelve with handles),
+  and a crowd of one-off visitors (three launches in five) who never claim
+  one. About 110 lines a visitor might write, two dozen for a second
+  launch, and a dozen answers to each of the stations' 21 questions.
+- **When they come** is a pure function of the clock, seeded by the hour:
+  a Canberra day's rhythm (busy evenings, near nothing at 4am, some days
+  busier), one to three launches a visit at least 70 s apart, a quarter
+  answering the day's question, a few brought down or boosted later. About
+  18 launches a day.
+- **Launched like anyone's**: heard, collided, blamed, met in Yours.
+  Nothing on the page tells them apart; the record does (owner `extra:…`,
+  which no browser can present; `operators.extra`, migration
+  `0010_extras`, so nobody can sign in as a regular). They never listen,
+  so "heard by" is still only people.
+- **Caught up like collisions**: launched and manoeuvred at their due
+  times inside `settle`; a first start fills in the last day; later starts
+  go back to the latest thing in the record; nothing launched twice;
+  only what's under a minute old announced.
+
+**Making it read as people** took several passes, each found by looking
+at a printed day of the schedule or by a test:
+
+- The first draft dealt lines from a shuffle per pool, and a line could
+  come straight back at the seam between two shuffles. Each round now
+  keeps the last round's halves apart, so anything comes round at least
+  half a pool later. A question's dozen answers could still run out on a
+  busy day, so a day deals at most half of them (counting ones passed
+  over).
+- Lines tied to a time came out at the wrong hour ("Woden bus
+  interchange, 9pm" at 2pm, "great night" at 11am). Forty-eight lines now
+  carry the hours they fit and are only said then.
+- One visitor answered the question twice in two minutes; a later launch
+  in a visit now answers a quarter as often.
+- Regulars with long hours crowded out the rest (the student 2.2 launches
+  a day, the hiker once in nine days); each regular now has their own
+  visits a day.
+- Counting what each pool had dealt disagreed with the dealing when a
+  callsign couldn't be numbered (the "same however it's asked" test
+  caught it); counting now deals everything, so the two can't drift.
+- Seen in the running app: callsigns "Static", "Echo" and "BEACON" read as
+  the app's own words, so they're gone; three lines named October and
+  would be wrong in November.
+
+**The balance.** A scratch harness drove the real server code (clock passed
+in, derelict floor on, people launching into random bands, every run
+played out until every person's satellite came down). Without extras it
+reproduced ADR 0020's own numbers within their spread, so it was trusted.
+The first default (0.75 visits an hour, no other rule) cut a quiet sky's
+people's satellites burning up from 62% to about 48%. A lower derelict
+floor didn't help: derelicts were already down at their minimum, and the
+extras simply add satellites, mostly low and mid. What did: a lighter rate
+(0.6), and making room for people (no extra launches in an hour people
+have launched four in). Now 54% in a quiet sky (62% without extras), 24% at
+a crit (27%), 22% busy (26%). Staging is unchanged (5.4 staged collisions a
+watched hour against 5.5); a watcher sees more natural collisions (1.4 an
+hour against 0.4), and a newcomer still sees one within 10 minutes 100% of
+the time. The sky also keeps at least five derelicts, since the extras
+count towards the derelicts' floor. Numbers and runs are in ADR 0021.
+
+**Tests, each failing first for the reason expected:**
+`spec/extras.test.ts` (14: every line and callsign passes the launch form,
+a dozen answers per question, the rate and Canberra rhythm, mostly
+one-offs without a handle with regulars back on many days, a minute
+between anyone's launches, bands, answers only to that day's question,
+lines only at their hours, nothing said twice in three days, manoeuvres
+after their launch and no boost from the high band, the same schedule
+however it's asked, next-due, off at 0) and `spec/extras-server.test.ts`
+(10: a fresh start's day launched at its times and not announced, a live
+one launched once and announced, nothing twice across a restart, a launch
+or a changed schedule, a regular's handle nobody can sign in as or claim,
+a handle a person claimed first stays theirs, the cap and the half-full
+rule, making room for people, manoeuvres when due, the derelict minimum,
+off at 0). The five server tests that need an exact sky set
+`EXTRAS_PER_HOUR=0`, as they set `DERELICTS=0`.
+
+**Review.** Done in this session rather than by a fresh subagent: the user's
+own instructions require subagents to run on Luna, which this harness's
+agent tool can't select. Read the whole server diff as a reviewer and
+checked what the extras could give away: nothing lists operators, an
+extra's owner never reaches a client, "heard by" stays people, and nothing
+in the README becomes false (being heard still needs other people;
+staging still never destroys a person's satellite). Found and fixed the
+month-bound lines and the callsigns above. Left for Advay: the README
+doesn't say the sky is seeded, and the app is marked on whether the two
+agree; C10's evidence (launches per band, "do people crowd low?") must
+leave the extras out (`isExtra`).
+
+![The sky minutes after a fresh start with extras: static from Tiny Moon
+and Big Truck's collision (a one-off's satellite and a regular's, met in
+the day the start filled in), "test" answering the day's question, "Starling" on being heard
+over each other. Every satellite here is an extra's.](screenshots/2026-10-12-sky-with-extras.png)
+
+`pnpm check` green (369 tests, 0 errors, 0 warnings) against a fresh
+build on a fresh scratch database; `pnpm check:evidence` green;
+`pnpm test:layout` 12 of 12 (run against agent-browser's Chrome with
+`--no-sandbox`, since the container has no installed Chrome). Checked by
+eye at 1920x1080 (the catalogue and the sky) and on an iPhone 14 (no
+sideways overflow).
+
+Commit `df4014c`.
+
+## 2026-10-12 — The extras' adversarial review, and what changed
+
+Advay allowed an Opus or Sonnet reviewer, so a fresh Opus agent reviewed
+`df4014c` against the spec, told to be adversarial. It confirmed the core
+held (24 of 24 extras tests, and 48 more runs of the server tests with the
+date moved; a restart and a server that ran all along ending with
+identical databases; the schedule the same asked cold or warm; a cold
+start a year on in about 190 ms; and its own rough re-measure of the
+balance agreeing with ADR 0021's). It also found what follows. Everything
+it called must fix or should fix was fixed, except where said.
+
+**Must fix:**
+
+- **The README and the Why page said things the extras made false.** The
+  first log entry claimed "nothing in the README becomes false"; it was
+  wrong. The Why page called a wreck's noise "real people's words"; it
+  now says "one line torn up and mixed with a stranger's". The README now
+  says the sky is seeded ("An empty sky", under what wasn't built: the
+  extras, that nothing on the page marks them, that they never listen and
+  hold back while people launch), and that launch counts per band leave
+  them out. Advay's words to change, not mine.
+- **A first deploy rewrote people's history.** It filled in a day behind
+  a sky people had used: in the reviewer's runs, people's satellites that
+  were live became "destroyed" hours in the past, and vanished from Yours
+  with no notice. Now only an empty sky (a new database) fills in a day;
+  any other start goes back only to the latest thing the record shows
+  happening (a launch, collision, manoeuvre or beacon heard). Tested: a
+  first deploy into a used sky fills in nothing behind it.
+- **Regulars only ever came in alternating hours** (kettle at 6 and 8,
+  never 7; tidepool only odd hours), which a catalogue search by handle
+  would show. Now each regular comes on some days, once that day, at any
+  hour of their window, drawn by the day. Tested: every regular comes at
+  odd and even hours, at least three different ones, and hours apart.
+- **Lines contradicted their satellite's card:** "Going high" on a low
+  satellite, "I'll bring this down when I'm done. Promise." on ones never
+  brought down (6 of 18 promises kept in 8 weeks). A line can now say
+  which bands, months and fate it fits, and is said only where it does: a
+  promise only by a satellite planned to be brought down (or boosted).
+  Tested over four weeks: every such line said was true of its satellite.
+
+**Should fix, all done:**
+
+- Lines that imply an hour are gated (nightjar's "Can't sleep" only from
+  11pm; "Bedtime story" only from 7pm), and answers to the two questions
+  about today only from 11am to 3am.
+- Lines that asserted something checkable and usually false are gone:
+  "My last pip got smashed", "Lost another one to someone's debris",
+  "Heard three beacons in a row over Goldstone", "PIP IS BACK" on PIP-1,
+  and every claim to be listening (extras never listen, and the sky says
+  "Just you, listening").
+- Regulars answer less (wren from 90% to 50%), so they keep their voice.
+- A regular whose handle a person holds now never launches (it launched
+  without the handle, but as "WREN n" saying wren's lines, seeming to be
+  that person). And pip, fern and wren, common first names, became
+  pipsqueak, frond and small_wren.
+- A regular's callsigns are numbered from the record, not the schedule, so
+  lowering the rate, a launch held back, or the first deploy never repeats
+  or skips a number (it had gone NIGHTJAR 20 then NIGHTJAR 11), and a
+  regular's first is 1. A one-off's numbering counts their uses of the
+  name ("beep boop", "Sunny", "beep boop 2", not "beep boop 3").
+- ADR 0021's claims corrected: about 15 *launched* in a fresh day, 5 to 12
+  still up, not 15 up; three answers that implied someone had died
+  reworded ("My grandad's old watch. Runs slow."); the derelict minimum is
+  topped up a gap apart, not at once. The ADR was revised before merging,
+  as 0019 and 0020 were after their reviews.
+- The balance harness is committed (`scripts/balance/`), so ADR 0021's
+  numbers can be reproduced.
+- **Airtime** is now measured: how much of their time over a station
+  people's beacons are on air, with and without extras (below).
+- Tests added: the same sky whether a server ran or caught up, with extras
+  on; a first deploy filling nothing behind it; fresh manoeuvres told and
+  stale ones not; the derelict minimum's default path; the realism checks
+  above; the schedule the same from a cold start. And two rare flakes
+  fixed: a test day is now picked to have a regular with a handle in it,
+  and a planned deorbit that lands in a satellite's last 30 seconds'
+  plunge is allowed to be refused.
+
+**Nits, done:** an empty `EXTRAS_PER_HOUR` or a non-numeric `EXTRA_CAP`
+falls back to the default; a day's answer count is forgotten once the day
+is gone; season-bound lines only in their months; "One for each station"
+and "same thing as before but louder" gone; kettle's "kettle again" no
+longer every fourth. **Left:** extras still count towards the 200 people
+launch against (they stop at 100, so people always have at least 180);
+the review's "an extra acting at the same moment as a collision goes
+first" isn't tested (the order is one comparison in `settle`); the work is
+on a branch, at Advay's request, not `main`.
+
+**The balance, measured again** (`scripts/balance/`, the reworked
+extras; ADR 0021 has the table):
+
+- Quiet sky (40 runs each): people's satellites burn up 54% with extras,
+  62% without, as before the rework. Collisions an hour 0.64 against 0.47.
+- A crit (24 runs each): 31% either way; making room for people works.
+- Busy: 26% without extras (24 runs); with them, still the first
+  version's 22%.
+- **Airtime, new:** in a quiet sky a person's beacon is on air for 37% of
+  its time over a station with extras, 58% without (25% against 30% at a
+  crit). That's a real cost to being heard, not seen before. What decides
+  "heard" is getting a turn at all in a pass, which isn't measured yet;
+  next, and if it falls as far, the extras should give way at the
+  stations or fly fewer at once.
+- Not yet re-measured (stopped to commit when Advay asked to see the
+  branch): busy with extras, and what a watcher sees.
+- A new database's filled-in day holds about 17 extras' launches, 1 to 12
+  still up (7 on average, ten start times).
+
+`pnpm check` green (374 tests, 0 errors, 0 warnings) against a fresh
+build on a fresh database; `pnpm check:evidence` green. `pnpm test:layout`
+not run again: this round changed neither the launchpad nor the sky
+page.
+
+Commit `3469642`.
+
+## 2026-10-12 — The extras re-measured, being heard included
+
+Advay asked for the measurement stopped at `f5d1830` to be finished. The
+harness now also counts what being heard needs (ADR 0016): how many of
+people's passes over a station get at least one turn on air. All four
+scenarios were run again with and without extras (`scripts/balance/`; 40
+quiet-sky runs a side, 24 crit and busy, 16 watched), and the quiet sky and
+the crit pooled with the earlier round of the same code, since one run
+varies a lot (a quiet sky's burn-ups from about 30% to 80%; the two
+rounds' with-extras quiet skies came out 54% and 60%).
+
+| | without extras | with extras |
+|---|---|---|
+| People's satellites burned up: quiet, crit, busy | 62%, 31%, 26% | 57%, 29%, 23% |
+| People's passes with a turn on air: quiet, crit, busy | 96.5%, 87%, 83% | 89%, 84%, 80.5% |
+| Collisions a watcher sees an hour (natural) | 6.0 (0.5) | 6.1 (0.5) |
+| A newcomer sees a collision within 10 minutes | 100% | 99.5% |
+
+So in a quiet sky the extras cost people a little: five points of
+burn-ups, and about one pass in nine unheard instead of one in thirty. In
+a crowded sky they barely matter, since they make room and people crowd
+the stations themselves. Staging is untouched. The first version's "a
+watcher sees 1.4 natural collisions an hour with extras" didn't hold up
+(0.5 either way now). ADR 0021's table and consequences updated; the dial
+if being heard less is too much is `EXTRA_CAP` or `PER_HOUR` (giving way
+at the stations would need the browser to know whose satellites are the
+extras', which would give them away).
+
+Commit `d7b89f7`.
+
 ## 2026-10-12 — C10's logging reframed against the crit 10 spec
 
 `PLAN.md` had C10's logging as aggregate evidence (launches per band,
@@ -3201,3 +3463,39 @@ wanted. The spec's other half, what each person may see and change checked
 on the server and written down with why, is mostly in ADRs 0002, 0009, 0010
 and 0011; to be checked for whether they say plainly what the server
 refuses. Today the server logs only errors.
+
+Commit `f0dc97e`.
+
+## 2026-10-13 — PR 13 reviewed and merged: the extras land on `main`
+
+Reviewed PR 13 (`claude/extras`, tip `07c22b3`) against the code and a
+fresh run rather than its description: built it, ran it on a scratch port
+and database, `pnpm check` 374 passed with 0 errors and 0 warnings,
+`pnpm check:evidence` green, `pnpm test:layout` 12 of 12. The scratch
+database after the start held 20 extras' launches over the day behind it,
+8 still up, 14 manoeuvres, 5 regulars' operator rows marked `extra`; lines
+fitted their hours, a regular showed in the catalogue as their handle and a
+one-off as "launched without a handle", and nothing on the page or in the
+event stream carried an `extra:` owner. Settle's interleaving of extras
+with collisions, the restart bookkeeping (`extrasThrough`) and the
+"first deploy fills nothing in" rule read correctly.
+
+Found, none blocking: the branch no longer merged cleanly with `main`
+(`PLAN.md` and this log, both appended at the same place by `f0dc97e`);
+grouch's "My satellite outlived yours" is a claim about one of theirs,
+which ADR 0021's own rule forbids; "three hours behind" for Perth holds
+only in daylight saving; a regular's handle is reserved only at their
+first launch; and C10's planned log of who did what will show the extras'
+launches and manoeuvres alongside people's, which the C10 work has to
+decide about (their owner is `extra:…`, so the lines can tell). Noted in
+`PLAN.md`; the lines are left for a later pass.
+
+Merged `main` into the branch and resolved the two files by hand, keeping
+both sides. At Advay's call ("undo those changes"), the PR's README bullet
+("An empty sky") and its Why page rewording were dropped, so both files
+are as they were before the PR: the README doesn't say the sky is seeded,
+and the Why page still says "real people's words". Both wait for the
+README rewrite in his words, already planned; `PLAN.md` says so. Advay
+then said merge, knowing the repo is public and `main` deploys.
+
+Commit `2d8f515`.

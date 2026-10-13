@@ -1,0 +1,1 @@
+ALTER TABLE `operators` ADD `extra` integer DEFAULT false NOT NULL;
