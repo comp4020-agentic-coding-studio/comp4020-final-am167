@@ -3497,3 +3497,5 @@ are as they were before the PR: the README doesn't say the sky is seeded,
 and the Why page still says "real people's words". Both wait for the
 README rewrite in his words, already planned; `PLAN.md` says so. Advay
 then said merge, knowing the repo is public and `main` deploys.
+
+Commit `2d8f515`.
