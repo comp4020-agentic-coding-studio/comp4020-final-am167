@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import { describe, expect, inject, it } from "vitest";
-import { Session, callsign, post } from "./session.ts";
+import { Session, callsign, events, post } from "./session.ts";
 
 // Operators (ADR 0009): a person is still an anonymous cookie, and can
 // launch at once; they can claim a handle with a passphrase, which keeps
@@ -129,6 +129,22 @@ describe("operators", () => {
     expect(res.status).toBe(303);
   });
 
+  it("refuses a claim, sign-in or sign-out posted from another site", async () => {
+    const h = handle();
+    await claim(new Session(baseUrl), h);
+    const a = new Session(baseUrl);
+    await a.get("/");
+    const evil = { origin: "https://evil.example" };
+    for (const fields of <Record<string, string>[]>[
+      { action: "claim", handle: handle(), passphrase: PASS },
+      { action: "sign-in", handle: h, passphrase: PASS },
+      { action: "sign-out" },
+    ]) {
+      expect((await post(a, "/operator/", fields, evil)).status, fields.action).toBe(403);
+    }
+    expect((await page(a, "/operator/")).body.textContent).not.toContain("Signed in as");
+  });
+
   it("won't claim a second handle while you're signed in to one", async () => {
     const a = new Session(baseUrl);
     const h = handle();
@@ -172,12 +188,39 @@ describe("operators", () => {
     expect(text).not.toMatch(/"owner"\s*:|"operator":\s*\d/);
   });
 
+  it("never sends another person's owner or ids with an event as it happens", async () => {
+    const watcher = new Session(baseUrl);
+    await watcher.get("/sky/");
+    const stream = events(await fetch(watcher.url("/api/events"), { headers: watcher.headers() }));
+    try {
+      expect((await stream.next()).event).toBe("hello");
+      const a = new Session(baseUrl);
+      await claim(a, handle());
+      const name = callsign();
+      await a.launch({ band: "low", callsign: name, beacon: "as it happens" });
+      const id = a.cookie("kessler_person")!;
+      for (;;) {
+        const { event, data } = await stream.next();
+        if (event !== "launch" || (data as { callsign: string }).callsign !== name) continue;
+        const text = JSON.stringify(data);
+        expect(text).not.toContain(id);
+        expect(text).not.toMatch(/"owner"\s*:|"operator":\s*\d/);
+        expect(data).toMatchObject({ mine: false });
+        break;
+      }
+    } finally {
+      stream.close();
+    }
+  });
+
   it("never shows a passphrase or anyone's person id", async () => {
     const a = new Session(baseUrl);
     const h = handle();
     await claim(a, h);
+    const launched = await a.launch({ band: "low", callsign: callsign(), beacon: "on every page" });
+    const object = new URL(launched.headers.get("location")!, baseUrl).searchParams.get("launched");
     const id = a.cookie("kessler_person")!;
-    for (const path of ["/", "/sky/", "/catalogue/?show=all", "/operator/"]) {
+    for (const path of ["/", "/sky/", "/catalogue/?show=all", "/catalogue/?show=mine", `/object/${object}/`, `/object/${object}/panel`, "/operator/"]) {
       const html = await (await a.get(path)).text();
       expect(html, path).not.toContain(PASS);
       expect(html, path).not.toContain(id);

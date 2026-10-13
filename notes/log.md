@@ -3499,3 +3499,70 @@ README rewrite in his words, already planned; `PLAN.md` says so. Advay
 then said merge, knowing the repo is public and `main` deploys.
 
 Commit `2d8f515`.
+
+## 2026-10-13 — Conjunction alerts and dodging dropped
+
+Conjunction alerts and dodging with fuel, moved from C9 to C10 and a maybe
+since 2026-10-10, are now **won't do**. Advay: "it defeats the whole
+purpose." The app's argument is that a collision is a cost nobody can
+step out of; a warning plus a way to dodge it hands each owner a private
+escape from the commons' consequences. Deorbiting and boosting stay the
+only manoeuvres. The open question on how fuel works is moot. `PLAN.md`
+updated wherever dodging appeared (status, Co-presence, the SSE summary,
+the testable claims, the C10 line, open questions). The accepted ADRs
+that mention dodging (0002, 0004, 0008) are left as written, since
+accepted records aren't edited; none of them depends on it.
+
+## 2026-10-13 — Who may see and change what: ADR 0022
+
+The crit 10 spec wants "what each person may see and change is checked on
+the server, and that decision is written down in the repo with why". The
+checks existed, but the rules were spread across ADRs 0009, 0010, 0011,
+0012, 0015, 0016 and 0021, and none said in one place what the server
+refuses. Audited every route that changes something (`/` launch,
+`/manoeuvre/`, `/operator/`) and everything that shows something (pages,
+`/api/events` through `toPublic` and `forViewer`). Nothing new was found
+open: deorbit and boost look the satellite up by the viewer's ownership
+and refuse `not-yours` otherwise, an extra's handle can't be signed into,
+and cross-site posts get a 403 from Astro.
+
+Wrote ADR 0022 (proposed) with a "Changing" table (action, who may, what
+the server refuses and why) and a "Seeing" table, under one principle:
+everything about the sky is public, and only you can act on what's yours.
+Seeing is open because a commons only works when its costs and their
+authors are visible; changing is owner-only because removing someone
+else's satellite would turn a shared cost into an attack. It also states
+the stream's known limit (every live beacon reaches every browser, ADR
+0012) rather than claiming more than the server does.
+
+Two regression tests added to `spec/manoeuvre-http.test.ts` for gaps in
+the existing coverage: a stranger's boost is refused with `not-yours` and
+the satellite keeps its fuel, and a device that signs out can no longer
+deorbit or boost the operator's satellites. Both passed on first run, as
+expected for checks that were already there; they pin the crit's failure
+case ("one can change the other's") so it can't quietly regress.
+
+**Review.** A fresh Opus reviewer attacked ADR 0022 against the code and
+the crit 10 spec. It found no way for one person to change another's
+satellite on the server, and confirmed each ownership, fuel, extras,
+cookie, cross-site and passphrase claim. Its findings were about the record
+overclaiming and the tests underchecking:
+- The beacon row read as a server check, but every live beacon reaches
+  every browser in the sky's data. Now labelled a display rule, with why.
+- The extras' anonymous satellites are protected only by the middleware's
+  cookie-shape check (their owner `extra:<key>` is in the repo). That
+  dependency is now stated, with a test that a made-up `extra:` cookie is
+  replaced and gets nothing in Yours.
+- The Consequences claimed more than the tests covered. Added: the older
+  stranger-deorbit test now asserts `not-yours`, cross-site boosts and
+  cross-site claim, sign-in and sign-out (403), the no-person-id page check
+  extended to Yours and an object's card and panel, and a stream check on a
+  live launch event, not only `hello`.
+- Missing actions added to the table: claim and sign-in merging this
+  device's satellites, being counted as a listener (ADR 0016's accepted
+  loophole), and opening the sky bringing a staged collision sooner.
+- Nits fixed: sign-out on an anonymous device orphans its satellites (said
+  plainly), the identical sign-in answer's reason reworded (handles are
+  public anyway), the full list of claim refusals, and the rate limits
+  trusting `fly-client-ip` behind Fly's proxy.
+Advay accepted the record the same day ("adr is approved").

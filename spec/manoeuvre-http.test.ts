@@ -202,7 +202,8 @@ describe("bringing your satellite down", () => {
     await b.get("/");
     const { id, name } = await launched(a);
     const res = await manoeuvre(b, id, "deorbit", json);
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { why: string }).why).toBe("not-yours");
     expect((await row(a, name))?.textContent).not.toMatch(/coming down/i);
   });
 
@@ -273,15 +274,57 @@ describe("boosting your satellite", () => {
     // and the laptop can still bring it down: it's theirs there too
     expect((await manoeuvre(laptop, id, "deorbit", json)).status).toBe(200);
   });
+
+  it("is refused for someone else's satellite, which keeps its fuel", async () => {
+    const a = new Session(baseUrl);
+    const b = new Session(baseUrl);
+    await b.get("/");
+    const { id, name } = await launched(a);
+    const res = await manoeuvre(b, id, "boost", json);
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { why: string }).why).toBe("not-yours");
+    expect((await row(a, name))?.textContent).not.toMatch(/climbing/i);
+    expect((await offered(a, id)).actions).toEqual(["boost", "deorbit"]);
+  });
+});
+
+describe("a device that signs out", () => {
+  // signing out makes it a new anonymous person (ADR 0009): what it launched
+  // signed in stays the operator's, out of its reach
+  it("can no longer bring down or boost the operator's satellites", async () => {
+    const a = new Session(baseUrl);
+    expect((await post(a, "/operator/", { action: "claim", handle: `so_${Math.random().toString(36).slice(2, 10)}`, passphrase: "correct horse battery" })).status).toBe(303);
+    const { id, name } = await launched(a);
+    expect((await post(a, "/operator/", { action: "sign-out" })).status).toBe(303);
+    for (const action of ["deorbit", "boost"] as const) {
+      const res = await manoeuvre(a, id, action, json);
+      expect(res.status, action).toBe(422);
+      expect(((await res.json()) as { why: string }).why, action).toBe("not-yours");
+    }
+    expect((await row(a, name))?.textContent).not.toMatch(/coming down|climbing/i);
+  });
 });
 
 describe("where a manoeuvre comes from", () => {
+  // an extra's satellites (ADR 0021) are owned by "extra:<key>", and the keys
+  // are in the repo: only a cookie the server made is anyone (ADR 0022)
+  it("won't take a made-up cookie, such as an extra's owner, as a person", async () => {
+    for (const forged of ["extra:nightjar", "extra:pip", "not-a-person"]) {
+      const res = await fetch(new URL("/catalogue/?show=mine", baseUrl), { headers: { cookie: `kessler_person=${forged}` }, redirect: "manual" });
+      const given = res.headers.getSetCookie().find((c) => c.startsWith("kessler_person="));
+      expect(given, forged).toMatch(/^kessler_person=[0-9a-f-]{36};/);
+      expect(doc(await res.text()).querySelector("[data-yours]"), forged).toBeNull();
+    }
+  });
+
   it("refuses a post from another site, and leaves the satellite as it was", async () => {
     const a = new Session(baseUrl);
     const { id, name } = await launched(a);
-    const res = await post(a, "/manoeuvre/", { id: String(id), action: "deorbit" }, { origin: "https://evil.example" });
-    expect(res.status).toBe(403);
-    expect((await row(a, name))?.textContent).not.toMatch(/coming down/i);
+    for (const action of ["deorbit", "boost"]) {
+      const res = await post(a, "/manoeuvre/", { id: String(id), action }, { origin: "https://evil.example" });
+      expect(res.status, action).toBe(403);
+    }
+    expect((await row(a, name))?.textContent).not.toMatch(/coming down|climbing/i);
   });
 
   it("only ever goes back to yours or the object's own page", async () => {

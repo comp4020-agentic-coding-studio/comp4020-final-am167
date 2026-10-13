@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-13 (extras merged: invented people seed the sky, ADR 0021, reviewed and revised; C10's logging reframed against the crit 10 spec: who did what, server-side, readable live from `flyctl logs`)._
+_Last updated 2026-10-13 (ADR 0022 accepted: who may see and change what; conjunction alerts and dodging dropped: won't do. Earlier the same day: extras merged, invented people seed the sky, ADR 0021, reviewed and revised; C10's logging reframed against the crit 10 spec: who did what, server-side, readable live from `flyctl logs`)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -65,7 +65,7 @@ _Last updated 2026-10-13 (extras merged: invented people seed the sky, ADR 0021,
     on the whole planet with a beacon panel per station, and the horizon
     over any station one click away.
   - Not built, though once listed for C9: conjunction alerts and dodging
-    (moved to C10; a maybe since 2026-10-10).
+    (moved to C10; a maybe since 2026-10-10; won't do since 2026-10-13).
 - **Overnight round, 2026-10-07 (branch `claude/nifty-thompson-s7cine`, a
   PR for Advay; not on `main`):** Advay's list after playing with the app,
   each built, tested and logged in `notes/log.md`, the four design changes
@@ -215,9 +215,12 @@ _Last updated 2026-10-13 (extras merged: invented people seed the sky, ADR 0021,
     Today the server only logs errors (`console.error` in `middleware.ts`,
     `sky.ts`, `heard.ts`).
   - The spec also wants what each person may see and change **checked on
-    the server and written down with why**. ADRs 0002, 0009, 0010 and 0011
-    cover most of it; check they say plainly what the server refuses, and
-    write a record if they don't.
+    the server and written down with why**: written 2026-10-13 as ADR 0022
+    (accepted 2026-10-13), one record of who may do and see
+    what, and what the server refuses. The checks were already in place;
+    two tests added for the gaps (a stranger's boost, and a device after it
+    signs out). The logging should name the same refusals (`not-yours`
+    and the rest).
   - Aggregate figures (launches per band, collisions, deorbits, several
     cookies per human) come from these lines later if wanted; they're no
     longer the point of the logging.
@@ -326,12 +329,14 @@ across each band.
   the people who have the sky open as it passes over a station, and each
   is counted; the sky page says how many are listening now. Your presence
   is someone else's audience.
-- **Conjunction alerts** (C10, a maybe; once the likely C9 decision, replaced by ADR
+- ~~**Conjunction alerts** (C10, a maybe; once the likely C9 decision, replaced by ADR
   0010 when dodging moved out): when two satellites are on a
   collision course, both owners are warned and either can spend limited fuel to
   dodge. If both are online, who moves? If an owner is offline, they can't
   dodge, so being absent makes you vulnerable. (Precedent: ESA moving Aeolus
-  for a Starlink satellite in 2019.)
+  for a Starlink satellite in 2019.)~~ **Won't do** (Advay, 2026-10-13): "it
+  defeats the whole purpose." Collisions stay something nobody can step out
+  of; deorbiting and boosting are the only manoeuvres.
 
 ## Foundations: person, persistence, real-time
 
@@ -386,8 +391,8 @@ by the launch limits of 2026-10-06 (any number up, one minute apart)._
 **Server-sent events, with the server's clock as the only clock.**
 
 - Actions go up as ordinary `POST`s (forms that work without JavaScript).
-- Events come down one SSE stream: launch, deorbit, collision, decay, and
-  later conjunction alerts. Positions are never sent: each client draws them
+- Events come down one SSE stream: launch, deorbit, collision, decay.
+  Positions are never sent: each client draws them
   from the stored orbits and the server time, after measuring its clock offset
   when the stream connects.
 - On reconnect, the client catches up from a snapshot of the live sky.
@@ -419,7 +424,7 @@ by the launch limits of 2026-10-06 (any number up, one minute apart)._
 - The event fan-out is in memory in the one Node process (fine on one machine).
 - The server keeps live objects in memory for collision checks, so 256 MB caps
   the sky's size.
-- The canvas is the spectacle. Every action (launch, dodge, deorbit) is also a
+- The canvas is the spectacle. Every action (launch, boost, deorbit) is also a
   normal form control, and the catalogue is a real table.
 
 ## Testable claims (draft)
@@ -433,8 +438,8 @@ by the launch limits of 2026-10-06 (any number up, one minute apart)._
   a restart.
 - Stopping the server and restarting applies the collisions that fell in the
   gap.
-- Launches one minute apart per person; dodging uses fuel; only the owner can
-  deorbit.
+- Launches one minute apart per person; only the owner can deorbit or
+  boost.
 
 ## Now and later
 
@@ -499,7 +504,8 @@ by the launch limits of 2026-10-06 (any number up, one minute apart)._
   done; first framed as evidence (launches per band, collisions, deorbits,
   leaving the extras out, ADR 0021), reframed 2026-10-12 against the crit
   10 spec as a live record of who did what (see "Status and next steps").
-  Maybes: conjunction alerts and dodging with fuel (moved from C9).
+  Won't do: conjunction alerts and dodging with fuel (moved from C9;
+  dropped 2026-10-13, see "Co-presence").
   Seeding the sky: built as the extras (2026-10-12, ADR 0021; merged
   2026-10-13). Won't do: seeing a burn-up on demand. The catalogue's
   lineage was built in C9.
@@ -647,8 +653,8 @@ flow, beacon rules, launch limits, bands.
 - ~~**C9:** collision radius~~: settled in ADR 0008 (hit distance and a 2%
   chance a meeting), with the head-on chance tripled in ADR 0013 to keep
   collisions per hour once orbits slowed.
-- **C10, a maybe:** how fuel works, and whether it refills (moved with dodging;
-  boosting needs none).
+- ~~**C10, a maybe:** how fuel works, and whether it refills (moved with dodging;
+  boosting needs none)~~: moot, dodging won't be built (2026-10-13).
 - ~~**C10, a maybe:** whether to seed the sky with launches the server makes (resident
   operators, PR 5, closed 2026-10-10 with its commits kept on the PR)~~:
   yes, as invented people rather than organisations, rethought against
