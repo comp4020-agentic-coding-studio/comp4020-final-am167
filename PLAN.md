@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-12 (extras: invented people seed the sky, ADR 0021; reviewed and revised; on branch `claude/extras` for Advay's review)._
+_Last updated 2026-10-13 (extras merged: invented people seed the sky, ADR 0021, reviewed and revised; C10's logging reframed against the crit 10 spec: who did what, server-side, readable live from `flyctl logs`)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -170,8 +170,8 @@ _Last updated 2026-10-12 (extras: invented people seed the sky, ADR 0021; review
   tells no news of yours; crowding only bites once people outnumber the
   derelict floor; `keepDerelicts` counts staged derelicts.
 - **Extras (2026-10-12, Advay approved seeding the sky with "fake, but
-  realistic users"; ADR 0021, accepted):** on branch `claude/extras` for
-  Advay to review (`df4014c`, then the review's fixes; see
+  realistic users"; ADR 0021, accepted; merged 2026-10-13, PR 13):**
+  built on branch `claude/extras` (`df4014c`, then the review's fixes; see
   `notes/log.md`). Invented people launch like anyone so a quiet sky isn't
   empty: fourteen regulars (twelve with handles) with their own hours,
   names and voices, each coming on some days at any hour of theirs, and a
@@ -180,7 +180,7 @@ _Last updated 2026-10-12 (extras: invented people seed the sky, ADR 0021; review
   brought down or boosted later; never the same line twice in a day, and
   nothing said that the satellite's card contradicts. Nothing on the page
   tells them apart; the record does (owner `extra:…`, `operators.extra`),
-  the README says so, nobody can sign in as one, and they never listen,
+  nobody can sign in as one, and they never listen,
   so "heard by" is still people. They make room for people (none in an
   hour people have launched four in, none in a half-full sky, at most 20
   up), and the sky keeps at least five derelicts. Only a new database
@@ -190,9 +190,38 @@ _Last updated 2026-10-12 (extras: invented people seed the sky, ADR 0021; review
   0021): in a quiet sky people's satellites burn up 57% of the time (62%
   without extras), and 89% of their passes over a station get a turn on
   air (96.5%); at a crit 29% (31%) and 84% (87%). `EXTRA_CAP` or
-  `PER_HOUR` is the dial if being heard less is too much. For Advay: the README's new "An empty sky" line and the Why
-  page's reworded line are in my words, not his; C10's evidence must
-  leave the extras out (`isExtra`).
+  `PER_HOUR` is the dial if being heard less is too much. At the merge
+  Advay dropped the PR's README bullet ("An empty sky") and its Why page
+  rewording, so the README doesn't yet say the sky is seeded and the Why
+  page still says "real people's words": both wait for the README rewrite
+  below, in his words. C10's evidence must leave the extras out
+  (`isExtra`), and C10's log lines will show the extras' launches and
+  manoeuvres alongside people's (their owner is `extra:…`).
+- **Next, for C10 (week 11; crit 10, "Fly by instruments"):** the spec
+  asks that the app **logs who did what, server-side, and the logging
+  outlives the crit**. At the crit two of the pod use the deployed app from
+  its URL alone, each in their own Chrome profile, while Advay narrates
+  from `flyctl logs -a <repo>` without touching the app; if the logs can't
+  tell them apart, or one can change the other's, that's the finding. So:
+  - One log line per action a person takes: visit (new cookie), launch,
+    deorbit, boost, claim and sign-in, a beacon heard. Each names **who**
+    (handle and a short operator or cookie id, so two anonymous visitors
+    are told apart) and **what** it touched (object id, band, callsign).
+  - Refusals logged too, with the reason: a launch refused, a deorbit or
+    boost of someone else's satellite, a claim that fails.
+  - Server-driven events logged for the narration: collisions (and whose
+    satellites), burn-ups, staged collisions, derelict top-ups.
+  - Plain lines on stdout, so `flyctl logs` shows them; nothing to set up.
+    Today the server only logs errors (`console.error` in `middleware.ts`,
+    `sky.ts`, `heard.ts`).
+  - The spec also wants what each person may see and change **checked on
+    the server and written down with why**. ADRs 0002, 0009, 0010 and 0011
+    cover most of it; check they say plainly what the server refuses, and
+    write a record if they don't.
+  - Aggregate figures (launches per band, collisions, deorbits, several
+    cookies per human) come from these lines later if wanted; they're no
+    longer the point of the logging.
+  - Plus `reflections/crit-10.md` and `PROCESS.md` for the crit.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or
@@ -466,12 +495,14 @@ by the launch limits of 2026-10-06 (any number up, one minute apart)._
 - **Boosting a satellite (added 2026-10-06; built 2026-10-07, ADR 0011).**
   The other half of deorbiting: an owner raises their own orbit one band,
   once, to stay up longer. No fuel; a boost is a new epoch for that object.
-- **C10 (week 11), sorted 2026-10-10 (Advay):** server-side logs as
-  evidence (launches per band, collisions, deorbits) will be done, just not
-  yet (leaving the extras out, ADR 0021). Maybes: conjunction alerts and
-  dodging with fuel (moved from C9). Seeding the sky: built as the extras
-  (2026-10-12, ADR 0021). Won't do: seeing a burn-up on demand. The
-  catalogue's lineage was built in C9.
+- **C10 (week 11), sorted 2026-10-10 (Advay):** server-side logs will be
+  done; first framed as evidence (launches per band, collisions, deorbits,
+  leaving the extras out, ADR 0021), reframed 2026-10-12 against the crit
+  10 spec as a live record of who did what (see "Status and next steps").
+  Maybes: conjunction alerts and dodging with fuel (moved from C9).
+  Seeding the sky: built as the extras (2026-10-12, ADR 0021; merged
+  2026-10-13). Won't do: seeing a burn-up on demand. The catalogue's
+  lineage was built in C9.
 - **Week 12:** visual polish (light trails, collision effects), README and
   PROCESS write-up.
 

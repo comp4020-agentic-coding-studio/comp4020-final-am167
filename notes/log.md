@@ -3446,3 +3446,54 @@ at the stations would need the browser to know whose satellites are the
 extras', which would give them away).
 
 Commit `d7b89f7`.
+
+## 2026-10-12 — C10's logging reframed against the crit 10 spec
+
+`PLAN.md` had C10's logging as aggregate evidence (launches per band,
+collisions, deorbits) to judge design questions later. Checked against the
+actual crit 10 spec ("Fly by instruments"), that's not what it asks: the app
+must log **who did what, server-side**, and keep doing so after the crit. At
+the crit two of the pod use the deployed app in separate Chrome profiles
+while Advay narrates from `flyctl logs` without touching the app. So the
+plan now calls for one stdout line per action (visit, launch, deorbit,
+boost, claim, beacon heard) naming the operator and what it touched,
+refusals with reasons, and server events (collisions, burn-ups, staging) for
+the narration. The aggregates can be derived from those lines if still
+wanted. The spec's other half, what each person may see and change checked
+on the server and written down with why, is mostly in ADRs 0002, 0009, 0010
+and 0011; to be checked for whether they say plainly what the server
+refuses. Today the server logs only errors.
+
+Commit `f0dc97e`.
+
+## 2026-10-13 — PR 13 reviewed and merged: the extras land on `main`
+
+Reviewed PR 13 (`claude/extras`, tip `07c22b3`) against the code and a
+fresh run rather than its description: built it, ran it on a scratch port
+and database, `pnpm check` 374 passed with 0 errors and 0 warnings,
+`pnpm check:evidence` green, `pnpm test:layout` 12 of 12. The scratch
+database after the start held 20 extras' launches over the day behind it,
+8 still up, 14 manoeuvres, 5 regulars' operator rows marked `extra`; lines
+fitted their hours, a regular showed in the catalogue as their handle and a
+one-off as "launched without a handle", and nothing on the page or in the
+event stream carried an `extra:` owner. Settle's interleaving of extras
+with collisions, the restart bookkeeping (`extrasThrough`) and the
+"first deploy fills nothing in" rule read correctly.
+
+Found, none blocking: the branch no longer merged cleanly with `main`
+(`PLAN.md` and this log, both appended at the same place by `f0dc97e`);
+grouch's "My satellite outlived yours" is a claim about one of theirs,
+which ADR 0021's own rule forbids; "three hours behind" for Perth holds
+only in daylight saving; a regular's handle is reserved only at their
+first launch; and C10's planned log of who did what will show the extras'
+launches and manoeuvres alongside people's, which the C10 work has to
+decide about (their owner is `extra:…`, so the lines can tell). Noted in
+`PLAN.md`; the lines are left for a later pass.
+
+Merged `main` into the branch and resolved the two files by hand, keeping
+both sides. At Advay's call ("undo those changes"), the PR's README bullet
+("An empty sky") and its Why page rewording were dropped, so both files
+are as they were before the PR: the README doesn't say the sky is seeded,
+and the Why page still says "real people's words". Both wait for the
+README rewrite in his words, already planned; `PLAN.md` says so. Advay
+then said merge, knowing the repo is public and `main` deploys.
