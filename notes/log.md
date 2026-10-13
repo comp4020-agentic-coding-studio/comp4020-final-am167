@@ -3513,6 +3513,8 @@ the testable claims, the C10 line, open questions). The accepted ADRs
 that mention dodging (0002, 0004, 0008) are left as written, since
 accepted records aren't edited; none of them depends on it.
 
+Commit `634c3cc`.
+
 ## 2026-10-13 — Who may see and change what: ADR 0022
 
 The crit 10 spec wants "what each person may see and change is checked on
@@ -3566,3 +3568,5 @@ overclaiming and the tests underchecking:
   public anyway), the full list of claim refusals, and the rate limits
   trusting `fly-client-ip` behind Fly's proxy.
 Advay accepted the record the same day ("adr is approved").
+
+Commit `634c3cc`.
