@@ -3863,3 +3863,5 @@ Cut to a few sentences ("Logging who did what", before "Closing"): the
 plan reframed against the spec (`f0dc97e`), and the review that found,
 with the tests green, `anon` claimable and a passphrase logged
 (`eca1ae7`). The rest stays in this log and the ADRs.
+
+Commit `e4525ce`.
