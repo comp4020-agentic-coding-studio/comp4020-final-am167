@@ -3854,3 +3854,12 @@ logged (cross-site form posts) and why the record became 0023 (`52d7768`,
 which haven't happened yet. A draft for Advay to put in his own words.
 
 Commit `8d9338d`.
+
+## 2026-10-14 — PROCESS.md's C10 section cut down
+
+Advay: the draft was "way too much", with `PROCESS.md` already about at
+its recommended length, and the logging is a small part of the project.
+Cut to a few sentences ("Logging who did what", before "Closing"): the
+plan reframed against the spec (`f0dc97e`), and the review that found,
+with the tests green, `anon` claimable and a passphrase logged
+(`eca1ae7`). The rest stays in this log and the ADRs.
