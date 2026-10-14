@@ -29,4 +29,4 @@ be edited until it's accepted.
 | [0020](0020-fewer-less-forced-collisions.md) | Fewer, less forced collisions: a close pair may never collide, staging is irregular, and a burn-up is told first | accepted |
 | [0021](0021-extras.md) | Extras: invented people who launch like anyone, so a quiet sky isn't empty | accepted |
 | [0022](0022-who-may-see-and-change-what.md) | Who may see and change what: the sky is public, only you can act on what's yours | accepted |
-| [0023](0023-the-servers-record-of-who-did-what.md) | The server's record of who did what: one plain stdout line per thing a person or the server does | proposed |
+| [0023](0023-the-servers-record-of-who-did-what.md) | The server's record of who did what: one plain stdout line per thing a person or the server does | accepted |

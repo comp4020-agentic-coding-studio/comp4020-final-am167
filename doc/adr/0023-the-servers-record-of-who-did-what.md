@@ -1,7 +1,7 @@
 # 0023. The server's record of who did what
 
-**Status:** proposed (2026-10-13). Adds to ADR 0022, which it leaves
-as it is.
+**Status:** accepted (2026-10-14; Advay: "accept ADR 0023"). Adds to
+ADR 0022, which it leaves as it is.
 
 ## Context
 

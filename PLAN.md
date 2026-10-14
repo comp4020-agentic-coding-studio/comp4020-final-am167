@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-14 (C10's logging merged: one stdout line per thing a person does or is refused, and per thing the server does, ADR 0023 proposed. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
+_Last updated 2026-10-14 (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -211,7 +211,7 @@ _Last updated 2026-10-14 (C10's logging merged: one stdout line per thing a pers
   extras' launches and manoeuvres (`who=extra:…`), each with its own time
   and never twice. Who is a handle or `anon` plus six hex digits of a hash
   of the cookie. No passphrases, no cookies, no beacons heard. The record
-  is ADR 0023 (proposed: Advay to accept). Rehearsed locally with two
+  is ADR 0023 (accepted 2026-10-14). Rehearsed locally with two
   browser sessions (`notes/log.md`, 2026-10-13). Known gap: a form posted
   from another site is refused by Astro before the app's code runs, so it
   isn't logged.
@@ -224,7 +224,7 @@ _Last updated 2026-10-14 (C10's logging merged: one stdout line per thing a pers
     (`not-yours` and the rest), plus `gone` for your own satellite no
     longer in orbit, and reserves the handles `anon`, `nobody`, `none` and
     `extra` (ADR 0023).
-  - **Still for C10:** accept or revise ADR 0023; deploy and try
+  - **Still for C10:** deploy and try
     `flyctl logs` against the real app; `reflections/crit-10.md` and
     `PROCESS.md` for the crit.
   - Aggregate figures (launches per band, collisions, deorbits, several

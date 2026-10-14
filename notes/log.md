@@ -3828,3 +3828,10 @@ No adversarial review this time: the code is the PR's, already reviewed
 Advay said to merge once the checks were green.
 
 Commit `52d7768`.
+
+## 2026-10-14 — ADR 0023 accepted
+
+Advay accepted ADR 0023, the server's record of who did what ("accept ADR
+0023"). Its status, the ADR index and `PLAN.md` (status line, the C10
+item, and its "still for C10" list) now say so; nothing else in the
+record changed.
