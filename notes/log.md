@@ -3852,3 +3852,5 @@ first, tests written first, and a line from the first two-session rehearsal
 logged (cross-site form posts) and why the record became 0023 (`52d7768`,
 `00f81ef`). It says nothing about the crit itself or the deployed logs,
 which haven't happened yet. A draft for Advay to put in his own words.
+
+Commit `8d9338d`.
