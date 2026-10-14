@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-14 (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
+_Last updated 2026-10-15 (listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -205,7 +205,8 @@ _Last updated 2026-10-14 (ADR 0023 accepted: the server's record of who did what
   logs can't tell them apart, or one can change the other's, that's the
   finding. Built: one plain stdout line per event (`src/lib/log.ts`,
   `event key=value`): `visit`, `launch`, `deorbit`, `boost`, `claim`,
-  `sign-in`, `sign-out`, each refusal as `<event>-refused` with its reason
+  `sign-in`, `sign-out`, `listen-open` and `listen-close` (2026-10-15:
+  each stream, with whether it counts and how many are listening), each refusal as `<event>-refused` with its reason
   (a stranger's manoeuvre names the satellite and its owner), and the
   server's own `collision`, `burn-up`, `staged`, `derelict` and the
   extras' launches and manoeuvres (`who=extra:…`), each with its own time
@@ -214,7 +215,11 @@ _Last updated 2026-10-14 (ADR 0023 accepted: the server's record of who did what
   is ADR 0023 (accepted 2026-10-14). Rehearsed locally with two
   browser sessions (`notes/log.md`, 2026-10-13). Known gap: a form posted
   from another site is refused by Astro before the app's code runs, so it
-  isn't logged.
+  isn't logged. ADR 0023's list of events predates the listen lines; it's
+  accepted, so it isn't edited (they follow its format and its `who`).
+  Found through them and fixed the same day: a sky page left for another
+  stayed in Chrome's back/forward cache with its stream open, still
+  counted as listening; it now closes on `pagehide`.
   - What each person may see and change, **checked on the server and
     written down with why**, is ADR 0022 (accepted 2026-10-13): one record
     of who may do and see what, and what the server refuses. The checks
@@ -224,9 +229,11 @@ _Last updated 2026-10-14 (ADR 0023 accepted: the server's record of who did what
     (`not-yours` and the rest), plus `gone` for your own satellite no
     longer in orbit, and reserves the handles `anon`, `nobody`, `none` and
     `extra` (ADR 0023).
-  - **Still for C10:** deploy and try
-    `flyctl logs` against the real app; `reflections/crit-10.md` and
-    `PROCESS.md` for the crit.
+  - **Still for C10:** the listen lines and the back/forward cache fix
+    are on branch `C10` only, not yet on `main` (the rest of the logging
+    is, since PR 14); try `flyctl logs` against the real app;
+    `reflections/crit-10.md` and `PROCESS.md` for the crit (a C10 section
+    drafted on `C10` was taken out again 2026-10-15, at Advay's word).
   - Aggregate figures (launches per band, collisions, deorbits, several
     cookies per human) can be counted from these lines if wanted.
 - **Later (low priority, near the end of the project):** `README.md`,

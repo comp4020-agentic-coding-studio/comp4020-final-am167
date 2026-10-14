@@ -461,3 +461,58 @@ describe("the extras", async () => {
     }
   });
 });
+
+// Listening (ADR 0016): someone who comes back only to listen does nothing
+// else the record sees, so each stream opening and closing is a line,
+// naming who, whether they count as listening, and how many people are.
+// Driven through the stream's own endpoint.
+describe("listening", async () => {
+  async function streams() {
+    const { log } = await freshServer();
+    const heard = await import("../src/lib/heard.ts");
+    const { GET } = await import("../src/pages/api/events.ts");
+    const open = (person: string, operator: { id: number; handle: string } | null = null) => {
+      const abort = new AbortController();
+      const request = new Request("http://kessler.test/api/events", { signal: abort.signal, headers: { referer: "http://kessler.test/sky/" } });
+      GET({ request, locals: { person, operator } } as never);
+      return () => abort.abort();
+    };
+    return { log, heard, open };
+  }
+
+  it("logs who opened a stream, from which page, and how many are listening", async () => {
+    const { log, heard, open } = await streams();
+    heard.visited(ALICE);
+    heard.visited(BOB);
+    open(ALICE);
+    open(BOB, { id: 3, handle: "vela" });
+    expect(linesOf("listen-open").map((l) => l.fields)).toEqual([
+      { who: log.whoIs(ALICE, null), counted: "yes", listening: "1", page: "/sky/" },
+      { who: log.whoIs(BOB, "vela"), counted: "yes", listening: "2", page: "/sky/" },
+    ]);
+    expectNoCookie(out.join("\n"), ALICE, BOB);
+  });
+
+  it("logs who left, after how long, and how many are still listening", async () => {
+    const { log, heard, open } = await streams();
+    heard.visited(ALICE);
+    heard.visited(BOB);
+    const alice = open(ALICE);
+    const bob = open(BOB);
+    alice();
+    bob();
+    expect(linesOf("listen-close").map((l) => [l.fields.who, l.fields.listening])).toEqual([
+      [log.whoIs(ALICE, null), "1"],
+      [log.whoIs(BOB, null), "0"],
+    ]);
+    expect(linesOf("listen-close")[0].fields.after).toMatch(/^\d+s$/);
+  });
+
+  it("says when a stream isn't counted as anyone listening", async () => {
+    const { log, open } = await streams();
+    // a browser that has loaded nothing here (ADR 0016)
+    open(ALICE)();
+    expect(linesOf("listen-open")[0].fields).toMatchObject({ who: log.whoIs(ALICE, null), counted: "no", listening: "0" });
+    expect(linesOf("listen-close")).toHaveLength(1);
+  });
+});

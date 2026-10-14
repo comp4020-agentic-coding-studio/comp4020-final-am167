@@ -855,3 +855,16 @@ function whenHidden() {
 }
 document.addEventListener("visibilitychange", whenHidden);
 whenHidden();
+
+// A page left for another can stay in the browser's back/forward cache with
+// its stream still open, counted as listening while its person is elsewhere
+// (found 2026-10-15 from the listen lines): close it on leaving, and
+// reconnect if the page is brought back (if hidden, once it's shown).
+addEventListener("pagehide", () => {
+  clearTimeout(hiddenFor);
+  current?.close();
+  current = null;
+});
+addEventListener("pageshow", (event) => {
+  if (event.persisted && !current && !document.hidden) connect();
+});
