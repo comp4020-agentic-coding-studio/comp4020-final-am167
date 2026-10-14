@@ -3913,3 +3913,5 @@ The sky's script now closes its stream on `pagehide` and reconnects on a
 above, ada's leaving is logged at once and coming back opens a new
 stream; the page reads "Live". No spec test for that half: it's browser
 behaviour, and the suite has no Chrome.
+
+Commit `9430a2d`.
