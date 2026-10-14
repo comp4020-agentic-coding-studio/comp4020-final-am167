@@ -3837,3 +3837,18 @@ item, and its "still for C10" list) now say so; nothing else in the
 record changed.
 
 Commit `00f81ef`.
+
+## 2026-10-14 — PROCESS.md: the C10 section drafted
+
+Drafted "Flying by the logs", the C10 part of `PROCESS.md`, from this
+log's C10 entries, before "Closing". It covers four things: the plan's
+logging reframed against the crit 10 spec (`f0dc97e`); ADR 0022, its
+review finding that the record claimed more than the server does, and
+dodging dropped (`634c3cc`); the logging, with the line format agreed
+first, tests written first, and a line from the first two-session rehearsal
+(`eca1ae7`); and what the Opus review found with the tests already green
+(`anon` claimable, a passphrase logged, your own gone satellite refused as
+`not-yours`, `who=` meaning two things). It also says what still isn't
+logged (cross-site form posts) and why the record became 0023 (`52d7768`,
+`00f81ef`). It says nothing about the crit itself or the deployed logs,
+which haven't happened yet. A draft for Advay to put in his own words.

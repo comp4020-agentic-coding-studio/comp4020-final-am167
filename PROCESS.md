@@ -159,6 +159,54 @@ Every round's numbers looked right until someone else checked them, and only
 playing told me whether it felt right. It isn't finished: the news is still
 mostly staged collisions.
 
+## Flying by the logs
+
+Crit 10 has two of the pod use the deployed app while I narrate from
+`flyctl logs` alone. My plan had C10's logging as evidence, such as launches
+per band and collisions an hour, to settle design questions later. Checked
+against the spec, it asks something else: who did what, refusals included. So
+the plan changed before anything was built
+([`f0dc97e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/f0dc97e)).
+
+The other half, what each person may see and change, was already checked on
+the server, but the rules were spread over seven ADRs and none said what the
+server refuses. ADR 0022 puts them in one place: everything about the sky is
+public, and only you can act on what's yours. An Opus reviewer found no way to
+change someone else's satellite. It did find the record claiming more than the
+server does: beacons it listed as hidden reach every browser, so that's a
+display rule, not a check. The same commit dropped conjunction alerts and
+dodging, planned since C9. A warning and a way out would hand each owner a
+private escape from the cost the app is about
+([`634c3cc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/634c3cc)).
+
+I agreed the line format before building: one `event key=value` line per
+action, a short hash of the cookie rather than the cookie itself, and never a
+passphrase. The agent wrote the tests first, then rehearsed with two browser
+sessions, `ada` and `bo`, reading only the server's output
+([`eca1ae7`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/eca1ae7)):
+
+```
+deorbit-refused who=anon#2aaafc sat=26 owner=ada#ecfa42 callsign=ADA-1 reason=not-yours
+```
+
+The tests passed, and a second Opus review still found the log would mislead
+me at the crit:
+
+- Anyone could claim the handle `anon` and then read exactly like an
+  anonymous visitor.
+- A passphrase typed into the handle box was logged.
+- Ada's own satellite, already burned up, was refused as `not-yours`, as if
+  she'd tried to touch someone else's.
+- `who=` meant both who acted and whose satellite burned up.
+
+Each was fixed with a failing test first. One gap is left: Astro refuses a
+form posted from another site before the app's code runs, so that refusal
+never reaches the log. The pull request was cut before ADR 0022 reached
+`main`, so its record became ADR 0023 rather than an edit to an accepted one
+([`52d7768`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/52d7768),
+accepted in
+[`00f81ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/00f81ef)).
+
 ## Closing
 
 Multi-user and real-time were the easy part: each had a clear answer a test
