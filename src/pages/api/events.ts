@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { audience, subscribe } from "../../lib/events.ts";
 import type { SkyEvent } from "../../lib/events.ts";
 import { HEARD_FEED, heardCounts, listenerFor, recentlyHeard, startListening } from "../../lib/heard.ts";
+import { clip, log, whoIs } from "../../lib/log.ts";
 import { conjunctions, liveSky, recentCollisions, toPublic, watcherArrived } from "../../lib/sky.ts";
 import { forViewer } from "../../lib/stream.ts";
 
@@ -9,7 +10,8 @@ import { forViewer } from "../../lib/stream.ts";
 // snapshot of the live sky and the collisions coming (ADR 0008), what the
 // stations have heard and how many are listening (ADR 0016), then sends
 // each event as it happens. An open stream is someone listening: the
-// server's ear starts with the first.
+// server's ear starts with the first. Each one opening and closing is a line
+// in the record (ADR 0023), so someone who only comes back to listen is seen.
 export const GET: APIRoute = ({ request, locals }) => {
   const viewer = { person: locals.person, operator: locals.operator?.id ?? null };
   // what this viewer may see of an event: objects lose their owner
@@ -27,10 +29,18 @@ export const GET: APIRoute = ({ request, locals }) => {
       // a stream from a browser that has loaded nothing here (a script, or a
       // made-up cookie) hears everything but isn't counted as listening
       // (ADR 0016)
-      const unsubscribe = subscribe(
-        (event) => (held ? held.push(event) : send(event.type, visible(event))),
-        listenerFor(locals),
-      );
+      const listener = listenerFor(locals);
+      const unsubscribe = subscribe((event) => (held ? held.push(event) : send(event.type, visible(event))), listener);
+      const who = whoIs(locals.person, locals.operator?.handle ?? null);
+      const opened = Date.now();
+      // which page it's on, if the browser says (and says it sensibly)
+      const from = request.headers.get("referer") ?? "";
+      log("listen-open", {
+        who,
+        counted: listener ? "yes" : "no",
+        listening: audience().size,
+        page: URL.canParse(from) ? clip(new URL(from).pathname, 80) : null,
+      });
       watcherArrived();
       startListening();
       const sky = liveSky();
@@ -47,9 +57,13 @@ export const GET: APIRoute = ({ request, locals }) => {
       for (const event of held) send(event.type, visible(event));
       held = null;
       const ping = setInterval(() => controller.enqueue(encoder.encode(": ping\n\n")), 25_000);
+      let closed = false;
       cleanup = () => {
+        if (closed) return;
+        closed = true;
         clearInterval(ping);
         unsubscribe();
+        log("listen-close", { who, after: `${Math.round((Date.now() - opened) / 1000)}s`, listening: audience().size });
       };
       request.signal.addEventListener("abort", cleanup);
     },

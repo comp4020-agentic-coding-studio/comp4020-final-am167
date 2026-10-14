@@ -3865,3 +3865,51 @@ with the tests green, `anon` claimable and a passphrase logged
 (`eca1ae7`). The rest stays in this log and the ADRs.
 
 Commit `e4525ce`.
+
+## 2026-10-15 — Listening logged: a stream opening and closing
+
+Advay's top idea for C10: a returning viewer who only listens did nothing
+the record saw (`visit` is only a new cookie), so the crit's narration from
+`flyctl logs` had no evidence for the README's first claim, "being heard
+needs other people". Now each `/api/events` stream writes `listen-open`
+and `listen-close` through ADR 0023's `log` and `whoIs`. From the real run
+below, two browsers, one leaving for the catalogue and coming back:
+
+```
+visit who=anon#6d7d7f path=/sky/
+listen-open who=anon#6d7d7f counted=yes listening=1 page=/sky/
+visit who=anon#0343f3 path=/sky/
+listen-open who=anon#0343f3 counted=yes listening=2 page=/sky/
+listen-close who=anon#6d7d7f after=7s listening=1
+listen-open who=anon#6d7d7f counted=yes listening=2 page=/sky/
+listen-close who=anon#6d7d7f after=4s listening=1
+listen-close who=anon#0343f3 after=10s listening=0
+```
+
+`counted=no` marks a stream from a browser that has loaded nothing here
+(ADR 0016: it hears, but isn't anyone); `listening` is the people
+listening after the change; `page` is the `Referer`'s path, left out if
+it's missing or unreadable. ADR 0023's list of events predates these two;
+it's accepted, so it isn't edited.
+
+First built on `main` with its own small `log.ts`, then moved to this
+branch at Advay's word ("inside the C10 branch though since thats where
+the logging is") and rewritten on 0023's module, dropping the duplicate.
+
+TDD: three tests in `spec/log.test.ts` drive the endpoint itself (who
+opened it, from which page, how many listening; who left, after how long;
+a stream that isn't counted); they failed with no lines, then passed. Then
+for real against a fresh build on :8091 with two `agent-browser` sessions
+(above), and a `curl` stream killed after 2 s, whose close was logged at
+once.
+
+**Found, and fixed (Advay: "yeah fix that"):** on the first run, leaving
+the sky for the catalogue didn't close its stream. Chrome kept the sky
+page in its back/forward cache with the stream open, and going back
+restored it without a new one, so someone on another page still counted
+as listening, and as hearing passes, until the browser dropped the page.
+The sky's script now closes its stream on `pagehide` and reconnects on a
+`pageshow` restored from that cache (once shown, if hidden). In the run
+above, ada's leaving is logged at once and coming back opens a new
+stream; the page reads "Live". No spec test for that half: it's browser
+behaviour, and the suite has no Chrome.
