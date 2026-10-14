@@ -3570,3 +3570,261 @@ overclaiming and the tests underchecking:
 Advay accepted the record the same day ("adr is approved").
 
 Commit `634c3cc`.
+
+## 2026-10-13 — C10: the server's record of who did what (ADR 0023)
+
+Crit 10 ("Fly by instruments"): two of the pod use the deployed app in
+separate Chrome profiles while Advay narrates from `flyctl logs` alone. The
+logs must tell them apart and show who did what, refusals included, with
+their reasons. Until now the server logged only errors.
+
+**Decided with Advay before building** (not reopened): one plain line per
+event on stdout through a small helper, `event key=value ...`, any value
+with spaces, quotes or newlines quoted with JSON's escaping, so each event
+is one line. `who` is the handle if signed in, else `anon`, then `#` and
+the first hex digits of a SHA-256 of the person cookie, never the cookie or
+a slice of it. The extras are logged and marked (`who=extra:<name>`). Beacons
+being heard aren't logged. A launch line carries the satellite, callsign,
+band and words. Passphrases are never logged; a failed claim or sign-in
+logs the handle tried and the reason only. Server-driven lines carry the
+event's own time (`at=`), since settle catches up after a restart, and
+nothing is logged twice. The existing `console.error` calls stay.
+
+**What was built:**
+
+- `src/lib/log.ts`: `log(event, fields)`, the quoting (plain words bare,
+  anything else JSON-quoted, and line separators, controls and bidi marks
+  escaped as well, since JSON leaves U+2028 and U+202E raw), `whoIs`
+  (six hex digits), `iso`, and `clip` for what someone typed into a
+  refused form.
+- Every action, logged where it's decided, so a page can't forget to:
+  `visit` (`newVisitor`, from the middleware, not every new cookie: a
+  sign-in's fresh cookie isn't a visit); `launch` and `launch-refused`
+  (`launchFrom` in `sky.ts`, which the launchpad now calls: `gap`,
+  `sky-full`, `bad-callsign`/`bad-beacon`/`bad-band` with the rule
+  broken and what was typed, `unreadable`); `deorbit`, `boost` and their
+  `-refused` lines, naming the satellite and its **owner's who**, so "bo
+  tried to bring down ada's satellite" is one line; `claim`, `sign-in`,
+  `sign-out` and their refusals (`operate` in `operators.ts`, which the
+  operator page now calls, with `who=` the device before and `now=` after,
+  since each gives the device a new cookie). Claims and sign-ins now say
+  why they failed (`taken`, `handle-length`, `passphrase-length`,
+  `wrong-passphrase`, `no-such-handle`, `too-many-tries`, ...); the page
+  still says only "that handle or passphrase isn't right".
+- Server-driven: `collision` (both objects, kinds, owners, callsigns,
+  debris's source, fragments), `burn-up` (each satellite and derelict;
+  debris as one line with a count, since every staged collision makes a
+  dozen), `staged` (the pair, when due, over which station), `derelict`,
+  and the extras' `launch`, `deorbit` and `boost`. Each is logged where
+  it's written: a burn-up only by the settle whose update changed the row,
+  an extra's launch only when it wasn't already in the record, so a
+  restart catches up without logging anything twice.
+
+**Not logged, and why:** a form posted from another site. Astro's origin
+check answers 403 before any of the app's code runs (checked with curl:
+no line, not even the visit), and logging it would mean replacing that
+check with our own. Recorded in ADR 0023 as a known gap.
+
+**Tests first** (`spec/log.test.ts`, 24, in-process against scratch
+databases with `console.log` captured; each failed first, against a
+do-nothing stub, for the reason expected: no line, or the function
+missing): a line stays one line and reads back whatever it holds; two
+cookies get different ids and no 8-character stretch of either appears
+anywhere; a visit; a launch names who, the satellite, callsign, band and
+words; each kind of launch refusal has its reason; deorbit and boost name
+whose it was, and a stranger's refusal names the target's owner; every
+manoeuvre refusal reason; claim, sign-in and sign-out with who before and
+after, and their refusals; no passphrase tried or right appears; a
+collision with both owners and its own time; a burn-up at its own time;
+nothing logged twice across a restart; a derelict and a staging; the
+extras' launches and manoeuvres marked `extra:` with their due times, once.
+`spec/access.test.ts` (3, over HTTP) covers what the record says the server
+refuses and wasn't tested yet: a stranger's boost as well as deorbit, told
+`not-yours`, with the owner's fuel untouched; a signed-in operator and an
+anonymous visitor each refused the other's; a device that signed out
+can't touch what it launched as the operator, and a phone signed in can.
+
+**The written-down half.** ADRs 0002, 0009, 0010 and 0011 between them
+say who owns a satellite and that only its owner may manoeuvre it, but
+none says in one place what the server refuses, to whom and why, or what
+a signed-out visitor and an operator each see. The record drafted here
+(as ADR 0022, proposed; renumbered ADR 0023 and cut to the logging when
+merged, below) did:
+a table of who may do what and each refusal's reason code and why, what
+everyone, only you, and nobody sees, and then the record itself. Accepted
+ADRs left as they are.
+
+**Rehearsed locally** on a scratch port and database, two agent-browser
+sessions: `ada` claimed a handle (one refused try first) and launched; `bo`
+launched anonymously, then posted deorbit and boost for ada's satellite
+from the console (the card offers him no controls); ada boosted hers and
+tried again; bo brought his own down; ada signed out, tried hers from the
+now-anonymous device, and signed back in; bo guessed ada's passphrase.
+The server's stdout alone (extras' lines left out):
+
+```
+visit who=anon#4ce9ad path=/operator/
+claim-refused who=anon#4ce9ad handle=ada reason=passphrase-length
+claim who=anon#4ce9ad handle=ada now=ada#ecfa42
+launch who=ada#ecfa42 sat=26 callsign=ADA-1 band=low beacon="Hello from ada's profile"
+staged at=2026-10-13T10:17:22.832Z a=27 b=28 due=2026-10-13T10:17:47.812Z over=Canberra
+visit who=anon#2aaafc path=/
+collision at=2026-10-13T10:17:47.812Z id=1 a=27 a_kind=derelict a_who=nobody b=28 b_kind=derelict b_who=nobody fragments=6
+burn-up at=2026-10-13T10:18:17.812Z kind=debris count=5 from=2026-10-13T10:18:17.812Z
+launch who=anon#2aaafc sat=36 callsign=BO-7 band=low beacon="bo was here, no handle"
+deorbit-refused who=anon#2aaafc sat=26 owner=ada#ecfa42 callsign=ADA-1 reason=not-yours
+boost-refused who=anon#2aaafc sat=26 owner=ada#ecfa42 callsign=ADA-1 reason=not-yours
+boost who=ada#ecfa42 sat=26 callsign=ADA-1 from=low to=mid
+boost-refused who=ada#ecfa42 sat=26 owner=ada#ecfa42 callsign=ADA-1 reason=no-fuel
+sign-out who=ada#ecfa42 now=anon#4d4065
+deorbit-refused who=anon#4d4065 sat=26 owner=ada#ecfa42 callsign=ADA-1 reason=not-yours
+sign-in-refused who=anon#2aaafc handle=ada reason=wrong-passphrase
+sign-in who=anon#4d4065 handle=ada now=ada#5c9da2
+deorbit who=ada#5c9da2 sat=26 callsign=ADA-1 from=low
+deorbit who=anon#2aaafc sat=36 callsign=BO-7 from=low
+burn-up at=2026-10-13T10:22:12.802Z sat=26 kind=satellite who=ada#ecfa42 callsign=ADA-1 fate=deorbited
+burn-up at=2026-10-13T10:22:30.463Z sat=36 kind=satellite who=anon#2aaafc callsign=BO-7 fate=deorbited
+```
+
+`anon#2aaafc` is bo throughout; ada is `ada#ecfa42`, then `anon#4d4065`
+signed out, then `ada#5c9da2`, each step tied to the last by `now=`. A
+satellite's owner is named by the device that launched it, so after
+signing in again ada's satellite still shows `owner=ada#ecfa42`; the
+handle is what matches. No passphrase (the refused "tiny", ada's, or bo's
+guess) appears anywhere in the server's output.
+
+Commit `eca1ae7`.
+
+## 2026-10-13 — C10 logging: the adversarial review, and what changed
+
+A fresh Opus agent reviewed the logging against the crit 10 spec, told to
+be hostile: can the logs tell two people apart, are actions or refusals
+missing, does a secret leak. (The global instructions say subagents run on
+Luna, which this harness can't select; Advay's request for this task asked
+for an Opus review by name, and the project's CLAUDE.md says reviewers run
+on Opus.) It read the diff, ran the new tests three times (27 of 27 each),
+read the running server's log and probed it with curl, and tried the
+formatter with line separators, bidi and zero-width marks, tag characters
+and lone surrogates. It found the one-line guarantee, the cookie hashing,
+the once-only logging across restarts, and the coverage of every POST
+route all held. Everything it called must fix or should fix was fixed,
+each with a test written first and seen failing:
+
+- **Must fix: your own dead satellite was refused as `not-yours`.** A
+  page left open past a burn-up or collision, then a click, logged "ada
+  was refused her own satellite as not hers". Now `gone` ("It isn't in
+  orbit any more."), for the owner only; anyone else still gets
+  `not-yours`.
+- **Must fix: anyone could claim the handle `anon`**, and would then read
+  exactly like an anonymous visitor. `anon`, `nobody`, `none` and `extra`
+  are now reserved (`handle-reserved`), whatever their case.
+- **An operator's satellite was named by the device that launched it**:
+  after signing out and in, ada's satellite still read
+  `owner=ada#ecfa42`, an id she no longer had, and a satellite launched
+  before claiming read as the old anonymous id. Ownership is the
+  operator's (ADR 0009), so its owner is now the handle alone
+  (`owner=ada`); an anonymous owner keeps the cookie's id.
+- **`who=` meant two things**: whoever acted, and on `burn-up` and
+  `collision` whose it was, so `grep who=ada#` found burn-ups as if ada
+  did them. Now `owner=`, `a_owner=`, `b_owner=`.
+- **A passphrase typed into the handle box was logged** (cut to 40
+  characters). A refused handle is now logged only if it could be a
+  handle (one word of letters, digits, `-` or `_`, at most 20);
+  anything else only by its length (`handle_length=`).
+- **The record (then ADR 0022, now 0023) claimed more than the code keeps**: the launch gap doesn't
+  stop "one person" filling the sky, since a script dropping its cookie
+  is a new person each time (it launched twice in the same second from
+  curl), the loophole ADR 0002 accepted; reworded, with a note that the
+  record has no client address and could add a hash of one if it's
+  abused. Also added: `operator-refused`, `gone`, the reserved handles,
+  and that lines with an early `at=` are catch-up. The sentence "the same
+  browser reads the same each time", contradicted by the cookie rotation
+  in the next, is gone.
+- Nits done: a claim or sign-in says how many of the device's satellites
+  became the operator's (`took=`); `manoeuvre-refused` says what was sent;
+  the debris burn-up line says `first=`, not `from=` (a band elsewhere);
+  the extras test now checks there is exactly one line per extra's launch
+  in the record, not just "no more than due".
+- Left: no test checks that the operator page sets the very cookie `now=`
+  names (only `operate` is tested in-process; the page passes its result
+  through in one line). The extras test's day follows the wall clock, as
+  `spec/extras-server.test.ts`'s does. One-off extras read as
+  `extra:497722.1`: marked, if not meaningful.
+
+**Rehearsed again** with fresh sessions, the new format (server stdout,
+extras and other tests' lines left out):
+
+```
+launch who=anon#5222a8 sat=126 callsign=ADA-1 band=low beacon="launched before claiming"
+launch who=anon#053d79 sat=127 callsign=BO-7 band=mid beacon="bo, no handle"
+deorbit-refused who=anon#053d79 sat=126 owner=anon#5222a8 callsign=ADA-1 reason=not-yours
+deorbit who=anon#5222a8 sat=126 callsign=ADA-1 from=low
+claim-refused who=anon#5222a8 handle=anon reason=handle-reserved
+claim-refused who=anon#5222a8 handle=ada reason=passphrase-length
+boost-refused who=anon#053d79 sat=126 owner=anon#5222a8 callsign=ADA-1 reason=not-yours
+sign-in-refused who=anon#053d79 handle=ada reason=no-such-handle
+sign-in-refused who=anon#053d79 handle_length=17 reason=no-such-handle
+claim who=anon#5222a8 handle=ada now=ada#5442ac took=1
+launch who=ada#5442ac sat=167 callsign=ADA-2 band=high beacon="signed in now"
+boost-refused who=anon#053d79 sat=126 owner=ada callsign=ADA-1 reason=not-yours
+boost-refused who=ada#5442ac sat=126 owner=ada callsign=ADA-1 reason=coming-down
+burn-up at=2026-10-13T10:35:44.997Z sat=126 kind=satellite owner=ada callsign=ADA-1 fate=deorbited
+boost-refused who=ada#5442ac sat=126 owner=ada callsign=ADA-1 reason=gone
+boost-refused who=anon#053d79 sat=126 owner=ada callsign=ADA-1 reason=not-yours
+```
+
+The 17-character "handle" is bo typing a passphrase into the handle box;
+it appears only as its length. No passphrase appears anywhere in the
+server's output.
+
+`pnpm check` green (405 tests, 0 errors, 0 warnings) against a fresh build
+on a fresh scratch database; `pnpm check:evidence` green. `pnpm
+test:layout` not run: neither the launchpad's nor the sky's layout, CSS
+or content changed (the launchpad's form handling moved into `launchFrom`,
+same responses).
+
+Commit `eca1ae7`.
+
+## 2026-10-14 — PR 14 brought up to date with `main`, renumbered ADR 0023, and merged
+
+PR 14 (the C10 logging, `claude/c10-kessler-logging-1c1dc0`) was cut
+before `634c3cc` and `129c5ec` landed, and Advay's comment on the PR asked
+for five fixes before it could merge:
+
+- **Merged `main` in** (a merge commit, not a rebase). The conflicts in
+  `PLAN.md`, `doc/adr/README.md` and `notes/log.md` kept both sides: the
+  log has `main`'s two entries (dodging dropped, ADR 0022) before the
+  PR's two, as they happened; `PLAN.md`'s C10 item now says the logging is
+  built and points at ADR 0022 for what the server refuses, without
+  `main`'s now-done plan for it, and dodging is gone from the C10 maybes.
+- **Renumbered the PR's record to ADR 0023, "The server's record of who
+  did what"**, since 0022 is `main`'s accepted policy and isn't edited.
+  0023 keeps the logging design (options, line format, `who`/`owner`,
+  events, logged once, not logged, consequences) and the reserved handles
+  (`anon`, `nobody`, `none`, `extra`); the permissions table and "what
+  each sees" list are gone, linked to 0022 instead. It says where it adds
+  to 0022: the refusal reasons the log names, `gone` (your own satellite
+  no longer in orbit, which the server used to answer `not-yours`), and
+  `handle-reserved`. Still proposed, for Advay to accept.
+- **Fixed every "ADR 0022" that meant the logging record**: `log.ts`,
+  `operators.ts`, `person.ts`, `scripts/balance/run.ts`, `PLAN.md`, the
+  index, and the PR's own log entries (which now say it was drafted as
+  0022). `spec/manoeuvre-http.test.ts`'s "ADR 0022" means the policy and
+  stays.
+- **Folded `spec/access.test.ts` into `spec/manoeuvre-http.test.ts`** and
+  deleted it. The stranger's deorbit and boost, and the device after
+  sign-out, were already on `main`. What it added: a signed-in operator
+  and an anonymous visitor each refused the other's (a new `describe`),
+  and the signed-out device's satellite boostable again from a phone
+  signed in to the operator (added to the sign-out test).
+- **Checks, against a fresh build and a scratch database:** `pnpm check`
+  408 passed, 0 errors, 0 warnings; `pnpm check:evidence` green (after
+  unshallowing the cloud session's clone, whose missing history had made
+  six of PROCESS.md's cited commits look absent); `pnpm test:layout` 12 of
+  12 (the launchpad's form handling moved in this PR).
+
+No adversarial review this time: the code is the PR's, already reviewed
+(previous entry), and 0023 is that record cut down, not new design.
+Advay said to merge once the checks were green.
+
+Commit `52d7768`.

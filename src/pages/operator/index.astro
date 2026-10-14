@@ -1,16 +1,6 @@
 ---
 import Base from "../../layouts/Base.astro";
-import {
-  HANDLE_MAX,
-  HANDLE_MIN,
-  PASSPHRASE_MIN,
-  claim,
-  moveTo,
-  readOperatorForm,
-  signIn,
-  signOut,
-  type OperatorErrors,
-} from "../../lib/operators.ts";
+import { HANDLE_MAX, HANDLE_MIN, PASSPHRASE_MIN, operate, type OperatorErrors } from "../../lib/operators.ts";
 import { newPerson } from "../../lib/person.ts";
 import { satellitesOf } from "../../lib/sky.ts";
 
@@ -41,29 +31,19 @@ if (Astro.request.method === "POST") {
     // unreadable: shown as an error below
   }
   back = String(form?.get("back") ?? "");
-  const read = form && readOperatorForm(form);
-  if (!read) {
-    errors = { form: "That form couldn't be read. Try again." };
-    Astro.response.status = 400;
-  } else if (read.action === "sign-out") {
-    signOut(person);
-    // a new anonymous person on this device; what it launched stays the operator's
-    newPerson(Astro.cookies, Astro.url, Astro.request.headers);
-    return Astro.redirect("/operator/", 303);
-  } else {
-    // where the tries come from: Fly passes the visitor's address on
-    const from = Astro.request.headers.get("fly-client-ip") ?? Astro.clientAddress;
-    const result = read.action === "claim" ? await claim(person, read, from) : await signIn(person, read, from);
-    if (result.ok) {
-      // a new cookie for the signed-in device (its satellites are the operator's now)
-      moveTo(person, newPerson(Astro.cookies, Astro.url, Astro.request.headers));
-      return Astro.redirect(BACK.get(back) ?? "/operator/", 303);
-    }
-    errors = result.errors;
-    failed = read.action;
-    handle = read.handle;
-    Astro.response.status = 422;
+  // where the tries come from: Fly passes the visitor's address on
+  const from = Astro.request.headers.get("fly-client-ip") ?? Astro.clientAddress;
+  const result = await operate(person, form, from);
+  if (result.ok) {
+    // a new cookie for this device: a new anonymous person after signing
+    // out (what it launched stays the operator's), or the signed-in device's
+    newPerson(Astro.cookies, Astro.url, Astro.request.headers, result.person);
+    return Astro.redirect(result.action === "sign-out" ? "/operator/" : (BACK.get(back) ?? "/operator/"), 303);
   }
+  errors = result.errors;
+  failed = result.action === "claim" || result.action === "sign-in" ? result.action : null;
+  handle = result.handle;
+  Astro.response.status = result.status;
 }
 
 const viewer = { person, operator: operator?.id ?? null };

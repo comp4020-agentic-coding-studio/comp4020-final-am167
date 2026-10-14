@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-13 (ADR 0022 accepted: who may see and change what; conjunction alerts and dodging dropped: won't do. Earlier the same day: extras merged, invented people seed the sky, ADR 0021, reviewed and revised; C10's logging reframed against the crit 10 spec: who did what, server-side, readable live from `flyctl logs`)._
+_Last updated 2026-10-14 (C10's logging merged: one stdout line per thing a person does or is refused, and per thing the server does, ADR 0023 proposed. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -197,34 +197,38 @@ _Last updated 2026-10-13 (ADR 0022 accepted: who may see and change what; conjun
   below, in his words. C10's evidence must leave the extras out
   (`isExtra`), and C10's log lines will show the extras' launches and
   manoeuvres alongside people's (their owner is `extra:…`).
-- **Next, for C10 (week 11; crit 10, "Fly by instruments"):** the spec
-  asks that the app **logs who did what, server-side, and the logging
-  outlives the crit**. At the crit two of the pod use the deployed app from
-  its URL alone, each in their own Chrome profile, while Advay narrates
-  from `flyctl logs -a <repo>` without touching the app; if the logs can't
-  tell them apart, or one can change the other's, that's the finding. So:
-  - One log line per action a person takes: visit (new cookie), launch,
-    deorbit, boost, claim and sign-in, a beacon heard. Each names **who**
-    (handle and a short operator or cookie id, so two anonymous visitors
-    are told apart) and **what** it touched (object id, band, callsign).
-  - Refusals logged too, with the reason: a launch refused, a deorbit or
-    boost of someone else's satellite, a claim that fails.
-  - Server-driven events logged for the narration: collisions (and whose
-    satellites), burn-ups, staged collisions, derelict top-ups.
-  - Plain lines on stdout, so `flyctl logs` shows them; nothing to set up.
-    Today the server only logs errors (`console.error` in `middleware.ts`,
-    `sky.ts`, `heard.ts`).
-  - The spec also wants what each person may see and change **checked on
-    the server and written down with why**: written 2026-10-13 as ADR 0022
-    (accepted 2026-10-13), one record of who may do and see
-    what, and what the server refuses. The checks were already in place;
-    two tests added for the gaps (a stranger's boost, and a device after it
-    signs out). The logging should name the same refusals (`not-yours`
-    and the rest).
+- **C10 (week 11; crit 10, "Fly by instruments"), the logging built
+  (2026-10-13; merged 2026-10-14 as PR 14):** the spec asks that the app
+  **logs who did what, server-side, and the logging outlives the crit**;
+  at the crit two of the pod use the deployed app in their own Chrome
+  profiles while Advay narrates from `flyctl logs -a <repo>` alone; if the
+  logs can't tell them apart, or one can change the other's, that's the
+  finding. Built: one plain stdout line per event (`src/lib/log.ts`,
+  `event key=value`): `visit`, `launch`, `deorbit`, `boost`, `claim`,
+  `sign-in`, `sign-out`, each refusal as `<event>-refused` with its reason
+  (a stranger's manoeuvre names the satellite and its owner), and the
+  server's own `collision`, `burn-up`, `staged`, `derelict` and the
+  extras' launches and manoeuvres (`who=extra:…`), each with its own time
+  and never twice. Who is a handle or `anon` plus six hex digits of a hash
+  of the cookie. No passphrases, no cookies, no beacons heard. The record
+  is ADR 0023 (proposed: Advay to accept). Rehearsed locally with two
+  browser sessions (`notes/log.md`, 2026-10-13). Known gap: a form posted
+  from another site is refused by Astro before the app's code runs, so it
+  isn't logged.
+  - What each person may see and change, **checked on the server and
+    written down with why**, is ADR 0022 (accepted 2026-10-13): one record
+    of who may do and see what, and what the server refuses. The checks
+    were already in place; tests added for the gaps (a stranger's boost, a
+    device after it signs out, a signed-in operator and an anonymous
+    visitor each refused the other's). The log names the same refusals
+    (`not-yours` and the rest), plus `gone` for your own satellite no
+    longer in orbit, and reserves the handles `anon`, `nobody`, `none` and
+    `extra` (ADR 0023).
+  - **Still for C10:** accept or revise ADR 0023; deploy and try
+    `flyctl logs` against the real app; `reflections/crit-10.md` and
+    `PROCESS.md` for the crit.
   - Aggregate figures (launches per band, collisions, deorbits, several
-    cookies per human) come from these lines later if wanted; they're no
-    longer the point of the logging.
-  - Plus `reflections/crit-10.md` and `PROCESS.md` for the crit.
+    cookies per human) can be counted from these lines if wanted.
 - **Later (low priority, near the end of the project):** `README.md`,
   in Advay's words. It still says "one live satellite each" and "a second
   launch is refused", says nothing of collisions, debris, blame or

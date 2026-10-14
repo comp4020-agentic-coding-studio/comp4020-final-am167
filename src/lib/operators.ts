@@ -4,6 +4,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.ts";
 import { blocked } from "./launch.ts";
 import { listenerKey, signedInAs } from "./listener.ts";
+import { log, whoIs } from "./log.ts";
 
 const { objects, operators, people } = schema;
 
@@ -37,15 +38,38 @@ export function readOperatorForm(form: FormData): OperatorForm | null {
   return { action, handle: String(form.get("handle") ?? "").trim(), passphrase: String(form.get("passphrase") ?? "") };
 }
 
-function checkClaim({ handle, passphrase }: OperatorForm): OperatorErrors {
+// Words the server's record uses for who someone is (ADR 0023): a person
+// with one of these as a handle would read as an anonymous visitor, as
+// no-one, or as an extra.
+const RESERVED = new Set(["anon", "nobody", "none", "extra"]);
+const HANDLE = /^[A-Za-z0-9_-]+$/;
+
+// What's wrong with a claim, and why in a word or two for the record (ADR
+// 0023), which never says more of a passphrase than that.
+function checkClaim({ handle, passphrase }: OperatorForm): { errors: OperatorErrors; why: string[] } {
   const errors: OperatorErrors = {};
-  if (handle.length < HANDLE_MIN || handle.length > HANDLE_MAX)
+  const why: string[] = [];
+  if (handle.length < HANDLE_MIN || handle.length > HANDLE_MAX) {
     errors.handle = `A handle is ${HANDLE_MIN} to ${HANDLE_MAX} characters.`;
-  else if (!/^[A-Za-z0-9_-]+$/.test(handle)) errors.handle = "Use letters, numbers, hyphens or underscores.";
-  else if (blocked(handle)) errors.handle = "That handle has a word we don't broadcast. Pick another.";
-  if (passphrase.length < PASSPHRASE_MIN) errors.passphrase = `A passphrase is at least ${PASSPHRASE_MIN} characters.`;
-  else if (passphrase.length > PASSPHRASE_MAX) errors.passphrase = `A passphrase is at most ${PASSPHRASE_MAX} characters.`;
-  return errors;
+    why.push("handle-length");
+  } else if (!HANDLE.test(handle)) {
+    errors.handle = "Use letters, numbers, hyphens or underscores.";
+    why.push("handle-characters");
+  } else if (blocked(handle)) {
+    errors.handle = "That handle has a word we don't broadcast. Pick another.";
+    why.push("handle-blocked");
+  } else if (RESERVED.has(handle.toLowerCase())) {
+    errors.handle = "That handle is taken. Pick another.";
+    why.push("handle-reserved");
+  }
+  if (passphrase.length < PASSPHRASE_MIN || passphrase.length > PASSPHRASE_MAX) {
+    errors.passphrase =
+      passphrase.length < PASSPHRASE_MIN
+        ? `A passphrase is at least ${PASSPHRASE_MIN} characters.`
+        : `A passphrase is at most ${PASSPHRASE_MAX} characters.`;
+    why.push("passphrase-length");
+  }
+  return { errors, why };
 }
 
 // scrypt with its default cost, a 16-byte salt per operator. Off the event
@@ -54,7 +78,7 @@ function checkClaim({ handle, passphrase }: OperatorForm): OperatorErrors {
 const scryptAsync = promisify(scrypt) as (passphrase: string, salt: string, length: number) => Promise<Buffer>;
 const HASHING_MAX = 4;
 let hashing = 0;
-const BUSY = { ok: false as const, errors: { form: "The station is busy. Try again in a moment." } };
+const BUSY = { ok: false as const, errors: { form: "The station is busy. Try again in a moment." }, why: "busy" };
 async function hashOf(passphrase: string, salt: string): Promise<Buffer | null> {
   if (hashing >= HASHING_MAX) return null;
   hashing++;
@@ -70,23 +94,28 @@ async function hashOf(passphrase: string, salt: string): Promise<Buffer | null> 
 // not two, signed out and in; less anything of the operator's own it heard
 // (a second device, signed out, hearing theirs), since nobody hears their
 // own.
-export function link(person: string, operator: number): void {
+// Returns how many satellites it took over.
+export function link(person: string, operator: number): number {
   const was = listenerKey({ person, operator: null });
   const now = listenerKey({ person: undefined, operator });
-  db.transaction((tx) => {
+  const took = db.transaction((tx) => {
     tx.insert(people).values({ person, operator }).onConflictDoUpdate({ target: people.person, set: { operator } }).run();
-    tx.update(objects)
+    const { changes } = tx
+      .update(objects)
       .set({ operator })
       .where(and(eq(objects.owner, person), isNull(objects.operator)))
       .run();
     tx.run(sql`INSERT OR IGNORE INTO listens (object, listener, at) SELECT object, ${now}, at FROM listens WHERE listener = ${was}`);
     tx.run(sql`DELETE FROM listens WHERE listener = ${was}`);
     tx.run(sql`DELETE FROM listens WHERE listener = ${now} AND object IN (SELECT id FROM objects WHERE operator = ${operator})`);
+    return changes;
   });
   signedInAs(was, now);
+  return took;
 }
 
-type Result = { ok: true; operator: Operator } | { ok: false; errors: OperatorErrors };
+// A refusal says why, in a word or two, for the record.
+type Result = { ok: true; operator: Operator; took: number } | { ok: false; errors: OperatorErrors; why: string };
 
 // Tries per place (an address, and the handle tried), with a lock after too
 // many: after FAILS wrong passphrases from one place, that place waits
@@ -109,12 +138,13 @@ function sweep(now: number) {
 }
 
 export async function claim(person: string, form: OperatorForm, from: string, now = Date.now()): Promise<Result> {
-  if (operatorOf(person)) return { ok: false, errors: { form: "You're signed in. Sign out first to claim another handle." } };
-  const errors = checkClaim(form);
-  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  if (operatorOf(person)) return { ok: false, errors: { form: "You're signed in. Sign out first to claim another handle." }, why: "signed-in" };
+  const { errors, why } = checkClaim(form);
+  if (why.length > 0) return { ok: false, errors, why: why.join(",") };
   sweep(now);
   const recent = (claims.get(from) ?? []).filter((at) => now - at < 3_600_000);
-  if (!LOCAL.has(from) && recent.length >= CLAIMS_PER_HOUR) return { ok: false, errors: { form: "Too many handles claimed from here. Try later." } };
+  if (!LOCAL.has(from) && recent.length >= CLAIMS_PER_HOUR)
+    return { ok: false, errors: { form: "Too many handles claimed from here. Try later." }, why: "too-many-claims" };
   const salt = randomBytes(16).toString("hex");
   const hash = await hashOf(form.passphrase, salt);
   if (!hash) return BUSY;
@@ -134,16 +164,16 @@ export async function claim(person: string, form: OperatorForm, from: string, no
       .get();
   } catch (error) {
     if ((error as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE")
-      return { ok: false, errors: { handle: `${form.handle} is taken. Pick another handle.` } };
+      return { ok: false, errors: { handle: `${form.handle} is taken. Pick another handle.` }, why: "taken" };
     throw error;
   }
-  link(person, row.id);
-  return { ok: true, operator: row };
+  return { ok: true, operator: row, took: link(person, row.id) };
 }
 
 // The same answer for an unknown handle and a wrong passphrase, so a
 // sign-in can't be used to find out which handles exist.
 const WRONG = { ok: false as const, errors: { form: "That handle or passphrase isn't right." } };
+const wrong = (why: string) => ({ ...WRONG, why });
 
 export async function signIn(person: string, form: OperatorForm, from: string, now = Date.now()): Promise<Result> {
   sweep(now);
@@ -151,7 +181,7 @@ export async function signIn(person: string, form: OperatorForm, from: string, n
   const key = `${from}|${handleKey}`;
   let tried = tries.get(key);
   if (tried && tried.until > now) {
-    return { ok: false, errors: { form: `Too many tries. Wait ${Math.ceil((tried.until - now) / 1000)} s.` } };
+    return { ok: false, errors: { form: `Too many tries. Wait ${Math.ceil((tried.until - now) / 1000)} s.` }, why: "too-many-tries" };
   }
   // a lock that has passed starts the count again
   if (tried && tried.count >= FAILS) tried = undefined;
@@ -163,11 +193,51 @@ export async function signIn(person: string, form: OperatorForm, from: string, n
   if (!row || row.extra || !timingSafeEqual(given, Buffer.from(row.hash, "hex"))) {
     const count = (tried?.count ?? 0) + 1;
     tries.set(key, { count, until: count >= FAILS ? now + LOCK_MS : 0 });
-    return WRONG;
+    // the record may say which, though the page doesn't
+    return wrong(!row ? "no-such-handle" : row.extra ? "extras-handle" : "wrong-passphrase");
   }
   tries.delete(key);
-  link(person, row.id);
-  return { ok: true, operator: { id: row.id, handle: row.handle } };
+  return { ok: true, operator: { id: row.id, handle: row.handle }, took: link(person, row.id) };
+}
+
+// What the operator page does with a form (null if it couldn't be read):
+// claims, signs in or signs out, and on success gives back the device's new
+// cookie for the page to set (a new person after signing out; after
+// claiming or signing in, a cookie nobody has seen, so one seen before
+// can't follow it in). Each is a line in the record, naming who the device
+// was and who it is now, and how many of its satellites became the
+// operator's; a refusal names the handle tried and why, and never the
+// passphrase: a handle tried that couldn't be one (spaces, punctuation,
+// too long) is only counted, in case it's a passphrase in the wrong box.
+export type Operated = { ok: true; person: string; action: OperatorForm["action"] } | { ok: false; errors: OperatorErrors; status: 400 | 422; action: OperatorForm["action"] | null; handle: string };
+export async function operate(person: string, form: FormData | null, from: string, now = Date.now()): Promise<Operated> {
+  const who = whoIs(person, operatorOf(person)?.handle ?? null);
+  const read = form && readOperatorForm(form);
+  if (!read) {
+    log("operator-refused", { who, reason: "unreadable" });
+    return { ok: false, errors: { form: "That form couldn't be read. Try again." }, status: 400, action: null, handle: "" };
+  }
+  if (read.action === "sign-out") {
+    signOut(person);
+    const next = crypto.randomUUID();
+    log("sign-out", { who, now: whoIs(next, null) });
+    return { ok: true, person: next, action: "sign-out" };
+  }
+  const result = read.action === "claim" ? await claim(person, read, from, now) : await signIn(person, read, from, now);
+  if (!result.ok) {
+    const plausible = read.handle.length <= HANDLE_MAX && HANDLE.test(read.handle);
+    log(`${read.action}-refused`, {
+      who,
+      handle: plausible ? read.handle : null,
+      handle_length: plausible ? null : [...read.handle].length,
+      reason: result.why,
+    });
+    return { ok: false, errors: result.errors, status: 422, action: read.action, handle: read.handle };
+  }
+  const next = crypto.randomUUID();
+  moveTo(person, next);
+  log(read.action, { who, handle: result.operator.handle, now: whoIs(next, result.operator.handle), took: result.took });
+  return { ok: true, person: next, action: read.action };
 }
 
 // This device stops being the operator; the caller gives it a fresh cookie.

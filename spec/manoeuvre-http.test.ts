@@ -291,9 +291,10 @@ describe("boosting your satellite", () => {
 describe("a device that signs out", () => {
   // signing out makes it a new anonymous person (ADR 0009): what it launched
   // signed in stays the operator's, out of its reach
-  it("can no longer bring down or boost the operator's satellites", async () => {
+  it("can no longer bring down or boost the operator's satellites, which stay theirs on any device they sign in on", async () => {
     const a = new Session(baseUrl);
-    expect((await post(a, "/operator/", { action: "claim", handle: `so_${Math.random().toString(36).slice(2, 10)}`, passphrase: "correct horse battery" })).status).toBe(303);
+    const handle = `so_${Math.random().toString(36).slice(2, 10)}`;
+    expect((await post(a, "/operator/", { action: "claim", handle, passphrase: "correct horse battery" })).status).toBe(303);
     const { id, name } = await launched(a);
     expect((await post(a, "/operator/", { action: "sign-out" })).status).toBe(303);
     for (const action of ["deorbit", "boost"] as const) {
@@ -302,6 +303,30 @@ describe("a device that signs out", () => {
       expect(((await res.json()) as { why: string }).why, action).toBe("not-yours");
     }
     expect((await row(a, name))?.textContent).not.toMatch(/coming down|climbing/i);
+    // signed in on another device, it's the operator's again
+    const phone = new Session(baseUrl);
+    await phone.get("/");
+    expect((await post(phone, "/operator/", { action: "sign-in", handle, passphrase: "correct horse battery" })).status).toBe(303);
+    expect((await manoeuvre(phone, id, "boost", json)).status).toBe(200);
+  });
+});
+
+describe("a signed-in operator and someone not signed in", () => {
+  // the crit's case: two people side by side, one signed in and one not,
+  // each trying the other's
+  it("can't change each other's satellites", async () => {
+    const operator = new Session(baseUrl);
+    await operator.get("/");
+    const handle = `op_${Math.random().toString(36).slice(2, 10)}`;
+    expect((await post(operator, "/operator/", { action: "claim", handle, passphrase: "correct horse battery" })).status).toBe(303);
+    const anon = new Session(baseUrl);
+    const theirs = await launched(operator);
+    const its = await launched(anon);
+    for (const [who, id] of [[anon, theirs.id], [operator, its.id]] as const) {
+      const res = await manoeuvre(who, id, "deorbit", json);
+      expect(res.status).toBe(422);
+      expect(((await res.json()) as { why: string }).why).toBe("not-yours");
+    }
   });
 });
 

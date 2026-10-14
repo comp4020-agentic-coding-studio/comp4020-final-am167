@@ -1,13 +1,13 @@
 import { defineMiddleware } from "astro:middleware";
 import { visited } from "./lib/heard.ts";
 import { operatorOf } from "./lib/operators.ts";
-import { PERSON_COOKIE, newPerson } from "./lib/person.ts";
+import { PERSON_COOKIE, newVisitor } from "./lib/person.ts";
 
 // Who is visiting: their person cookie (ADR 0002), set on the first visit,
 // and the operator they're signed in as, if any (ADR 0009).
 export const onRequest = defineMiddleware(async (context, next) => {
   const given = context.cookies.get(PERSON_COOKIE)?.value;
-  const person = given && /^[0-9a-f-]{36}$/.test(given) ? given : newPerson(context.cookies, context.url, context.request.headers);
+  const person = given && /^[0-9a-f-]{36}$/.test(given) ? given : newVisitor(context.cookies, context.url, context.request.headers);
   context.locals.person = person;
   context.locals.operator = operatorOf(person);
   const response = await next();
