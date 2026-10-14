@@ -3835,3 +3835,5 @@ Advay accepted ADR 0023, the server's record of who did what ("accept ADR
 0023"). Its status, the ADR index and `PLAN.md` (status line, the C10
 item, and its "still for C10" list) now say so; nothing else in the
 record changed.
+
+Commit `00f81ef`.
