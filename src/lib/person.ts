@@ -21,7 +21,7 @@ export function newPerson(cookies: AstroCookies, url: URL, headers: Headers, per
 }
 
 // Someone new: a browser with no cookie (or one that isn't ours) gets one,
-// and the record notes the visit (ADR 0022), naming them by its short id.
+// and the record notes the visit (ADR 0023), naming them by its short id.
 export function newVisitor(cookies: AstroCookies, url: URL, headers: Headers): string {
   const person = newPerson(cookies, url, headers);
   log("visit", { who: whoIs(person, null), path: clip(url.pathname, 80) });

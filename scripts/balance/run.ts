@@ -13,7 +13,7 @@
 // hours after two of warming up, a newcomer arriving every half hour, and it
 // reports the collisions they saw. EXTRAS_PER_HOUR (0 for none) sets the
 // extras. Prints one line of JSON, after the server's own record of what
-// happened (ADR 0022), which index.ts skips.
+// happened (ADR 0023), which index.ts skips.
 import { db, schema } from "../../src/db/index.ts";
 import { onAir } from "../../src/lib/airtime.ts";
 import { subscribe } from "../../src/lib/events.ts";

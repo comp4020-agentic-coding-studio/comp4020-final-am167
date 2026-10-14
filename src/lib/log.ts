@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-// The server's record of who did what (crit 10; ADR 0022): one plain line
+// The server's record of who did what (crit 10; ADR 0023): one plain line
 // on stdout per thing a person does or is refused, and per thing the server
 // does on its own, so `flyctl logs` alone tells two people apart and says
 // who touched what. A line is `event key=value ...`; a value that isn't a

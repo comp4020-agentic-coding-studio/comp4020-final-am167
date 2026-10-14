@@ -3500,7 +3500,78 @@ then said merge, knowing the repo is public and `main` deploys.
 
 Commit `2d8f515`.
 
-## 2026-10-13 — C10: the server's record of who did what (ADR 0022)
+## 2026-10-13 — Conjunction alerts and dodging dropped
+
+Conjunction alerts and dodging with fuel, moved from C9 to C10 and a maybe
+since 2026-10-10, are now **won't do**. Advay: "it defeats the whole
+purpose." The app's argument is that a collision is a cost nobody can
+step out of; a warning plus a way to dodge it hands each owner a private
+escape from the commons' consequences. Deorbiting and boosting stay the
+only manoeuvres. The open question on how fuel works is moot. `PLAN.md`
+updated wherever dodging appeared (status, Co-presence, the SSE summary,
+the testable claims, the C10 line, open questions). The accepted ADRs
+that mention dodging (0002, 0004, 0008) are left as written, since
+accepted records aren't edited; none of them depends on it.
+
+Commit `634c3cc`.
+
+## 2026-10-13 — Who may see and change what: ADR 0022
+
+The crit 10 spec wants "what each person may see and change is checked on
+the server, and that decision is written down in the repo with why". The
+checks existed, but the rules were spread across ADRs 0009, 0010, 0011,
+0012, 0015, 0016 and 0021, and none said in one place what the server
+refuses. Audited every route that changes something (`/` launch,
+`/manoeuvre/`, `/operator/`) and everything that shows something (pages,
+`/api/events` through `toPublic` and `forViewer`). Nothing new was found
+open: deorbit and boost look the satellite up by the viewer's ownership
+and refuse `not-yours` otherwise, an extra's handle can't be signed into,
+and cross-site posts get a 403 from Astro.
+
+Wrote ADR 0022 (proposed) with a "Changing" table (action, who may, what
+the server refuses and why) and a "Seeing" table, under one principle:
+everything about the sky is public, and only you can act on what's yours.
+Seeing is open because a commons only works when its costs and their
+authors are visible; changing is owner-only because removing someone
+else's satellite would turn a shared cost into an attack. It also states
+the stream's known limit (every live beacon reaches every browser, ADR
+0012) rather than claiming more than the server does.
+
+Two regression tests added to `spec/manoeuvre-http.test.ts` for gaps in
+the existing coverage: a stranger's boost is refused with `not-yours` and
+the satellite keeps its fuel, and a device that signs out can no longer
+deorbit or boost the operator's satellites. Both passed on first run, as
+expected for checks that were already there; they pin the crit's failure
+case ("one can change the other's") so it can't quietly regress.
+
+**Review.** A fresh Opus reviewer attacked ADR 0022 against the code and
+the crit 10 spec. It found no way for one person to change another's
+satellite on the server, and confirmed each ownership, fuel, extras,
+cookie, cross-site and passphrase claim. Its findings were about the record
+overclaiming and the tests underchecking:
+- The beacon row read as a server check, but every live beacon reaches
+  every browser in the sky's data. Now labelled a display rule, with why.
+- The extras' anonymous satellites are protected only by the middleware's
+  cookie-shape check (their owner `extra:<key>` is in the repo). That
+  dependency is now stated, with a test that a made-up `extra:` cookie is
+  replaced and gets nothing in Yours.
+- The Consequences claimed more than the tests covered. Added: the older
+  stranger-deorbit test now asserts `not-yours`, cross-site boosts and
+  cross-site claim, sign-in and sign-out (403), the no-person-id page check
+  extended to Yours and an object's card and panel, and a stream check on a
+  live launch event, not only `hello`.
+- Missing actions added to the table: claim and sign-in merging this
+  device's satellites, being counted as a listener (ADR 0016's accepted
+  loophole), and opening the sky bringing a staged collision sooner.
+- Nits fixed: sign-out on an anonymous device orphans its satellites (said
+  plainly), the identical sign-in answer's reason reworded (handles are
+  public anyway), the full list of claim refusals, and the rate limits
+  trusting `fly-client-ip` behind Fly's proxy.
+Advay accepted the record the same day ("adr is approved").
+
+Commit `634c3cc`.
+
+## 2026-10-13 — C10: the server's record of who did what (ADR 0023)
 
 Crit 10 ("Fly by instruments"): two of the pod use the deployed app in
 separate Chrome profiles while Advay narrates from `flyctl logs` alone. The
@@ -3552,7 +3623,7 @@ nothing is logged twice. The existing `console.error` calls stay.
 **Not logged, and why:** a form posted from another site. Astro's origin
 check answers 403 before any of the app's code runs (checked with curl:
 no line, not even the visit), and logging it would mean replacing that
-check with our own. Recorded in ADR 0022 as a known gap.
+check with our own. Recorded in ADR 0023 as a known gap.
 
 **Tests first** (`spec/log.test.ts`, 24, in-process against scratch
 databases with `console.log` captured; each failed first, against a
@@ -3567,7 +3638,7 @@ after, and their refusals; no passphrase tried or right appears; a
 collision with both owners and its own time; a burn-up at its own time;
 nothing logged twice across a restart; a derelict and a staging; the
 extras' launches and manoeuvres marked `extra:` with their due times, once.
-`spec/access.test.ts` (3, over HTTP) covers what ADR 0022 says the server
+`spec/access.test.ts` (3, over HTTP) covers what the record says the server
 refuses and wasn't tested yet: a stranger's boost as well as deorbit, told
 `not-yours`, with the owner's fuel untouched; a signed-in operator and an
 anonymous visitor each refused the other's; a device that signed out
@@ -3576,7 +3647,9 @@ can't touch what it launched as the operator, and a phone signed in can.
 **The written-down half.** ADRs 0002, 0009, 0010 and 0011 between them
 say who owns a satellite and that only its owner may manoeuvre it, but
 none says in one place what the server refuses, to whom and why, or what
-a signed-out visitor and an operator each see. ADR 0022 (proposed) does:
+a signed-out visitor and an operator each see. The record drafted here
+(as ADR 0022, proposed; renumbered ADR 0023 and cut to the logging when
+merged, below) did:
 a table of who may do what and each refusal's reason code and why, what
 everyone, only you, and nobody sees, and then the record itself. Accepted
 ADRs left as they are.
@@ -3658,7 +3731,7 @@ each with a test written first and seen failing:
   characters). A refused handle is now logged only if it could be a
   handle (one word of letters, digits, `-` or `_`, at most 20);
   anything else only by its length (`handle_length=`).
-- **ADR 0022 claimed more than the code keeps**: the launch gap doesn't
+- **The record (then ADR 0022, now 0023) claimed more than the code keeps**: the launch gap doesn't
   stop "one person" filling the sky, since a script dropping its cookie
   is a new person each time (it launched twice in the same second from
   curl), the loophole ADR 0002 accepted; reworded, with a note that the
@@ -3711,3 +3784,45 @@ or content changed (the launchpad's form handling moved into `launchFrom`,
 same responses).
 
 Commit `eca1ae7`.
+
+## 2026-10-14 — PR 14 brought up to date with `main`, renumbered ADR 0023, and merged
+
+PR 14 (the C10 logging, `claude/c10-kessler-logging-1c1dc0`) was cut
+before `634c3cc` and `129c5ec` landed, and Advay's comment on the PR asked
+for five fixes before it could merge:
+
+- **Merged `main` in** (a merge commit, not a rebase). The conflicts in
+  `PLAN.md`, `doc/adr/README.md` and `notes/log.md` kept both sides: the
+  log has `main`'s two entries (dodging dropped, ADR 0022) before the
+  PR's two, as they happened; `PLAN.md`'s C10 item now says the logging is
+  built and points at ADR 0022 for what the server refuses, without
+  `main`'s now-done plan for it, and dodging is gone from the C10 maybes.
+- **Renumbered the PR's record to ADR 0023, "The server's record of who
+  did what"**, since 0022 is `main`'s accepted policy and isn't edited.
+  0023 keeps the logging design (options, line format, `who`/`owner`,
+  events, logged once, not logged, consequences) and the reserved handles
+  (`anon`, `nobody`, `none`, `extra`); the permissions table and "what
+  each sees" list are gone, linked to 0022 instead. It says where it adds
+  to 0022: the refusal reasons the log names, `gone` (your own satellite
+  no longer in orbit, which the server used to answer `not-yours`), and
+  `handle-reserved`. Still proposed, for Advay to accept.
+- **Fixed every "ADR 0022" that meant the logging record**: `log.ts`,
+  `operators.ts`, `person.ts`, `scripts/balance/run.ts`, `PLAN.md`, the
+  index, and the PR's own log entries (which now say it was drafted as
+  0022). `spec/manoeuvre-http.test.ts`'s "ADR 0022" means the policy and
+  stays.
+- **Folded `spec/access.test.ts` into `spec/manoeuvre-http.test.ts`** and
+  deleted it. The stranger's deorbit and boost, and the device after
+  sign-out, were already on `main`. What it added: a signed-in operator
+  and an anonymous visitor each refused the other's (a new `describe`),
+  and the signed-out device's satellite boostable again from a phone
+  signed in to the operator (added to the sign-out test).
+- **Checks, against a fresh build and a scratch database:** `pnpm check`
+  408 passed, 0 errors, 0 warnings; `pnpm check:evidence` green (after
+  unshallowing the cloud session's clone, whose missing history had made
+  six of PROCESS.md's cited commits look absent); `pnpm test:layout` 12 of
+  12 (the launchpad's form handling moved in this PR).
+
+No adversarial review this time: the code is the PR's, already reviewed
+(previous entry), and 0023 is that record cut down, not new design.
+Advay said to merge once the checks were green.

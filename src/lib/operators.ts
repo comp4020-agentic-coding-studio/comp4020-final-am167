@@ -38,14 +38,14 @@ export function readOperatorForm(form: FormData): OperatorForm | null {
   return { action, handle: String(form.get("handle") ?? "").trim(), passphrase: String(form.get("passphrase") ?? "") };
 }
 
-// Words the server's record uses for who someone is (ADR 0022): a person
+// Words the server's record uses for who someone is (ADR 0023): a person
 // with one of these as a handle would read as an anonymous visitor, as
 // no-one, or as an extra.
 const RESERVED = new Set(["anon", "nobody", "none", "extra"]);
 const HANDLE = /^[A-Za-z0-9_-]+$/;
 
 // What's wrong with a claim, and why in a word or two for the record (ADR
-// 0022), which never says more of a passphrase than that.
+// 0023), which never says more of a passphrase than that.
 function checkClaim({ handle, passphrase }: OperatorForm): { errors: OperatorErrors; why: string[] } {
   const errors: OperatorErrors = {};
   const why: string[] = [];
