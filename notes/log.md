@@ -3915,3 +3915,11 @@ stream; the page reads "Live". No spec test for that half: it's browser
 behaviour, and the suite has no Chrome.
 
 Commit `9430a2d`.
+
+## 2026-10-15 — PROCESS.md's C10 section taken out of the branch
+
+Advay: "remove the process.md change in this branch." `PROCESS.md` on
+`C10` is back to `main`'s, without the "Logging who did what" section
+drafted in `8d9338d` and cut in `e4525ce`; both commits stay in the
+history. The C10 part of `PROCESS.md` is still to write. `PLAN.md`'s
+C10 status now also says the listen lines are on `C10` only, not `main`.

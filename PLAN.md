@@ -229,9 +229,11 @@ _Last updated 2026-10-15 (listening logged: `listen-open` and `listen-close`; a 
     (`not-yours` and the rest), plus `gone` for your own satellite no
     longer in orbit, and reserves the handles `anon`, `nobody`, `none` and
     `extra` (ADR 0023).
-  - **Still for C10:** deploy and try
-    `flyctl logs` against the real app; `reflections/crit-10.md` and
-    `PROCESS.md` for the crit.
+  - **Still for C10:** the listen lines and the back/forward cache fix
+    are on branch `C10` only, not yet on `main` (the rest of the logging
+    is, since PR 14); try `flyctl logs` against the real app;
+    `reflections/crit-10.md` and `PROCESS.md` for the crit (a C10 section
+    drafted on `C10` was taken out again 2026-10-15, at Advay's word).
   - Aggregate figures (launches per band, collisions, deorbits, several
     cookies per human) can be counted from these lines if wanted.
 - **Later (low priority, near the end of the project):** `README.md`,

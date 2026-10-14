@@ -159,17 +159,6 @@ Every round's numbers looked right until someone else checked them, and only
 playing told me whether it felt right. It isn't finished: the news is still
 mostly staged collisions.
 
-## Logging who did what
-
-At crit 10 I narrate two people using the app from its server logs alone. My
-plan had the logging as counts to settle design questions, but the spec asks
-who did what, so it changed before anything was built
-([`f0dc97e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/f0dc97e)).
-The tests passed, yet a review found anyone could claim the handle `anon`
-and pass as an anonymous visitor, and a passphrase typed into the handle box
-was logged; both were fixed
-([`eca1ae7`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/eca1ae7)).
-
 ## Closing
 
 Multi-user and real-time were the easy part: each had a clear answer a test
