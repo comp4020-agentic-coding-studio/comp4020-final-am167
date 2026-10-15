@@ -3925,3 +3925,58 @@ history. The C10 part of `PROCESS.md` is still to write. `PLAN.md`'s
 C10 status now also says the listen lines are on `C10` only, not `main`.
 
 Commit `408634c`.
+
+## 2026-10-15 — A line per request, and its id on every line inside it
+
+Advay asked whether the logging matches the week 10 lecture. The slides
+are about the app's runtime log, not this file: "what to log" (who,
+what, when, one line each; each error with enough context to reproduce
+it; never secrets) and "reading a request log", a line per request with
+a short request id in front of it and of every event written while
+serving it. ADR 0023's record already kept the first and third; the gaps
+were the request line and id (a returning visitor's page views weren't
+logged at all, and nothing joined a refusal to its request), and errors
+that said what failed but not for whom or where. Advay: "add a one-line
+request log per request with a short request id tagging the events
+inside it, plus who/path on error lines. Write a superseding ADR first,
+TDD it."
+
+ADR 0024 (accepted: Advay, "Accept ADR 0024") supersedes 0023's "page views by someone seen before
+aren't logged", "errors stay outside the record" and the line's shape,
+and lists the listen lines 0023 predates. The middleware serves each
+request through `served()` in `log.ts`: a fresh six-hex id carried by
+`AsyncLocalStorage`, so no call site changed, and a `request` line once
+it's answered (`who method path status ms`, path without the query). A
+stream's closing is bound to its request, so its `listen-open` and
+`listen-close` share an id. `console.error` calls became `logError()`:
+an `error` line (`who method path what` inside a request, `what` alone
+outside) with the error after it. A page that throws gets an `error`
+line with its message and a `status=500` request line; Astro prints the
+stack after, so ours leaves it out.
+
+Judgement call, written into the ADR: a collision or burn-up the server
+catches up on while serving someone carries that request's tag. Its
+`at=` says when it happened and it has no `who=`, so the tag says which
+request found it due, not who caused it.
+
+TDD: six tests in `spec/log.test.ts` ("a request"), failing on
+`served is not a function`, then passing; the parser reads the tag.
+Real run on :8091 with a fresh database, then `pnpm check` (417 passed;
+338 tagged request lines in the server's output, no errors):
+
+```
+[4c495a] launch who=anon#22b2a6 sat=33 callsign="PIP 1" band=mid beacon="hello sky"
+[4c495a] request who=anon#22b2a6 method=POST path=/ status=303 ms=4
+[286321] launch-refused who=anon#22b2a6 reason=gap detail="You can launch again in 1 min 00 s." band=low callsign="PIP 2" beacon=again
+[286321] request who=anon#22b2a6 method=POST path=/ status=422 ms=3
+[57e060] listen-open who=anon#22b2a6 counted=yes listening=1 page=/sky/
+[57e060] request who=anon#22b2a6 method=GET path=/api/events status=200 ms=4
+[57e060] listen-close who=anon#22b2a6 after=2s listening=0
+[f9df6e] error who=anon#473e75 method=GET path=/boom-tmp what=page message="boom for the log"
+[f9df6e] request who=anon#473e75 method=GET path=/boom-tmp status=500 ms=1
+```
+
+The last two are from a throwaway route that only throws, built for
+this run and deleted; Astro's `[ERROR]` stack followed them. The first
+visit's request on a new database carried the extras' whole day of
+catch-up lines under its tag, as the ADR says it would.

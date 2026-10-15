@@ -1,11 +1,14 @@
-import { createHash } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { createHash, randomBytes } from "node:crypto";
 
-// The server's record of who did what (crit 10; ADR 0023): one plain line
-// on stdout per thing a person does or is refused, and per thing the server
-// does on its own, so `flyctl logs` alone tells two people apart and says
-// who touched what. A line is `event key=value ...`; a value that isn't a
-// plain word is quoted with JSON's escaping, so a line is always one line.
-// Errors stay on console.error: they aren't part of this record.
+// The server's record of who did what (crit 10; ADR 0023, 0024): one plain
+// line on stdout per request, per thing a person does or is refused, and
+// per thing the server does on its own, so `flyctl logs` alone tells two
+// people apart and says who touched what. A line is `event key=value ...`;
+// a value that isn't a plain word is quoted with JSON's escaping, so a line
+// is always one line. A line written while serving a request starts with
+// that request's id, `[3f9a1c] `. Errors are lines too, on stderr, with the
+// error after them.
 
 type Value = string | number | boolean | null | undefined;
 
@@ -33,9 +36,71 @@ export function line(event: string, fields: Record<string, Value>): string {
   return parts.join(" ");
 }
 
-export function log(event: string, fields: Record<string, Value>): void {
-  console.log(line(event, fields));
+// The request being served, carried through its async work: its id, and
+// who it's from once the middleware knows.
+interface Serving {
+  id: string;
+  method: string;
+  path: string;
+  who: string | null;
 }
+const serving = new AsyncLocalStorage<Serving>();
+
+// A line, tagged with the request it's written in, if any.
+const tagged = (event: string, fields: Record<string, Value>): string => {
+  const now = serving.getStore();
+  return now ? `[${now.id}] ${line(event, fields)}` : line(event, fields);
+};
+
+export function log(event: string, fields: Record<string, Value>): void {
+  console.log(tagged(event, fields));
+}
+
+// An error, as a line saying what failed (and, inside a request, for whom
+// and where, so it can be tried again), then the error itself.
+export function logError(what: string, error: unknown): void {
+  const now = serving.getStore();
+  const where = now ? { who: now.who ?? "none", method: now.method, path: now.path } : {};
+  console.error(tagged("error", { ...where, what }), error);
+}
+
+// Serves a request (ADR 0024): every line written while `answer` runs is
+// tagged with a fresh id, and once it's answered, a `request` line says who
+// it was from, what they asked for, and how it went. A request that throws
+// is an `error` line (Astro prints the stack after) and a 500.
+export async function served(request: Request, answer: () => Promise<Response>): Promise<Response> {
+  const now: Serving = {
+    id: randomBytes(3).toString("hex"),
+    method: request.method,
+    path: clip(new URL(request.url).pathname, 80),
+    who: null,
+  };
+  const started = performance.now();
+  const done = (status: number) =>
+    log("request", { who: now.who ?? "none", method: now.method, path: now.path, status, ms: Math.round(performance.now() - started) });
+  return serving.run(now, async () => {
+    try {
+      const response = await answer();
+      done(response.status);
+      return response;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(tagged("error", { who: now.who ?? "none", method: now.method, path: now.path, what: "page", message: clip(message) }));
+      done(500);
+      throw error;
+    }
+  });
+}
+
+// Who the request being served is from, in the record's words (`whoIs`).
+export function identify(who: string): void {
+  const now = serving.getStore();
+  if (now) now.who = who;
+}
+
+// `fn`, kept in the request it was made in: for a callback something else
+// calls later, such as a stream's closing.
+export const inThisRequest = <A extends unknown[], R>(fn: (...args: A) => R): ((...args: A) => R) => AsyncLocalStorage.bind(fn);
 
 // A moment as the record gives it, for the server's own events: settle can
 // catch up on what happened while it was stopped, so a line's own time

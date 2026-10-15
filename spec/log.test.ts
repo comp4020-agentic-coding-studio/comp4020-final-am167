@@ -20,27 +20,35 @@ afterAll(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
 });
 
-// every line written to stdout while a test runs
+// every line written to stdout while a test runs, and each error written
+// to stderr: its line, and what came after it
 let out: string[] = [];
+let errors: { raw: string; error: unknown }[] = [];
 beforeEach(() => {
   out = [];
+  errors = [];
   vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
     out.push(args.map(String).join(" "));
+  });
+  vi.spyOn(console, "error").mockImplementation((raw: unknown, error?: unknown) => {
+    errors.push({ raw: String(raw), error });
   });
 });
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// A line, read back: its event and its fields. A value is bare, or quoted
-// with JSON's escaping.
+// A line, read back: the request it was written in (ADR 0024), if any, its
+// event and its fields. A value is bare, or quoted with JSON's escaping.
 interface Line {
+  id: string | null;
   event: string;
   fields: Record<string, string>;
   raw: string;
 }
 function parse(raw: string): Line {
-  const [event, ...rest] = raw.split(" ");
+  const tag = /^\[([^\]]*)\] /.exec(raw);
+  const [event, ...rest] = raw.slice(tag ? tag[0].length : 0).split(" ");
   const fields: Record<string, string> = {};
   const pattern = /([a-z_]+)=("(?:[^"\\]|\\.)*"|\S*)/gy;
   const tail = rest.join(" ");
@@ -54,7 +62,7 @@ function parse(raw: string): Line {
     fields[match[1]] = match[2].startsWith('"') ? JSON.parse(match[2]) : match[2];
     at = pattern.lastIndex;
   }
-  return { event, fields, raw };
+  return { id: tag ? tag[1] : null, event, fields, raw };
 }
 const lines = () => out.map(parse);
 const linesOf = (event: string) => lines().filter((line) => line.event === event);
@@ -514,5 +522,110 @@ describe("listening", async () => {
     open(ALICE)();
     expect(linesOf("listen-open")[0].fields).toMatchObject({ who: log.whoIs(ALICE, null), counted: "no", listening: "0" });
     expect(linesOf("listen-close")).toHaveLength(1);
+  });
+});
+
+// A request (ADR 0024): a line for each, written once it's answered, and
+// its id in front of every line written while serving it, so the events
+// read back to the request that made them. Driven through the wrapper the
+// middleware serves each request with.
+describe("a request", async () => {
+  const { log } = await freshServer();
+  const get = (path: string, method = "GET") => new Request(`http://kessler.test${path}`, { method });
+
+  it("is a line, last, naming who, the method, the path, the status and how long it took", async () => {
+    await log.served(get("/sky/"), async () => {
+      log.identify(log.whoIs(ALICE, null));
+      log.log("launch", { who: log.whoIs(ALICE, null), sat: 1 });
+      return new Response("ok", { status: 201 });
+    });
+    const [launch, request] = lines();
+    expect(request.event).toBe("request");
+    expect(request.fields).toMatchObject({ who: log.whoIs(ALICE, null), method: "GET", path: "/sky/", status: "201" });
+    expect(request.fields.ms).toMatch(/^\d+$/);
+    expect(launch.event).toBe("launch");
+    // one id on both, six hex digits
+    expect(request.id).toMatch(/^[0-9a-f]{6}$/);
+    expect(launch.id).toBe(request.id);
+    expectNoCookie(out.join("\n"), ALICE);
+  });
+
+  it("gives each request its own id, and none to a line written outside one", async () => {
+    await log.served(get("/"), async () => (log.log("visit", { who: "anon#aaaaaa" }), new Response(null)));
+    await log.served(get("/catalogue/", "POST"), async () => (log.log("boost", { who: "anon#bbbbbb" }), new Response(null)));
+    log.log("burn-up", { sat: 3 });
+    const [visit, first, boost, second, burnUp] = lines();
+    expect(visit.id).toBe(first.id);
+    expect(boost.id).toBe(second.id);
+    expect(second.id).not.toBe(first.id);
+    expect(second.fields.method).toBe("POST");
+    expect(burnUp.id).toBeNull();
+    expect(burnUp.event).toBe("burn-up");
+  });
+
+  it("names nobody it didn't learn, and keeps the query out of the path", async () => {
+    await log.served(get("/object/4/panel?callsign=secret"), async () => new Response(null, { status: 404 }));
+    const [request] = linesOf("request");
+    expect(request.fields).toMatchObject({ who: "none", path: "/object/4/panel", status: "404" });
+    expect(out.join("\n")).not.toContain("secret");
+  });
+
+  it("is an error, then a 500, when serving it throws, saying for whom and where", async () => {
+    const thrown = new Error("the disk is full");
+    await expect(
+      log.served(get("/manoeuvre/", "POST"), async () => {
+        log.identify(log.whoIs(BOB, "vela"));
+        throw thrown;
+      }),
+    ).rejects.toBe(thrown);
+    const [request] = linesOf("request");
+    expect(request.fields).toMatchObject({ who: log.whoIs(BOB, "vela"), method: "POST", path: "/manoeuvre/", status: "500" });
+    expect(errors).toHaveLength(1);
+    const error = parse(errors[0].raw);
+    expect(error.event).toBe("error");
+    expect(error.id).toBe(request.id);
+    expect(error.fields).toMatchObject({ who: log.whoIs(BOB, "vela"), method: "POST", path: "/manoeuvre/", what: "page", message: "the disk is full" });
+    // Astro prints the stack: once is enough
+    expect(errors[0].error).toBeUndefined();
+  });
+
+  it("puts who and where on an error inside it, and the error after the line", async () => {
+    const thrown = new Error("SQLITE_BUSY");
+    await log.served(get("/sky/"), async () => {
+      log.identify(log.whoIs(ALICE, null));
+      log.logError("couldn't note a visitor", thrown);
+      return new Response(null);
+    });
+    log.logError("settling the sky failed", thrown);
+    const [inside, outside] = errors.map((e) => parse(e.raw));
+    expect(inside.id).toMatch(/^[0-9a-f]{6}$/);
+    expect(inside.fields).toEqual({ who: log.whoIs(ALICE, null), method: "GET", path: "/sky/", what: "couldn't note a visitor" });
+    expect(outside.id).toBeNull();
+    expect(outside.fields).toEqual({ what: "settling the sky failed" });
+    expect(errors.map((e) => e.error)).toEqual([thrown, thrown]);
+    expectNoCookie(errors.map((e) => e.raw).join("\n"), ALICE);
+  });
+
+  it("tags a stream's opening and its closing with the stream's own request", async () => {
+    // the stream's own modules, so its record is this one
+    const { log } = await freshServer();
+    const heard = await import("../src/lib/heard.ts");
+    const { GET } = await import("../src/pages/api/events.ts");
+    heard.visited(ALICE);
+    const abort = new AbortController();
+    await log.served(new Request("http://kessler.test/api/events", { signal: abort.signal }), async () => {
+      log.identify(log.whoIs(ALICE, null));
+      return GET({ request: new Request("http://kessler.test/api/events", { signal: abort.signal }), locals: { person: ALICE, operator: null } } as never);
+    });
+    // another request in between, then the stream closes outside any
+    await log.served(get("/"), async () => new Response(null));
+    abort.abort();
+    const [open] = linesOf("listen-open");
+    const [close] = linesOf("listen-close");
+    const [stream, other] = linesOf("request");
+    expect(stream.fields).toMatchObject({ path: "/api/events", status: "200" });
+    expect(open.id).toBe(stream.id);
+    expect(close.id).toBe(stream.id);
+    expect(other.id).not.toBe(stream.id);
   });
 });

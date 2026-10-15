@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { audience, subscribe } from "../../lib/events.ts";
 import type { SkyEvent } from "../../lib/events.ts";
 import { HEARD_FEED, heardCounts, listenerFor, recentlyHeard, startListening } from "../../lib/heard.ts";
-import { clip, log, whoIs } from "../../lib/log.ts";
+import { clip, inThisRequest, log, whoIs } from "../../lib/log.ts";
 import { conjunctions, liveSky, recentCollisions, toPublic, watcherArrived } from "../../lib/sky.ts";
 import { forViewer } from "../../lib/stream.ts";
 
@@ -58,13 +58,14 @@ export const GET: APIRoute = ({ request, locals }) => {
       held = null;
       const ping = setInterval(() => controller.enqueue(encoder.encode(": ping\n\n")), 25_000);
       let closed = false;
-      cleanup = () => {
+      // its closing is tagged with the stream's own request (ADR 0024)
+      cleanup = inThisRequest(() => {
         if (closed) return;
         closed = true;
         clearInterval(ping);
         unsubscribe();
         log("listen-close", { who, after: `${Math.round((Date.now() - opened) / 1000)}s`, listening: audience().size });
-      };
+      });
       request.signal.addEventListener("abort", cleanup);
     },
     cancel: () => cleanup(),

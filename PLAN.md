@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-15 (listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
+_Last updated 2026-10-15 (a line per request, and its id on every line inside it, ADR 0024 accepted; errors say who and where. Earlier: listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -219,7 +219,13 @@ _Last updated 2026-10-15 (listening logged: `listen-open` and `listen-close`; a 
   accepted, so it isn't edited (they follow its format and its `who`).
   Found through them and fixed the same day: a sky page left for another
   stayed in Chrome's back/forward cache with its stream open, still
-  counted as listening; it now closes on `pagehide`.
+  counted as listening; it now closes on `pagehide`. 2026-10-15, after
+  the week 10 lecture's "reading a request log": a `request` line per
+  request (who, method, path, status, ms), each line written while
+  serving one tagged with its six-hex id (`[3f9a1c] launch ...`), and
+  errors as `error` lines saying who and where; ADR 0024, accepted,
+  supersedes 0023's page views, errors and line shape, and lists the
+  listen lines.
   - What each person may see and change, **checked on the server and
     written down with why**, is ADR 0022 (accepted 2026-10-13): one record
     of who may do and see what, and what the server refuses. The checks
@@ -229,9 +235,9 @@ _Last updated 2026-10-15 (listening logged: `listen-open` and `listen-close`; a 
     (`not-yours` and the rest), plus `gone` for your own satellite no
     longer in orbit, and reserves the handles `anon`, `nobody`, `none` and
     `extra` (ADR 0023).
-  - **Still for C10:** the listen lines and the back/forward cache fix
-    are on branch `C10` only, not yet on `main` (the rest of the logging
-    is, since PR 14); try `flyctl logs` against the real app;
+  - **Still for C10:** try `flyctl logs` against
+    the real app (the listen lines and the back/forward cache fix are on
+    `main` since PR 15);
     `reflections/crit-10.md` and `PROCESS.md` for the crit (a C10 section
     drafted on `C10` was taken out again 2026-10-15, at Advay's word).
   - Aggregate figures (launches per band, collisions, deorbits, several

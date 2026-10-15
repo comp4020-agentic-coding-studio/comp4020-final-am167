@@ -7,7 +7,7 @@ import { EXTRA, HOUR, PER_HOUR, callsignOf, extrasBetween, isExtra, nextExtraAft
 import { FUEL, REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
 import { readLaunch, type LaunchErrors, type LaunchInput } from "./launch.ts";
-import { clip, iso, log, whoIs } from "./log.ts";
+import { clip, iso, log, logError, whoIs } from "./log.ts";
 import { STATIONS, nextStation, type Station } from "./stations.ts";
 import { lineOf, shardsOf, type WreckPiece } from "./wreck.ts";
 import {
@@ -1034,7 +1034,7 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
       } catch (error) {
         // one that can't be written (a busy or full disk) is tried again on
         // the next settle, with everything after it
-        console.error(`${event.owner}'s ${event.type} due at ${event.at} failed:`, error);
+        logError(`${event.owner}'s ${event.type} due at ${event.at}`, error);
         through = event.at - 1;
         due.length = 0;
       }
@@ -1048,7 +1048,7 @@ export function settle(now = Date.now()): { decayed: SkyObject[]; collisions: Co
     } catch (error) {
       // a collision that can't be written (a busy or full disk) is dropped,
       // so it can't fail every read after it; the sky goes on without it
-      console.error(`collision of ${next.a.id} and ${next.b.id} failed:`, error);
+      logError(`collision of ${next.a.id} and ${next.b.id}`, error);
       meetings.delete(`${next.a.id}:${next.b.id}`);
       continue;
     }
@@ -1083,7 +1083,7 @@ function wakeForNext(now = Date.now()): number {
     try {
       settle();
     } catch (error) {
-      console.error("settling the sky failed:", error);
+      logError("settling the sky", error);
       wakeForNext();
     }
   }, wait);

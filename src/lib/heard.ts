@@ -7,6 +7,7 @@ import { isOwnedBy, liveSky, rootsOf, type Fate, type Kind, type Root, type SkyO
 import { STATIONS, stationOver, type StationId } from "./stations.ts";
 import { lineOf } from "./wreck.ts";
 import { listenerKey, sameAs } from "./listener.ts";
+import { logError } from "./log.ts";
 
 // Being heard (ADR 0016). A beacon is heard when it's on air over a ground
 // station while people have the sky open: that pass is a transmission,
@@ -458,7 +459,7 @@ export function startListening(): void {
       listen(last, now);
     } catch (error) {
       // a busy or full disk: those passes go unheard, and it carries on
-      console.error("listening failed:", error);
+      logError("listening failed", error);
     }
     last = now;
   }, 1000);
