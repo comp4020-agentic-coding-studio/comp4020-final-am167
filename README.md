@@ -11,13 +11,13 @@ Crit 9 version.
 
 ## What good means here
 
-Low orbit is a commons. Kessler and Cour-Palais (1978) showed debris can breed
-faster than drag clears it; Hardin (1968) argues such a commons is doomed;
-Ostrom (1990) found commons survive when users can see the resource and what
-each takes. Shirky (2004) says the same of small software: make behaviour
-visible and let the group do the rest. Kessler does: no moderation, just a
-record of what each launch cost. Kazemi (2019) says small communities hold
-through limits; for strangers, the sky's rules are the limit.
+Low orbit is a shared resource. Kessler and Cour-Palais (1978) showed debris can grow
+faster than drag clears it; Hardin (1968) argues such resources are doomed to overuse;
+Ostrom (1990) found they survive when users can see the resource and what each takes.
+Shirky (2004) says the same of small software: make behaviour visible and let the group
+do the rest. Kessler does no moderation, just a record of what each launch cost. Kazemi
+(2019) says small communities hold through limits; for strangers, the sky's rules are 
+the limit.
 
 1. **Being heard needs other people.** A beacon is heard only by others with
    the sky open as it passes a station.
