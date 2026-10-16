@@ -434,9 +434,16 @@ describe("what the server does on its own", async () => {
 });
 
 describe("the extras", async () => {
-  // a day with a regular's launch and a one-off's in it
+  // a day with a regular's launch in it, and a manoeuvre due in the two
+  // after (which day has one depends on today's date)
   let day = T;
-  while (!extrasBetween(day - DAY, day).some((e) => e.type === "launch" && e.handle !== null)) day += HOUR;
+  while (
+    !extrasBetween(day - DAY, day).some((e) => e.type === "launch" && e.handle !== null) ||
+    !extrasBetween(day, day + 2 * DAY).some((e) => e.type !== "launch")
+  ) {
+    day += HOUR;
+    if (day > T + 30 * DAY) throw new Error("no day in the next month has an extra's launch and a manoeuvre after it");
+  }
   const { sky, path, db, schema } = await freshServer({ EXTRAS_PER_HOUR: undefined, EXTRA_CAP: "1000" });
 
   it("logs their launches as an extra's, at the time each was due, once", async () => {

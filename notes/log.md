@@ -3982,3 +3982,13 @@ visit's request on a new database carried the extras' whole day of
 catch-up lines under its tag, as the ADR says it would.
 
 Commit `af7ebf8`.
+
+## 2026-10-16 — A date-dependent extras log test, fixed
+
+`spec/log.test.ts` "logs their manoeuvres as an extra's" failed on
+`main` today, with no code change: the test picks a day ten days out
+and assumes the extras' schedule has a boost or deorbit in the two days
+after it, which for today's date it doesn't. The search for the test's
+day now also asks for a manoeuvre in the two days after, and gives up
+with a plain error after a month rather than looping forever (the
+reviewer's point, below). Found while checking the catalogue change.
