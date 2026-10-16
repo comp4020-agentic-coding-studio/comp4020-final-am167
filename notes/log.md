@@ -3993,6 +3993,8 @@ day now also asks for a manoeuvre in the two days after, and gives up
 with a plain error after a month rather than looping forever (the
 reviewer's point, below). Found while checking the catalogue change.
 
+Commit `fb18419`.
+
 ## 2026-10-16 — The catalogue: short pages, numbered, and a table that folds away
 
 Advay: production has about a thousand objects ever launched, and the
@@ -4058,3 +4060,5 @@ about 1,900 objects: no horizontal scroll at 390px, the pager on one
 line, folded view goes straight to the collisions.
 
 ![The catalogue with its table folded: the heading, the count, "Show table", then the collisions straight under it](screenshots/2026-10-16-catalogue-table-folded.png)
+
+Commit `c30ef32`.
