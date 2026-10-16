@@ -1143,7 +1143,10 @@ export interface CatalogueQuery {
   per: number;
 }
 
-export const PER_PAGE = 100;
+// a short page by default: a thousand objects made a hundred-row page far
+// too long (the user's review, 2026-10-16)
+export const PER_PAGE = 25;
+export const PER_CHOICES = [25, 50, 100] as const;
 const PER_MAX = 200;
 // which way each column sorts first: names A to Z, newest launches first
 export const FIRST_DIR: Record<Sort, "asc" | "desc"> = {

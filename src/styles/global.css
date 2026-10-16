@@ -113,6 +113,54 @@ a:hover {
   }
 }
 
+/* folds a box to its heading (src/scripts/collapsible.ts), on the sky
+   and the catalogue: a chevron, down while it's open, right once it's
+   folded. Hidden until the script shows it. */
+.box-toggle {
+  flex: none;
+  align-self: center;
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+.box-toggle[hidden] {
+  display: none;
+}
+
+.box-toggle::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-20%) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.box-toggle[aria-expanded="false"]::before {
+  transform: translateX(-15%) rotate(-45deg);
+}
+
+.box-toggle:hover,
+.box-toggle:focus-visible {
+  border-color: var(--grid-strong);
+  color: var(--amber);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .box-toggle::before {
+    transition: none;
+  }
+}
+
 /* An object's history (ADR 0012), in the card that pops up when an object
    is clicked (ADR 0015). Global, since the card's markup is fetched into
    the page. One column, read top to bottom (2026-10-08): what it is, its

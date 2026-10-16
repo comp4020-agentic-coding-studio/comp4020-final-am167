@@ -52,3 +52,18 @@ export const falling = (kmPerHour: number) => {
 
 // JSON for a <script type="application/json"> block: no "</script>" escapes.
 export const embed = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
+
+// The page numbers a pager shows: the first, the last, and this page with
+// its neighbours, with null for a gap ("1 … 5 6 7 … 40"). A gap of a single
+// page shows that page instead.
+export function pageNumbers(page: number, pages: number): (number | null)[] {
+  const shown = [...new Set([1, page - 1, page, page + 1, pages])].filter((n) => n >= 1 && n <= pages).sort((a, b) => a - b);
+  const out: (number | null)[] = [];
+  for (const n of shown) {
+    const last = out.at(-1);
+    if (typeof last === "number" && n - last === 2) out.push(last + 1);
+    else if (typeof last === "number" && n - last > 2) out.push(null);
+    out.push(n);
+  }
+  return out;
+}

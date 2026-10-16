@@ -4,13 +4,14 @@ import ManoeuvreDialogs from "../../components/ManoeuvreDialogs.astro";
 import ObjectCard from "../../components/ObjectCard.astro";
 import YourSatellite from "../../components/YourSatellite.astro";
 import Wreck from "../../components/Wreck.astro";
-import { ago, falling, km } from "../../lib/format.ts";
+import { ago, falling, km, pageNumbers } from "../../lib/format.ts";
 import { REFUSALS, isRefusal } from "../../lib/manoeuvre.ts";
 import { heardTotals } from "../../lib/heard.ts";
 import { lastLooked, looked } from "../../lib/seen.ts";
 import { BANDS, climbing, fallRate, heightKm, radiusAt, type Band } from "../../lib/orbit.ts";
 import {
   FIRST_DIR,
+  PER_CHOICES,
   PER_PAGE,
   browse,
   catalogueCounts,
@@ -115,8 +116,10 @@ function href(changes: Partial<CatalogueQuery>): string {
   const text = params.toString();
   return `/catalogue/${text ? `?${text}` : ""}`;
 }
+// sorted other than newest first, as href() leaves it out
+const sorted = query.sort !== "launched" || query.dir !== FIRST_DIR.launched;
 const filtered = Boolean(query.q || query.kind || query.band || query.fate);
-const clear = href({ q: "", kind: null, band: null, fate: null });
+const clear = `${href({ q: "", kind: null, band: null, fate: null })}#records`;
 // a column's header: a link that sorts by it, or turns the sort round
 const sortBy = (sort: Sort) =>
   href({ sort, dir: query.sort === sort ? (query.dir === "asc" ? "desc" : "asc") : FIRST_DIR[sort] });
@@ -137,6 +140,12 @@ const views = [
 ] as const;
 const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
 const number = (n: number) => n.toLocaleString("en");
+// rows a page: the usual choices, and whatever an address asked for
+const perChoices = [...new Set<number>([...PER_CHOICES, query.per])].sort((a, b) => a - b);
+const page = Math.min(query.page, result.pages);
+// the table's own heading, and a pager link back to it
+const recordTitle = yours ? "Your record" : query.show === "all" ? "Everything ever launched" : "In orbit";
+const atRecords = (changes: Partial<CatalogueQuery>) => `${href(changes)}#records`;
 ---
 <Base title={card ? `Kessler: ${titleOf(card)}` : pageTitle} current="catalogue">
   <main class="catalogue-page" data-server-time={now}>
@@ -237,16 +246,35 @@ const number = (n: number) => n.toLocaleString("en");
             ))}
           </ol>
         )}
-
-        <h2 class="yours-record-title">Your record</h2>
       </section>
     )}
 
-    <form class="filters" method="get" action="/catalogue/" aria-label="Filter the catalogue">
+    <!-- the table folds to its heading (the user's review, 2026-10-16), so
+         the collisions under it are a click away; src/scripts/collapsible.ts
+         shows the button and remembers, for this visit only. Yours has no
+         collisions under it, so it stays open. -->
+    <section class="records" id="records" aria-labelledby="records-title" data-collapsible={yours ? undefined : "catalogue-table"}>
+      <div class="records-head">
+        <h2 id="records-title">{recordTitle}</h2>
+        {result.total > 0 && (
+          <p class="range">
+            {number(result.from)}–{number(result.to)} of {number(result.total)}
+          </p>
+        )}
+        {!yours && (
+          <>
+            <a class="to-collisions" href="#collisions">Collisions <span aria-hidden="true">↓</span></a>
+            <button type="button" class="box-toggle labelled" aria-controls="records-body" aria-expanded="true" hidden>
+              <span class="fold-open">Hide table</span><span class="fold-shut">Show table</span>
+            </button>
+          </>
+        )}
+      </div>
+      <div id="records-body">
+    <form class="filters" method="get" action="/catalogue/#records" aria-label="Filter the catalogue">
       {query.show !== "live" && <input type="hidden" name="show" value={query.show} />}
-      {query.sort !== "launched" && <input type="hidden" name="sort" value={query.sort} />}
-      {query.sort !== "launched" && <input type="hidden" name="dir" value={query.dir} />}
-      {query.per !== PER_PAGE && <input type="hidden" name="per" value={query.per} />}
+      {sorted && <input type="hidden" name="sort" value={query.sort} />}
+      {sorted && <input type="hidden" name="dir" value={query.dir} />}
       <label class="search">
         <span>Search</span>
         <input type="search" name="q" value={query.q} placeholder="Callsign or handle" maxlength="40" autocomplete="off" spellcheck="false" />
@@ -278,6 +306,12 @@ const number = (n: number) => n.toLocaleString("en");
           </select>
         </label>
       )}
+      <label class="per">
+        <span>Rows</span>
+        <select name="per">
+          {perChoices.map((n) => <option value={n} selected={query.per === n}>{n}</option>)}
+        </select>
+      </label>
       <button type="submit">Apply</button>
       {filtered && <a class="clear" href={clear}>Clear filters</a>}
     </form>
@@ -299,16 +333,13 @@ const number = (n: number) => n.toLocaleString("en");
       </p>
     ) : (
       <>
-        <p class="range" aria-live="polite">
-          {number(result.from)}–{number(result.to)} of {number(result.total)}
-        </p>
         <div class="table-wrap">
           <table data-server-time={now}>
             <thead>
               <tr>
                 {columns.map((c) => (
                   <th scope="col" class={c.class} aria-sort={ariaSort(c.sort)}>
-                    <a href={sortBy(c.sort)}>
+                    <a href={`${sortBy(c.sort)}#records`}>
                       {c.label}
                       <span class="arrow" aria-hidden="true">
                         {query.sort === c.sort ? (query.dir === "asc" ? "▲" : "▼") : ""}
@@ -364,13 +395,35 @@ const number = (n: number) => n.toLocaleString("en");
         </div>
         {result.pages > 1 && (
           <nav class="pages" aria-label="Pages">
-            {query.page > 1 ? <a rel="prev" href={href({ page: query.page - 1 })}>← Previous page</a> : <span></span>}
-            <span>Page {query.page} of {result.pages}</span>
-            {query.page < result.pages ? <a rel="next" href={href({ page: query.page + 1 })}>Next page →</a> : <span></span>}
+            {page > 1 ? (
+              <a class="step prev" rel="prev" href={atRecords({ page: page - 1 })}><span aria-hidden="true">‹</span> <span class="step-word">Previous</span></a>
+            ) : (
+              <span class="step prev" aria-hidden="true"><span>‹</span> <span class="step-word">Previous</span></span>
+            )}
+            <ol>
+              {pageNumbers(page, result.pages).map((n) => (
+                <li>
+                  {n === null ? (
+                    <span class="gap" aria-hidden="true">…</span>
+                  ) : n === page ? (
+                    <span class="page" aria-current="page"><span class="visually-hidden">Page </span>{n}</span>
+                  ) : (
+                    <a class="page" href={atRecords({ page: n })}><span class="visually-hidden">Page </span>{n}</a>
+                  )}
+                </li>
+              ))}
+            </ol>
+            {page < result.pages ? (
+              <a class="step next" rel="next" href={atRecords({ page: page + 1 })}><span class="step-word">Next</span> <span aria-hidden="true">›</span></a>
+            ) : (
+              <span class="step next" aria-hidden="true"><span class="step-word">Next</span> <span>›</span></span>
+            )}
           </nav>
         )}
       </>
     )}
+      </div>
+    </section>
 
     {!yours && (
     <section class="collisions" id="collisions" aria-labelledby="collisions-title">
@@ -410,6 +463,18 @@ const number = (n: number) => n.toLocaleString("en");
   </main>
 
   <script>
+    import { collapsible } from "../../scripts/collapsible.ts";
+
+    // folded for this visit only: the table is the page, so coming back
+    // to a catalogue that looks empty would be worse than folding it again
+    let visit: Storage | null = null;
+    try {
+      visit = window.sessionStorage;
+    } catch {
+      // nothing kept here: it starts open
+    }
+    collapsible(document, visit);
+
     // Filters apply as they change; the Apply button is for no JavaScript,
     // and for the search box (Enter works too).
     const filters = document.querySelector<HTMLFormElement>("form.filters");
@@ -621,10 +686,6 @@ const number = (n: number) => n.toLocaleString("en");
     font-variant-numeric: tabular-nums;
   }
 
-  .yours-record-title {
-    margin-top: 2rem;
-  }
-
   .encounters {
     display: grid;
     gap: 0.75rem;
@@ -824,10 +885,71 @@ const number = (n: number) => n.toLocaleString("en");
     color: var(--ink-dim);
   }
 
+  /* the table's box: its heading, how many, the way down to the
+     collisions, and its fold button last */
+  .records {
+    margin-top: 2rem;
+  }
+
+  .records-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 1rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--grid-strong);
+  }
+
+  .records-head h2 {
+    margin: 0;
+    font-size: var(--step-1);
+    font-weight: 700;
+    font-variation-settings: "wdth" 112;
+  }
+
   .range {
-    margin: 0 0 0.5rem;
+    margin: 0 auto 0 0;
     color: var(--ink-dim);
     font-size: var(--step--1);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .to-collisions {
+    color: var(--ink-dim);
+    font-size: var(--step--1);
+    text-decoration: none;
+  }
+
+  .to-collisions:hover {
+    color: var(--amber);
+  }
+
+  /* folded, the table is its heading alone */
+  .records.folded .records-head {
+    margin-bottom: 0;
+  }
+
+  /* the table's fold button says what it does, beside the shared
+     chevron (global.css) */
+  .records .box-toggle {
+    width: auto;
+    gap: 0.4rem;
+    grid-auto-flow: column;
+    margin: -0.3rem 0;
+    padding: 0 0.6rem 0 0.7rem;
+    border-color: var(--grid);
+    font: inherit;
+    font-size: var(--step--1);
+  }
+
+  .records .box-toggle::before {
+    order: 1;
+  }
+
+  .records .box-toggle[aria-expanded="true"] .fold-shut,
+  .records .box-toggle[aria-expanded="false"] .fold-open {
+    display: none;
   }
 
   /* the column headers sort */
@@ -862,14 +984,82 @@ const number = (n: number) => n.toLocaleString("en");
     display: none;
   }
 
+  /* the pager: previous and next pinned to the ends, so clicking on
+     through stays put; the page numbers between, the one you're on
+     underlined in amber like the view you're on */
   .pages {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    gap: 1rem;
-    margin-top: 1rem;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
     font-size: var(--step--1);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pages ol {
+    display: flex;
+    gap: 0.15rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pages .page,
+  .pages .gap,
+  .pages .step {
+    display: inline-grid;
+    place-items: center;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0 0.4rem;
+    border-radius: 3px;
     color: var(--ink-dim);
+    text-decoration: none;
+  }
+
+  .pages .step {
+    grid-auto-flow: column;
+    gap: 0.35rem;
+    justify-self: start;
+    padding-inline: 0.5rem;
+  }
+
+  .pages .next {
+    justify-self: end;
+  }
+
+  .pages a:hover {
+    background: rgb(147 166 191 / 0.1);
+    color: var(--ink);
+  }
+
+  .pages [aria-current="page"] {
+    color: var(--ink);
+    font-weight: 700;
+    box-shadow: inset 0 -2px 0 var(--amber);
+    border-radius: 0;
+  }
+
+  .pages span.step {
+    visibility: hidden;
+  }
+
+  /* a phone keeps only the chevrons, so the pager stays on one line */
+  @media (max-width: 30rem) {
+    .pages .step-word {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .pages .page,
+    .pages .gap {
+      min-width: 2rem;
+    }
   }
 
   .collisions {

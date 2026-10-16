@@ -1,5 +1,6 @@
 import { JSDOM } from "jsdom";
 import { describe, expect, inject, it } from "vitest";
+import { pageNumbers } from "../src/lib/format.ts";
 import { Session, callsign, post } from "./session.ts";
 
 // The catalogue as a table you can work with: filtered, searched, sorted and
@@ -126,11 +127,89 @@ describe("the catalogue as a table", () => {
     expect(first.body.textContent).toMatch(/1–2 of 3/);
   });
 
+  // a thousand objects in production made a hundred-row page far too long
+  // (the user's review, 2026-10-16): a short page by default, more on asking
+  it("shows 25 a page unless asked for more", async () => {
+    const page = await view("?show=all");
+    const total = Number(page.querySelector(".range")!.textContent!.match(/of ([\d,]+)/)![1].replace(/,/g, ""));
+    expect(page.querySelectorAll("tbody tr")).toHaveLength(Math.min(total, 25));
+    const per = page.querySelector<HTMLSelectElement>('form.filters select[name="per"]');
+    expect(per, "no rows-per-page choice").not.toBeNull();
+    expect(per!.value).toBe("25");
+    expect([...per!.options].map((o) => o.value)).toEqual(["25", "50", "100"]);
+  });
+
+  it("numbers its pages, and marks the one you're on", async () => {
+    const { prefix } = await three();
+    const first = await view(`?q=${prefix}&sort=name&dir=asc&per=1`);
+    const pager = first.querySelector("nav.pages")!;
+    // (read out as "Page 1")
+    const number = (el: Element | null | undefined) => el?.textContent?.trim().replace(/^Page\s*/, "");
+    expect(number(pager.querySelector('[aria-current="page"]'))).toBe("1");
+    const third = [...pager.querySelectorAll("a")].find((a) => number(a) === "3");
+    expect(third?.getAttribute("href"), "no link to page 3").toMatch(/page=3/);
+    const last = await view(`?q=${prefix}&sort=name&dir=asc&per=1&page=3`);
+    expect(last.querySelector('nav.pages a[rel="next"]')).toBeNull();
+    expect(last.querySelector('nav.pages a[rel="prev"]')?.getAttribute("href")).toMatch(/page=2/);
+  });
+
+  // ...and folds away, so the collisions under it are a click away
+  it("folds the table away, with the collisions outside it", async () => {
+    const page = await view("");
+    const box = [...page.querySelectorAll<HTMLElement>("section[data-collapsible]")].find((s) => s.querySelector("table"));
+    expect(box, "the table isn't in a box that folds").toBeDefined();
+    const toggle = box!.querySelector("button[aria-expanded]");
+    expect(toggle?.textContent, "the fold button doesn't say what it does").toMatch(/table/i);
+    const body = page.getElementById(toggle?.getAttribute("aria-controls") ?? "");
+    expect(body?.querySelector("table")).not.toBeNull();
+    expect(body?.querySelector("form.filters")).not.toBeNull();
+    expect(box!.contains(page.getElementById("collisions"))).toBe(false);
+    expect(box!.querySelector('a[href="#collisions"]'), "no way down to the collisions").not.toBeNull();
+  });
+
+  // Yours has no collisions under its record: nothing to fold it away for
+  it("doesn't fold your record away", async () => {
+    const a = new Session(baseUrl);
+    await a.launch({ band: "low", callsign: callsign("FOLD"), beacon: "kept open" });
+    const page = await view("?show=mine", a);
+    expect(page.querySelector("table")).not.toBeNull();
+    expect(page.querySelector("table")!.closest("[data-collapsible]")).toBeNull();
+  });
+
+  // the filter form keeps the rows a page, the sort and its direction
+  it("keeps the rows a page and the sort through a filter change", async () => {
+    const page = await view("?show=all&per=50&sort=launched&dir=asc");
+    const form = page.querySelector<HTMLFormElement>("form.filters")!;
+    const sent = Object.fromEntries([...form.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[name]")].map((f) => [f.name, f.value]));
+    expect(sent).toMatchObject({ per: "50", sort: "launched", dir: "asc" });
+    const sortLink = page.querySelector<HTMLAnchorElement>("thead th a")!.getAttribute("href")!;
+    expect(sortLink).toContain("per=50");
+  });
+
+  it("shows the last page for a page past the end", async () => {
+    const { prefix } = await three();
+    const page = await view(`?q=${prefix}&per=2&page=99`);
+    expect(page.body.textContent).toMatch(/3–3 of 3/);
+    expect(page.querySelector('nav.pages [aria-current="page"]')?.textContent).toMatch(/2/);
+  });
+
   it("says when nothing matches, and how to clear the filters", async () => {
     const page = await view(`?q=${callsign("NONE")}`);
     expect(page.querySelectorAll("tbody tr")).toHaveLength(0);
     expect(page.body.textContent).toMatch(/nothing matches/i);
     const clear = [...page.querySelectorAll("a")].find((a) => /clear/i.test(a.textContent ?? ""));
-    expect(clear?.getAttribute("href"), "no link to clear the filters").toMatch(/^\/catalogue\/(\?show=live)?$/);
+    expect(clear?.getAttribute("href"), "no link to clear the filters").toMatch(/^\/catalogue\/(\?show=live)?(#records)?$/);
+  });
+});
+
+describe("the catalogue's page numbers", () => {
+  it("shows the first, the last and those around this one, with gaps", () => {
+    expect(pageNumbers(1, 1)).toEqual([1]);
+    expect(pageNumbers(3, 5)).toEqual([1, 2, 3, 4, 5]);
+    expect(pageNumbers(1, 5)).toEqual([1, 2, null, 5]);
+    expect(pageNumbers(6, 40)).toEqual([1, null, 5, 6, 7, null, 40]);
+    expect(pageNumbers(40, 40)).toEqual([1, null, 39, 40]);
+    // a gap of one page shows the page instead
+    expect(pageNumbers(4, 7)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 });

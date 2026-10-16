@@ -3992,3 +3992,69 @@ after it, which for today's date it doesn't. The search for the test's
 day now also asks for a manoeuvre in the two days after, and gives up
 with a plain error after a month rather than looping forever (the
 reviewer's point, below). Found while checking the catalogue change.
+
+## 2026-10-16 — The catalogue: short pages, numbered, and a table that folds away
+
+Advay: production has about a thousand objects ever launched, and the
+catalogue page had become far too long; then "needs to be a lot less
+default, and should be collapsable so I can easily get to the
+collisions section". The paging already existed (`37f104c`), but at
+100 rows a page with a bare "Previous / Page 6 of 44 / Next" line at
+the very bottom, so the collisions sat under a hundred rows.
+
+- 25 rows a page by default, with a Rows choice (25, 50, 100) in the
+  filter form; any `per=` up to 200 still works and shows as a choice.
+- A numbered pager: the first page, the last, this one and its
+  neighbours, gaps as "…" (`pageNumbers` in `src/lib/format.ts`).
+  Previous and Next are pinned to the ends, and the page you're on is
+  underlined in amber like the view tab you're on. On a phone only the
+  chevrons show, so it stays on one line.
+- The filters and table are a box of their own, headed with the view's
+  name and "126–150 of 1,877", a "Collisions ↓" link, and a
+  "Hide table" / "Show table" button (the sky's `collapsible.ts`). It
+  remembers the fold in `sessionStorage`, for the visit only. Yours
+  doesn't fold: it has no collisions under it.
+- Paging, sort and filter links land on `#records`, so a page change
+  doesn't drop you back at the introduction.
+
+TDD: six new page tests in `spec/catalogue.test.ts` (25 a page and the
+Rows choice; numbered pages; the fold with the collisions outside it;
+Yours not folding; rows and sort kept through a filter change; a page
+past the end shows the last) plus a unit test for `pageNumbers`. Each
+failed first for the expected reason (44 rows; no `aria-current`; no
+fold; `pageNumbers is not a function`; the fold in Yours; `dir` lost).
+
+**Adversarial review** (Opus, fresh context). What it found and what
+changed:
+
+- *High:* a fold kept in `localStorage` survives view changes and
+  return visits, so the catalogue's main content looks empty days
+  later, behind an unlabelled chevron. Now kept for the visit only,
+  and the button says "Show table".
+- *High:* Yours shared the fold key, and folding gains nothing there.
+  Yours no longer folds.
+- *Medium:* Next moved sideways from page to page (the row was
+  centred), and the pager wrapped on a phone. Fixed with ends pinned
+  in a three-column grid and chevrons only on a phone.
+- *Medium:* the fold button was named by the heading alone. Now
+  labelled.
+- *Medium:* the fold button's CSS was copied from the sky and had
+  already drifted. Moved to `global.css`; each page keeps its own size.
+- *Medium:* tests didn't cover rows/sort surviving a filter change, a
+  page past the end, or Yours. Added.
+- *Low:* the "↓" read aloud; a dead `aria-live`; "Clear filters"
+  didn't land on the table. All fixed.
+- *Low, pre-existing:* sorting Launched oldest first and then changing
+  a filter dropped `dir=asc`, because the form's hidden inputs checked
+  only the column. Fixed, tested.
+- *Left as is:* the heading repeats the view tab's name. It names what
+  folds when folded.
+- *Left as is:* `per=25` now shows in a filtered address, as `q=` and
+  `kind=` already do.
+
+Checks: `pnpm check` 424 passed; `pnpm test:layout` 12 passed. Checked
+in Chrome at 1920x1080 and on an iPhone 14 against a fresh build with
+about 1,900 objects: no horizontal scroll at 390px, the pager on one
+line, folded view goes straight to the collisions.
+
+![The catalogue with its table folded: the heading, the count, "Show table", then the collisions straight under it](screenshots/2026-10-16-catalogue-table-folded.png)

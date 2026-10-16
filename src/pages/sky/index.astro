@@ -604,52 +604,9 @@ const view = launched ? "canberra" : null;
     margin-right: auto;
   }
 
-  /* folds a box to its heading (src/scripts/collapsible.ts): a chevron,
-     down while it's open, right once it's folded */
+  /* the fold button itself is in global.css, shared with the catalogue */
   .sky-page .box-toggle {
-    flex: none;
-    align-self: center;
-    display: inline-grid;
-    place-items: center;
-    width: 1.75rem;
-    height: 1.75rem;
     margin: -0.3rem -0.4rem -0.3rem -0.5rem;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    background: none;
-    color: var(--ink-dim);
-    cursor: pointer;
-  }
-
-  .sky-page .box-toggle[hidden] {
-    display: none;
-  }
-
-  .sky-page .box-toggle::before {
-    content: "";
-    width: 0.45rem;
-    height: 0.45rem;
-    border-right: 2px solid currentColor;
-    border-bottom: 2px solid currentColor;
-    transform: translateY(-20%) rotate(45deg);
-    transition: transform 0.15s ease;
-  }
-
-  .sky-page .box-toggle[aria-expanded="false"]::before {
-    transform: translateX(-15%) rotate(-45deg);
-  }
-
-  .sky-page .box-toggle:hover,
-  .sky-page .box-toggle:focus-visible {
-    border-color: var(--grid-strong);
-    color: var(--amber);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .sky-page .box-toggle::before {
-      transition: none;
-    }
   }
 
   /* folded, a box is its heading alone */
