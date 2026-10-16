@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-16 (the catalogue pages 25 at a time, with numbered pages and a Rows choice, and its table folds away for the visit so the collisions are a click away). 2026-10-15 (to do: `PROCESS.md` and `README.md` for C10. Earlier: a line per request, and its id on every line inside it, ADR 0024 accepted; errors say who and where. Earlier: listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
+_Last updated 2026-10-16 (a whole-project review sorted into TODOs and won't-dos, under C10 below; before that, the catalogue pages 25 at a time, with numbered pages and a Rows choice, and its table folds away for the visit so the collisions are a click away). 2026-10-15 (to do: `PROCESS.md` and `README.md` for C10. Earlier: a line per request, and its id on every line inside it, ADR 0024 accepted; errors say who and where. Earlier: listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -244,6 +244,24 @@ _Last updated 2026-10-16 (the catalogue pages 25 at a time, with numbered pages 
     2026-10-15). `README.md`: what the server logs and who may see and
     change what (ADRs 0022–0024). This is the C10 part only, not the full
     rewrite below.
+  - **Review of the whole project (2026-10-16), sorted by Advay.** The
+    gates pass (`pnpm check` 424, `pnpm test:layout` 12 of 12,
+    `pnpm check:evidence`), and multi-user, real-time and persistence held
+    in a live two-session test and a restart. Against the brief:
+    - **TODO:** `PROCESS.md` is about 1,500 words (about 1,520 once the
+      commit URLs are dropped), over the brief's 900–1100. Cut about 400.
+    - **TODO:** the README's "a launch reaches other sessions within a
+      second, even without JavaScript" overclaims: posting a launch works
+      without JavaScript, but live delivery needs it (SSE). Reword.
+    - **TODO, small:** the README still says "Crit 9 version."; it doesn't
+      name SSE (the brief asks for the real-time mechanism to be explained;
+      `PROCESS.md` does, with room in the README's word count); and the
+      "Later" item below that says the README is out of date was done
+      2026-10-15.
+    - **Won't fix:** the README's "Kessler does no moderation" beside the
+      word blocklist and link filter in `src/lib/launch.ts`; the README
+      not saying the sky is seeded with invented people (ADR 0021); and
+      "launch counts per band will show it", with no count made yet.
   - Aggregate figures (launches per band, collisions, deorbits, several
     cookies per human) can be counted from these lines if wanted.
 - **Later (low priority, near the end of the project):** `README.md`,
