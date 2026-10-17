@@ -4114,3 +4114,5 @@ does; it now names the server-sent events stream. The live `/readme/`
 still says "Crit 9 version." until the next deploy. And the README now
 says the sky is seeded with the extras, moved from won't fix, since
 `PROCESS.md` cites it doing so. 475 words before Sources.
+
+Commit `db4e7d8` (the test), `9de4a0e` (README, plan, this entry).
