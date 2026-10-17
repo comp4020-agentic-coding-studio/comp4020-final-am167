@@ -4062,3 +4062,24 @@ line, folded view goes straight to the collisions.
 ![The catalogue with its table folded: the heading, the count, "Show table", then the collisions straight under it](screenshots/2026-10-16-catalogue-table-folded.png)
 
 Commit `c30ef32`.
+
+## 2026-10-17 — PROCESS.md reviewed against the spec; three corrections made rules
+
+Advay asked for an adversarial review of `PROCESS.md` against the final
+project spec and the band descriptors, compared with assignments 1 and 2.
+Found: no position on the "good" readings (the brief asks for one); nothing
+on the extras (ADR 0021) or since; a stale burn-up figure (58%, now 57% with
+extras, ADR 0021); about 1,475 words against 900–1,100; and a section titled
+"Corrections that became the harness" holding three repeated failures that
+never reached the harness: tests that couldn't fail (`262e2b4`, `4e34a4a`),
+the agent's reasoned balance numbers being wrong two reviews running, and
+text approved as correct that Advay couldn't follow (`d409ccf`, and
+assignment 2's home page). The Opus switch (`e3f9cb5`) had no reason given.
+
+Changed: CLAUDE.md (`c89bcbf`) now says a rule's test must go red with the rule
+reverted (logged), balance numbers come from `scripts/balance/` with the
+command quoted, and reviewers of visitor-facing text also read as a
+first-time visitor. `PROCESS.md` redrafted to about 1,200 words (Advay's
+cap: 10% over), with the extras, a "What good means here" section on
+Shirky, Ostrom and Kazemi, and the harness section rebuilt around what did
+and didn't land. A draft for Advay to rewrite in their own words.

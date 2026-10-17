@@ -7,8 +7,6 @@ heard more causes collisions, which turn both messages into static that takes
 airtime from everyone. Nothing resets, and the record keeps who caused what. So what's
 worth saying, if saying it costs everyone a little?
 
-Crit 9 version.
-
 ## What good means here
 
 Low orbit is a shared resource. Kessler and Cour-Palais (1978) showed debris can grow
