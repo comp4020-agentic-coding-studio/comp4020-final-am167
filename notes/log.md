@@ -4083,3 +4083,5 @@ first-time visitor. `PROCESS.md` redrafted to about 1,200 words (Advay's
 cap: 10% over), with the extras, a "What good means here" section on
 Shirky, Ostrom and Kazemi, and the harness section rebuilt around what did
 and didn't land. A draft for Advay to rewrite in their own words.
+
+Commit `c89bcbf` (CLAUDE.md), `3ba6956` (PROCESS.md, README.md, this entry).
