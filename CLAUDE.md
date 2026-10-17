@@ -117,6 +117,17 @@ status.
 - Turning the published spec into tests is your work: add your own
   `spec/*.test.ts` alongside the supplied one, and test the contract (what the
   page must do), not the implementation.
+- **A test for a rule must fail with that rule reverted.** Before calling it
+  done, revert or break the rule, watch the test go red, restore it, and say
+  in the log that you did. A test that compares against the constant it
+  checks can't fail; compare against a fixed value. Tests here have twice
+  passed with their feature broken.
+- **Numbers about the sky's balance come from a run, never an estimate.**
+  How often things collide, how many burn up, what a watcher or newcomer
+  sees: measure with `scripts/balance/` (or a test) and quote the command and
+  run count in the log or ADR. Re-run it after any change to orbits,
+  collisions, staging or extras. Reasoned figures have been wrong in two
+  reviews running.
 
 ## Process logging
 
@@ -152,7 +163,11 @@ can't judge (a new feature, a UX decision, the app's account of itself in
 `README.md`), spawn a fresh reviewer agent that doesn't share the drafting
 agent's context, and tell it to be adversarial, not encouraging. Have it attack
 the work against the published spec: missed requirements, thin or confusing UX,
-`README.md` claims the app doesn't keep, untried edge cases. Act on its
+`README.md` claims the app doesn't keep, untried edge cases. For anything a
+visitor reads (a page, a card, the copy), also have it read as a first-time
+visitor who knows nothing of the project and flag every sentence that needs
+that context to follow: correct isn't the same as clear, and reviewers have
+approved accurate text I still couldn't follow. Act on its
 findings; re-review only if the revision was substantial. Skip this for small
 fixes. Keep a trail (what was reviewed, what it found, what changed) so
 `PROCESS.md` can cite commit hashes.
