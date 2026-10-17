@@ -307,7 +307,13 @@ describe("a device that signs out", () => {
     const phone = new Session(baseUrl);
     await phone.get("/");
     expect((await post(phone, "/operator/", { action: "sign-in", handle, passphrase: "correct horse battery" })).status).toBe(303);
-    expect((await manoeuvre(phone, id, "boost", json)).status).toBe(200);
+    // a busy test sky can destroy it meanwhile (it failed on CI so); the
+    // server says "gone" only to its owner, so that still shows it's theirs
+    const res = await manoeuvre(phone, id, "boost", json);
+    if (res.status !== 200) {
+      expect(res.status).toBe(422);
+      expect(((await res.json()) as { why: string }).why).toBe("gone");
+    }
   });
 });
 
