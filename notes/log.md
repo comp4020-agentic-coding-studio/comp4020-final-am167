@@ -4085,3 +4085,32 @@ Shirky, Ostrom and Kazemi, and the harness section rebuilt around what did
 and didn't land. A draft for Advay to rewrite in their own words.
 
 Commit `c89bcbf` (CLAUDE.md), `3ba6956` (PROCESS.md, README.md, this entry).
+
+## 2026-10-17 — CI flake on `main`, `flyctl logs` on the real app, README trimmed
+
+**CI.** The run for `5a696b3` failed one test: `spec/manoeuvre-http.test.ts`,
+"a device that signs out", whose last step signs in on another device and
+expects the boost to be accepted. The app's output in the CI log showed
+why: another test's satellite (sat 42) collided with this one (sat 54)
+between the sign-out and the sign-in, so the boost was refused as `gone`
+(the CI run logged 162 collisions in all). Not a regression. The server
+says `gone` only to a satellite's owner (`whyNot` in `src/lib/sky.ts`),
+so the test now accepts 200 or a 422 that says `gone`: either shows it's
+theirs again. Per the new rule, checked it still fails with the rule
+reverted: with an operator's satellites made nobody's, it fails with
+"expected 'not-yours' to be 'gone'"; restored. The 15 Oct failures were
+the extras log test, already fixed in `fb18419`.
+
+**`flyctl logs`** (`mise exec -- flyctl logs -a comp4020-final-am167
+--no-tail`, read-only): the real app's lines carry their request ids
+(`visit`, `request ... status=200 ms=73`), and Fly's autostop and wake
+show around them. Opening `/api/events` from here gave `listen-open
+counted=no` and `listen-close after=0s` on the real app. No launch made
+there.
+
+**README.** Three of the 2026-10-16 review's TODOs: the tested line said
+a launch reaches others "even without JavaScript", but only posting one
+does; it now names the server-sent events stream. The live `/readme/`
+still says "Crit 9 version." until the next deploy. And the README now
+says the sky is seeded with the extras, moved from won't fix, since
+`PROCESS.md` cites it doing so. 475 words before Sources.

@@ -29,7 +29,9 @@ the limit.
 
 Enforced, and tested:
 
-- a launch reaches other sessions within a second, even without JavaScript
+- a launch reaches every open sky within a second, over one server-sent
+  events stream per page; launching itself is a plain form that works
+  without JavaScript
 - a minute between launches; at most 200 satellites up
 - "heard by" counts people, not owners or tabs
 - fragments carry every word of both messages, and trace back to operators
@@ -48,6 +50,10 @@ Judged, not tested:
   cost: two browsers are two people.
 - **One satellite each.** The commons is tested by how much each person takes,
   so one person can crowd everyone.
+- **An empty sky.** A quiet sky would be empty, so invented people, the
+  extras, launch about 18 a day. Nothing on the page marks them; they never
+  listen, so "heard by" is still only people, and they hold back while
+  people launch.
 - **Staged collisions between people.** Staging uses derelicts, so the server
   never destroys someone's satellite on purpose.
 

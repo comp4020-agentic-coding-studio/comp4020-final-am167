@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-16 (a whole-project review sorted into TODOs and won't-dos, under C10 below; before that, the catalogue pages 25 at a time, with numbered pages and a Rows choice, and its table folds away for the visit so the collisions are a click away). 2026-10-15 (to do: `PROCESS.md` and `README.md` for C10. Earlier: a line per request, and its id on every line inside it, ADR 0024 accepted; errors say who and where. Earlier: listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
+_Last updated 2026-10-17 (the CI flake on `main` fixed; `flyctl logs` tried on the real app; README trimmed: SSE named, the no-JavaScript overclaim gone, the extras said; `PROCESS.md` redrafted, CLAUDE.md rules `c89bcbf`). 2026-10-16 (a whole-project review sorted into TODOs and won't-dos, under C10 below; before that, the catalogue pages 25 at a time, with numbered pages and a Rows choice, and its table folds away for the visit so the collisions are a click away). 2026-10-15 (to do: `PROCESS.md` and `README.md` for C10. Earlier: a line per request, and its id on every line inside it, ADR 0024 accepted; errors say who and where. Earlier: listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -235,41 +235,39 @@ _Last updated 2026-10-16 (a whole-project review sorted into TODOs and won't-dos
     (`not-yours` and the rest), plus `gone` for your own satellite no
     longer in orbit, and reserves the handles `anon`, `nobody`, `none` and
     `extra` (ADR 0023).
-  - **Still for C10:** try `flyctl logs` against
-    the real app (the listen lines and the back/forward cache fix are on
-    `main` since PR 15); `reflections/crit-10.md`.
-  - **To do (2026-10-15): update `PROCESS.md` and `README.md` for
-    the C10 work.** `PROCESS.md`: a short C10 section, kept brief (it's
-    near its recommended length; the earlier draft on `C10` was taken out
-    2026-10-15). `README.md`: what the server logs and who may see and
-    change what (ADRs 0022–0024). This is the C10 part only, not the full
-    rewrite below.
+  - **Done (2026-10-17):** `flyctl logs -a comp4020-final-am167` against
+    the real app shows the request lines with their ids, and opening
+    `/api/events` gave `listen-open` and `listen-close`; no launch tried
+    there. `reflections/crit-10.md` is written.
+  - **Done (2026-10-17):** `PROCESS.md` redrafted to about 1,200 words
+    (Advay's cap: 1,100 plus 10%) with the extras and a position on the
+    readings (`3ba6956`); three repeated corrections made rules in
+    CLAUDE.md (`c89bcbf`). **To do:** Advay rewrites `PROCESS.md` in their
+    own words.
   - **Review of the whole project (2026-10-16), sorted by Advay.** The
     gates pass (`pnpm check` 424, `pnpm test:layout` 12 of 12,
     `pnpm check:evidence`), and multi-user, real-time and persistence held
     in a live two-session test and a restart. Against the brief:
-    - **TODO:** `PROCESS.md` is about 1,500 words (about 1,520 once the
-      commit URLs are dropped), over the brief's 900–1100. Cut about 400.
-    - **TODO:** the README's "a launch reaches other sessions within a
-      second, even without JavaScript" overclaims: posting a launch works
-      without JavaScript, but live delivery needs it (SSE). Reword.
-    - **TODO, small:** the README still says "Crit 9 version."; it doesn't
-      name SSE (the brief asks for the real-time mechanism to be explained;
-      `PROCESS.md` does, with room in the README's word count); and the
-      "Later" item below that says the README is out of date was done
-      2026-10-15.
+    - ~~`PROCESS.md` over length~~: done 2026-10-17, above.
+    - ~~The README's "within a second, even without JavaScript"
+      overclaim, "Crit 9 version.", and SSE unnamed~~: done 2026-10-17;
+      the README now names the server-sent events stream and says only
+      launching works without JavaScript.
+    - **Changed from won't fix (2026-10-17):** the README now says the sky
+      is seeded with the extras, since `PROCESS.md` cites it doing so.
     - **Won't fix:** the README's "Kessler does no moderation" beside the
-      word blocklist and link filter in `src/lib/launch.ts`; the README
-      not saying the sky is seeded with invented people (ADR 0021); and
-      "launch counts per band will show it", with no count made yet.
+      word blocklist and link filter in `src/lib/launch.ts`; and "launch
+      counts per band will show it", with no count made yet.
+  - **CI on `main` (2026-10-17):** the 17 Oct run failed in
+    `spec/manoeuvre-http.test.ts` (sign-out, then sign-in on another
+    device) because another test's satellite collided with this one
+    mid-test, so its boost was refused as `gone`; the test now accepts
+    `gone`, which the server gives only to the owner. The 15 Oct failures
+    were the extras log test, fixed in `fb18419`.
   - Aggregate figures (launches per band, collisions, deorbits, several
     cookies per human) can be counted from these lines if wanted.
-- **Later (low priority, near the end of the project):** `README.md`,
-  in Advay's words. It still says "one live satellite each" and "a second
-  launch is refused", says nothing of collisions, debris, blame or
-  operators, and its tested list predates them. ADR 0010 is judged by what
-  the README says good means, so the rewrite should say it. Advay also
-  confirms which sources he has read.
+- ~~**Later:** the README rewrite in Advay's words~~: done, per the
+  2026-10-16 review; trimmed for the brief 2026-10-17.
 - **Never deploy, flip public or commit without Advay's say-so** (CLAUDE.md).
 
 ## The idea
