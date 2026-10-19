@@ -7,7 +7,7 @@ import { EXTRA, HOUR, PER_HOUR, callsignOf, extrasBetween, isExtra, nextExtraAft
 import { FUEL, REFUSALS, canManoeuvre, type Refusal } from "./manoeuvre.ts";
 import { handles } from "./operators.ts";
 import { readLaunch, type LaunchErrors, type LaunchInput } from "./launch.ts";
-import { clip, iso, log, logError, whoIs } from "./log.ts";
+import { clip, iso, log, logError, onItsOwn, whoIs } from "./log.ts";
 import { STATIONS, nextStation, type Station } from "./stations.ts";
 import { lineOf, shardsOf, type WreckPiece } from "./wreck.ts";
 import {
@@ -190,6 +190,16 @@ const toObject = <T extends { direction: number }>(row: T): T & { direction: 1 |
 const live = (): SkyObject[] =>
   db.select(columns).from(objects).where(eq(objects.fate, "live")).orderBy(objects.id).all().map(toObject);
 
+// One object, or one collision, by id: prepared once, since a page of
+// collisions asks for hundreds and building each query again was most of
+// the catalogue's time.
+const objectRow = db.select(columns).from(objects).where(eq(objects.id, sql.placeholder("id"))).prepare();
+const collisionRow = db.select().from(collisions).where(eq(collisions.id, sql.placeholder("id"))).prepare();
+
+// The newest object when this server started: anything after it is news
+// to every page (announce).
+const lastBeforeStart = db.select({ id: max(objects.id) }).from(objects).get()?.id ?? 0;
+
 // ── collisions (ADR 0008) ─────────────────────────────────────────────────
 
 export type CollisionRow = typeof collisions.$inferSelect;
@@ -310,16 +320,21 @@ function schedule(): Hit[] {
 
 const toConjunction = ({ a, b, at }: Hit): Conjunction => ({ a: a.id, b: b.id, at, ...impactOf(a, b, at) });
 
-// Everyone is told of each collision coming, once.
+// Everyone is told of each collision coming, once. A pair of objects both
+// up before the server started was told before it stopped (each cold start
+// told them again), and every page that reconnects gets it in its
+// snapshot: the first look only notes those.
 const announced = new Set<string>();
+let started = false;
 function announce(now: number): void {
   for (const key of announced) if (!meetings.has(key)) announced.delete(key);
   for (const hit of schedule()) {
     const key = `${hit.a.id}:${hit.b.id}`;
     if (hit.at <= now || announced.has(key)) continue;
     announced.add(key);
-    publish({ type: "conjunction", conjunction: toConjunction(hit) });
+    if (started || hit.b.id > lastBeforeStart) publish({ type: "conjunction", conjunction: toConjunction(hit) });
   }
+  started = true;
 }
 
 // The collisions coming after `now`, for a page that has just opened.
@@ -398,22 +413,12 @@ export function rootsOf(collision: number): Root[] {
   const walk = (id: number) => {
     if (seen.has(id)) return;
     seen.add(id);
-    const row = db.select().from(collisions).where(eq(collisions.id, id)).get();
+    const row = collisionRow.get({ id });
     if (!row) return;
     for (const objectId of [row.a, row.b]) {
-      const object = db
-        .select({
-          id: objects.id,
-          kind: objects.kind,
-          callsign: objects.callsign,
-          operator: objects.operator,
-          source: objects.sourceCollision,
-        })
-        .from(objects)
-        .where(eq(objects.id, objectId))
-        .get();
+      const object = objectRow.get({ id: objectId });
       if (!object) continue;
-      if (object.kind === "debris" && object.source !== null) walk(object.source);
+      if (object.kind === "debris" && object.sourceCollision !== null) walk(object.sourceCollision);
       else roots.set(object.id, { id: object.id, kind: object.kind, callsign: object.callsign, operator: object.operator });
     }
   };
@@ -432,7 +437,7 @@ const partyOf = (object: SkyObject): Party => ({
   beacon: object.beacon,
   words: object.words,
   question: object.question,
-  echoOf: object.echo === null ? null : (db.select({ callsign: objects.callsign }).from(objects).where(eq(objects.id, object.echo)).get()?.callsign ?? null),
+  echoOf: object.echo === null ? null : (objectRow.get({ id: object.echo })?.callsign ?? null),
   operator: object.operator === null ? null : (handles([object.operator]).get(object.operator) ?? null),
   from: object.kind === "debris" && object.sourceCollision !== null ? rootsOf(object.sourceCollision) : null,
 });
@@ -464,9 +469,7 @@ function wrecksOf(ids: number[]): Map<number, WreckPiece[]> {
 const storiesOf = (rows: CollisionRow[]): CollisionStory[] => {
   const wrecks = wrecksOf(rows.map((row) => row.id));
   return rows.map((row) => {
-    const [a, b] = [row.a, row.b].map((id) =>
-      toObject(db.select(columns).from(objects).where(eq(objects.id, id)).get()!),
-    );
+    const [a, b] = [row.a, row.b].map((id) => objectById(id)!);
     return { ...row, parties: [partyOf(a), partyOf(b)], wreck: wrecks.get(row.id) ?? [] };
   });
 };
@@ -1078,15 +1081,18 @@ function wakeForNext(now = Date.now()): number {
   let next = Math.min(nextHit()?.at ?? Infinity, nextExtraAfter(now, EXTRAS_RATE));
   for (const object of live()) next = Math.min(next, reentryAt(object));
   const wait = Math.min(Math.max(next - Date.now(), 0) + 5, 60_000);
-  wake = setTimeout(() => {
-    // an error here would otherwise end the process
-    try {
-      settle();
-    } catch (error) {
-      logError("settling the sky", error);
-      wakeForNext();
-    }
-  }, wait);
+  wake = setTimeout(
+    onItsOwn(() => {
+      // an error here would otherwise end the process
+      try {
+        settle();
+      } catch (error) {
+        logError("settling the sky", error);
+        wakeForNext();
+      }
+    }),
+    wait,
+  );
   // never what keeps the process alive
   wake.unref?.();
   return next;
@@ -1394,7 +1400,7 @@ export interface Step {
 }
 
 export const objectById = (id: number): SkyObject | null => {
-  const row = db.select(columns).from(objects).where(eq(objects.id, id)).get();
+  const row = objectRow.get({ id });
   return row ? toObject(row) : null;
 };
 

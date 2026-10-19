@@ -522,11 +522,8 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       }, 100);
       form.inert = true;
       document.body.classList.add("launching");
-      // the sky page loads while the launch plays
-      const prefetch = document.createElement("link");
-      prefetch.rel = "prefetch";
-      prefetch.href = redirect;
-      document.head.append(prefetch);
+      // (no prefetch of the sky: it's sent no-store, so the browser fetched
+      // and the server rendered it twice; `flyctl logs`, 2026-10-19)
 
       if (!scene) {
         setTimeout(go, 2400);

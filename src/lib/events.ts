@@ -1,6 +1,6 @@
 import type { HeardItem } from "./heard.ts";
 import { sameAs } from "./listener.ts";
-import { log } from "./log.ts";
+import { log, onItsOwn } from "./log.ts";
 import type { CollisionReport, Conjunction, SkyObject } from "./sky.ts";
 
 // In-process pub/sub behind the SSE endpoint. One machine, so no broker needed.
@@ -43,13 +43,16 @@ let announced = 0;
 let settling: ReturnType<typeof setTimeout> | undefined;
 function recount(): void {
   if (settling) return;
-  settling = setTimeout(() => {
-    settling = undefined;
-    const now = audience().size;
-    if (now === announced) return;
-    announced = now;
-    publish({ type: "audience", listening: now });
-  }, 1500);
+  settling = setTimeout(
+    onItsOwn(() => {
+      settling = undefined;
+      const now = audience().size;
+      if (now === announced) return;
+      announced = now;
+      publish({ type: "audience", listening: now });
+    }),
+    1500,
+  );
   settling.unref?.();
 }
 
