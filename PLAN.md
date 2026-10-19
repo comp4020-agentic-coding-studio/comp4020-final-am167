@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-19 (`flyctl logs` watched live; eight findings listed under C10 to evaluate later. Earlier: a `broadcast` line per event sent and a `snapshot` line per stream's opening, ADR 0025 accepted). 2026-10-17 (the CI flake on `main` fixed; `flyctl logs` tried on the real app; README trimmed: SSE named, the no-JavaScript overclaim gone, the extras said; `PROCESS.md` redrafted, CLAUDE.md rules `c89bcbf`). 2026-10-16 (a whole-project review sorted into TODOs and won't-dos, under C10 below; before that, the catalogue pages 25 at a time, with numbered pages and a Rows choice, and its table folds away for the visit so the collisions are a click away). 2026-10-15 (to do: `PROCESS.md` and `README.md` for C10. Earlier: a line per request, and its id on every line inside it, ADR 0024 accepted; errors say who and where. Earlier: listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
+_Last updated 2026-10-19 (findings 2 to 8 from the live logs checked: 3 to 6 fixed, 2, 7 and 8 not problems; 1 still open. Earlier: `flyctl logs` watched live; eight findings listed under C10 to evaluate later. Earlier: a `broadcast` line per event sent and a `snapshot` line per stream's opening, ADR 0025 accepted). 2026-10-17 (the CI flake on `main` fixed; `flyctl logs` tried on the real app; README trimmed: SSE named, the no-JavaScript overclaim gone, the extras said; `PROCESS.md` redrafted, CLAUDE.md rules `c89bcbf`). 2026-10-16 (a whole-project review sorted into TODOs and won't-dos, under C10 below; before that, the catalogue pages 25 at a time, with numbered pages and a Rows choice, and its table folds away for the visit so the collisions are a click away). 2026-10-15 (to do: `PROCESS.md` and `README.md` for C10. Earlier: a line per request, and its id on every line inside it, ADR 0024 accepted; errors say who and where. Earlier: listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -269,7 +269,8 @@ _Last updated 2026-10-19 (`flyctl logs` watched live; eight findings listed unde
   - **To evaluate later: what `flyctl logs` showed (2026-10-19, 02:57 to
     03:53 UTC).** Three cold starts and up to five on the sky at once, with
     no errors, warnings or crashes; only refused launches gave a 422. Read
-    from the logs, not yet checked against the code:
+    from the logs; 2 to 8 since checked against the code (2026-10-19,
+    each marked):
     1. **Beacons the blocklist misses.** "Dick Cheese" got through (sat
        1267) while "fuck this shit" was refused; a joke "DoS attack /
        uranium enrichment" beacon went up too (sat 1277). Nothing lets a
@@ -278,23 +279,38 @@ _Last updated 2026-10-19 (`flyctl logs` watched live; eight findings listed unde
        refused only as a link (`console.log` reads as a domain), so a tag
        with no dotted word likely passes. Check beacons are escaped on the
        sky, the panel and the catalogue (`set:html`, `innerHTML`).
+       **Not a problem:** a launched `<b>…</b> <img onerror…>` beacon shows
+       as text on the sky, the panel and the catalogue; Astro escapes it,
+       the sky's JSON escapes `<`, and the scripts set beacons as text.
     3. **The sky loads twice after a launch.** Most launches logged
        `GET /sky/` twice, 6 to 7 s apart, and `/api/events` opened only on
        the second. Possibly the launch hand-off (ADR 0006); confirm it's
-       meant.
+       meant. **Fixed:** the launchpad prefetched the sky while the launch
+       played, but the page is `no-store`, so it was rendered twice; the
+       prefetch is gone.
     4. **Request ids on background lines.** `heard`, `collision`,
        `burn-up` and `decay` lines carry the id of whichever request set
        off the check, often a stream already closed, so tracing by id
-       misleads (ADR 0024).
+       misleads (ADR 0024). **Fixed:** the server's timers (the ear, the
+       wake-up, the audience's recount) run outside any request, as 0024
+       says (`onItsOwn`).
     5. **Conjunctions broadcast again after each cold start.** The same
        pairs (1214/1231, 1169/1238) were announced at 03:32 and 03:46.
+       **Fixed:** a server's first look only notes pairs whose objects were
+       both up before it started; pages get them in their snapshot.
     6. **The catalogue is the slow page:** 58 to 155 ms, against under
-       10 ms for the rest.
+       10 ms for the rest. **Fixed:** its 50 collisions looked up each
+       object with a freshly built query; prepared once, that's 2.4 ms, not
+       13.6 ms, locally.
     7. **Snapshot counts look capped:** `collisions=5` and `heard=30` in
        every snapshot, through new collisions. Wrong if shown as totals.
+       **Not a problem:** the snapshot sends the latest 5 collisions and 30
+       heard beacons, and the line counts what it sent (ADR 0025).
     8. **Launch before snapshot.** A newcomer's stream gets the staged
        pair's `launch` and `conjunction` events before its `snapshot`,
        which already holds them; check the sky doesn't draw them twice.
+       **Not a problem:** the sky keeps both by id, so the second is the
+       same entry set again.
 - ~~**Later:** the README rewrite in Advay's words~~: done, per the
   2026-10-16 review; trimmed for the brief 2026-10-17.
 - **Never deploy, flip public or commit without Advay's say-so** (CLAUDE.md).

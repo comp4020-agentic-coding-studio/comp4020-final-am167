@@ -674,7 +674,7 @@ function watchForErrors(page: Page, errors: string[]): void {
   });
   page.on("requestfailed", (request) => {
     const failure = request.failure()?.errorText ?? "failed";
-    // the event stream and the sky's prefetch are cut off by navigation and
+    // the event stream is cut off by navigation and
     // context close, which is expected, not a failure
     if (failure === "net::ERR_ABORTED") return;
     errors.push(`request: ${request.url()} (${failure})`);

@@ -414,6 +414,23 @@ describe("what the server does on its own", async () => {
     expect(after.filter((l) => l.event === "collision" || (l.event === "burn-up" && l.fields.sat === String(lone.id)))).toEqual([]);
   });
 
+  // `flyctl logs`, 2026-10-19: each cold start broadcast the same pairs
+  // again; a page reconnecting gets them in its snapshot
+  it("announces a collision coming once, even across a restart", async () => {
+    const fresh = await freshServer();
+    const p = fresh.put(ALICE, 1.3, 0, 1);
+    const q = fresh.put(BOB, 1.3 + HIT.headOn / 2, 2, -1);
+    const pair = `${Math.min(p.id, q.id)}:${Math.max(p.id, q.id)}`;
+    const told = () => linesOf("broadcast").filter((l) => l.fields.type === "conjunction" && `${l.fields.a}:${l.fields.b}` === pair);
+    fresh.sky.settle(T);
+    expect(told()).toHaveLength(1);
+    const again = await server(fresh.path);
+    again.sky.settle(T + 1_000);
+    expect(told()).toHaveLength(1);
+    // and it's still in the snapshot a page opens with
+    expect(again.sky.conjunctions(T + 2_000).map((c) => `${c.a}:${c.b}`)).toContain(pair);
+  });
+
   it("logs a derelict put up and a collision staged, each at its time", async () => {
     const derelicts = await freshServer({ DERELICTS: "3" });
     const now = T + DAY;
@@ -665,5 +682,24 @@ describe("a request", async () => {
     expect(open.id).toBe(stream.id);
     expect(close.id).toBe(stream.id);
     expect(other.id).not.toBe(stream.id);
+  });
+
+  // `flyctl logs`, 2026-10-19: what the server's timers wrote carried the
+  // id of whichever request had started them, often a stream long closed
+  // (real timers: fake ones don't carry a request's context, so they'd
+  // pass with the fault in)
+  it("gives no id to what the server's timers write, though a request started them", async () => {
+    const { log } = await freshServer();
+    const events = await import("../src/lib/events.ts");
+    // someone arriving inside a request sets off the audience's recount,
+    // which tells everyone a moment later
+    await log.served(get("/sky/"), async () => {
+      events.subscribe(() => {}, "p:bob");
+      return new Response(null);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    const told = linesOf("broadcast").filter((l) => l.fields.type === "audience");
+    expect(told.length).toBeGreaterThan(0);
+    for (const line of told) expect(line.id).toBeNull();
   });
 });

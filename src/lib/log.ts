@@ -102,6 +102,12 @@ export function identify(who: string): void {
 // calls later, such as a stream's closing.
 export const inThisRequest = <A extends unknown[], R>(fn: (...args: A) => R): ((...args: A) => R) => AsyncLocalStorage.bind(fn);
 
+// `fn`, out of any request: for the server's own timers, which a request
+// may start but which aren't its doing, so what they write has no id
+// (ADR 0024). A timer otherwise keeps the id of the request that set it.
+export const onItsOwn = <A extends unknown[], R>(fn: (...args: A) => R): ((...args: A) => R) =>
+  (...args) => serving.exit(() => fn(...args));
+
 // A moment as the record gives it, for the server's own events: settle can
 // catch up on what happened while it was stopped, so a line's own time
 // isn't always when it was written.

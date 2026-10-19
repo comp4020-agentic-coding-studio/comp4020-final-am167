@@ -4202,3 +4202,56 @@ first-launch dialog, click the notice's ×, the notice is hidden. Red before
 427/427 against a fresh build.
 
 Commit `3936c4f`.
+
+## 2026-10-19 — The live logs' findings 2 to 8, checked and fixed
+
+Advay asked for findings 2 to 8 from the live-log session (PLAN.md, C10)
+to be checked against the code and fixed where real; 1 (the blocklist) was
+left alone. Four were real, three weren't.
+
+- **2, markup in beacons: not a problem.** Launched
+  `<b>bold</b> <img src=x onerror=alert(1)> hi` through the launchpad in
+  Chrome against a fresh build: the sky had no `<img>` or `<b>` element,
+  and the panel, the sky's HTML and the catalogue all served it escaped
+  (the sky's embedded JSON as `<`). The only `innerHTML` writes are a
+  fixed string and the server's escaped panel.
+- **3, the sky loaded twice: fixed.** Reproduced locally: two `GET /sky/`
+  per launch, the stream opening on the second. The launchpad added a
+  `<link rel=prefetch>` for the sky while the launch played, but pages
+  are sent `no-store`, so the browser couldn't use it and asked again.
+  The prefetch is gone; a launch now logs one `GET /sky/`, then the
+  stream.
+- **4, request ids on the server's own lines: fixed.** `AsyncLocalStorage`
+  carries a request's id into any timer started inside it, so the ear,
+  the wake-up and the audience's recount tagged everything they wrote
+  with whichever request first started them. ADR 0024 already says such
+  lines have no id, so no new record: `onItsOwn` in `log.ts` runs each
+  timer's callback outside any request. Test in `spec/log.test.ts` ("a
+  request"), with real timers: fake ones don't carry the context, and a
+  first version with them passed with the fault in. Red with the fix
+  reverted (`expected '6fc13a' to be null`), green with it.
+- **5, conjunctions again after a cold start: fixed.** `announce` kept
+  what it had told in memory, so a restarted server told every coming
+  pair again. Now its first look only notes pairs whose objects were both
+  up before it started (the newest id at start); a pair with anything
+  newer is still told. Test in `spec/log.test.ts` ("what the server does
+  on its own"): red before (the pair broadcast twice), green after; the
+  collision suite still passes, including a fresh server's first pair
+  being announced.
+- **6, the slow catalogue: fixed.** Profiled with a copy of the local
+  database (435 objects, 80 collisions): `recentCollisions(50)` was 13.6
+  of the page's ~18 ms, and the CPU profile put nearly all of it in
+  Drizzle building and preparing the same one-row queries again for each
+  object in each lineage. Those lookups (`objectById`, the roots walk,
+  each party's echo) are now prepared once: 2.4 ms. Remembering roots
+  across a page's collisions saved only 0.5 ms more, so it wasn't kept.
+- **7, capped snapshot counts: not a problem.** The snapshot sends the
+  latest 5 collisions and 30 heard beacons by design, and the line counts
+  what was sent (ADR 0025).
+- **8, launch before snapshot: not a problem.** The sky keeps launches
+  and conjunctions by id, so an event the snapshot already holds is the
+  same entry set again.
+
+`pnpm check` 429/429 and `pnpm test:layout` 16/16 against a fresh build.
+
+Commit `8a52a97`.
