@@ -4139,3 +4139,5 @@ deployed app.
 
 0025 supersedes 0023's "beacons being heard aren't logged": each heard
 pass is now a `broadcast type=heard` line.
+
+Commit `551e774`.
