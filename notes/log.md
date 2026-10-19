@@ -4116,3 +4116,26 @@ says the sky is seeded with the extras, moved from won't fix, since
 `PROCESS.md` cites it doing so. 475 words before Sources.
 
 Commit `db4e7d8` (the test), `9de4a0e` (README, plan, this entry).
+
+## 2026-10-19 — Broadcasts and snapshots in the server's record
+
+Advay asked whether the record has a line for each of: someone connecting
+or disconnecting, an action received, an action refused, a broadcast, and
+a snapshot sent to one person. The first three were there (`listen-open`/
+`listen-close`, `visit`, `request`, each action's line and its
+`-refused`). The last two weren't: `publish` wrote nothing, so a
+`conjunction`, `heard` or `audience` event left no trace at all, and the
+`hello` a stream opens with had no line of its own.
+
+Added (ADR 0025, accepted the same day): a `broadcast` line from `publish` for every
+event, with what it's about and `streams=` (how many it reached), and a
+`snapshot` line after each `hello` with who and its counts (objects,
+conjunctions, collisions, heard, listening). Three tests in
+`spec/log.test.ts` ("listening"), written first and seen failing for want
+of the lines. Per the rule, both reverted again (the `broadcast` and
+`snapshot` calls removed): all three go red; restored, 40/40. `pnpm check`
+427/427 against a fresh build. Advay said not to check it on the
+deployed app.
+
+0025 supersedes 0023's "beacons being heard aren't logged": each heard
+pass is now a `broadcast type=heard` line.

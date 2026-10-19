@@ -1,5 +1,6 @@
 import type { HeardItem } from "./heard.ts";
 import { sameAs } from "./listener.ts";
+import { log } from "./log.ts";
 import type { CollisionReport, Conjunction, SkyObject } from "./sky.ts";
 
 // In-process pub/sub behind the SSE endpoint. One machine, so no broker needed.
@@ -62,17 +63,41 @@ export function subscribe(fn: Listener, who: string | null = null): () => void {
   };
 }
 
+// What an event is about, in the record's words (ADR 0025): the object, the
+// pair, the collision, or the count.
+function about(event: SkyEvent): Record<string, string | number> {
+  switch (event.type) {
+    case "launch":
+    case "decay":
+      return { sat: event.object.id };
+    case "manoeuvre":
+      return { manoeuvre: event.manoeuvre, sat: event.object.id };
+    case "conjunction":
+      return { a: event.conjunction.a, b: event.conjunction.b };
+    case "collision":
+      return { id: event.collision.id };
+    case "heard":
+      return { sat: event.heard.id, station: event.heard.station };
+    case "audience":
+      return { listening: event.listening };
+  }
+}
+
 // One broken stream mustn't stop the others hearing, or fail the launch that
-// caused the event (it's already saved): drop it and carry on.
+// caused the event (it's already saved): drop it and carry on. Each event is
+// a line in the record (ADR 0025), saying how many streams it reached.
 export function publish(event: SkyEvent): void {
   let dropped = false;
+  let reached = 0;
   for (const fn of [...listeners.keys()]) {
     try {
       fn(event);
+      reached++;
     } catch {
       if (listeners.get(fn)) dropped = true;
       listeners.delete(fn);
     }
   }
+  log("broadcast", { type: event.type, ...about(event), streams: reached });
   if (dropped) recount();
 }

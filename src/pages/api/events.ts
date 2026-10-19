@@ -11,7 +11,8 @@ import { forViewer } from "../../lib/stream.ts";
 // stations have heard and how many are listening (ADR 0016), then sends
 // each event as it happens. An open stream is someone listening: the
 // server's ear starts with the first. Each one opening and closing is a line
-// in the record (ADR 0023), so someone who only comes back to listen is seen.
+// in the record (ADR 0023), so someone who only comes back to listen is seen,
+// and so is the snapshot it starts from (ADR 0025).
 export const GET: APIRoute = ({ request, locals }) => {
   const viewer = { person: locals.person, operator: locals.operator?.id ?? null };
   // what this viewer may see of an event: objects lose their owner
@@ -44,7 +45,7 @@ export const GET: APIRoute = ({ request, locals }) => {
       watcherArrived();
       startListening();
       const sky = liveSky();
-      send("hello", {
+      const hello = {
         serverTime: Date.now(),
         sky: sky.map((object) => toPublic(object, viewer)),
         conjunctions: conjunctions(),
@@ -53,6 +54,16 @@ export const GET: APIRoute = ({ request, locals }) => {
         heard: recentlyHeard(HEARD_FEED, viewer),
         heardBy: heardCounts(sky.map((object) => object.id)),
         listening: audience().size,
+      };
+      send("hello", hello);
+      // what this one viewer was sent to start from (ADR 0025)
+      log("snapshot", {
+        who,
+        objects: hello.sky.length,
+        conjunctions: hello.conjunctions.length,
+        collisions: hello.collisions.length,
+        heard: hello.heard.length,
+        listening: hello.listening,
       });
       for (const event of held) send(event.type, visible(event));
       held = null;

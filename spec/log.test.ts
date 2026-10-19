@@ -483,7 +483,7 @@ describe("the extras", async () => {
 // Driven through the stream's own endpoint.
 describe("listening", async () => {
   async function streams() {
-    const { log } = await freshServer();
+    const { log, sky, put } = await freshServer();
     const heard = await import("../src/lib/heard.ts");
     const { GET } = await import("../src/pages/api/events.ts");
     const open = (person: string, operator: { id: number; handle: string } | null = null) => {
@@ -492,7 +492,7 @@ describe("listening", async () => {
       GET({ request, locals: { person, operator } } as never);
       return () => abort.abort();
     };
-    return { log, heard, open };
+    return { log, sky, put, heard, open };
   }
 
   it("logs who opened a stream, from which page, and how many are listening", async () => {
@@ -521,6 +521,37 @@ describe("listening", async () => {
       [log.whoIs(BOB, null), "0"],
     ]);
     expect(linesOf("listen-close")[0].fields.after).toMatch(/^\d+s$/);
+  });
+
+  it("logs the snapshot a stream opens with: whose it is and what it holds", async () => {
+    const { log, put, open } = await streams();
+    put(ALICE, 1.3, 0, 1);
+    put(BOB, 2.4, 1, -1);
+    open(ALICE);
+    const [line] = linesOf("snapshot");
+    expect(line.fields).toEqual({ who: log.whoIs(ALICE, null), objects: "2", conjunctions: "0", collisions: "0", heard: "0", listening: "0" });
+    // after the stream's opening, which says who and from where
+    expect(lines().findIndex((l) => l.event === "snapshot")).toBeGreaterThan(lines().findIndex((l) => l.event === "listen-open"));
+    expectNoCookie(out.join("\n"), ALICE);
+  });
+
+  it("logs each broadcast: what it was, what it was about, and how many streams it went to", async () => {
+    const { sky, open } = await streams();
+    open(ALICE);
+    open(BOB);
+    const result = sky.launchFrom({ person: ALICE, operator: null }, form({ band: "mid", callsign: "PIP 1", beacon: "hello" }), T);
+    expect(result.ok).toBe(true);
+    const [line] = linesOf("broadcast").filter((l) => l.fields.type === "launch");
+    expect(line.fields).toEqual({ type: "launch", sat: String(result.ok && result.object.id), streams: "2" });
+    // after the launch it tells of
+    expect(lines().findIndex((l) => l.raw === line.raw)).toBeGreaterThan(lines().findIndex((l) => l.event === "launch"));
+  });
+
+  it("logs a broadcast nobody is there to hear, as going to no streams", async () => {
+    const { sky } = await streams();
+    const result = sky.launchFrom({ person: BOB, operator: null }, form({ band: "low", callsign: "PIP 2", beacon: "anyone?" }), T);
+    expect(result.ok).toBe(true);
+    expect(linesOf("broadcast").find((l) => l.fields.type === "launch")?.fields.streams).toBe("0");
   });
 
   it("says when a stream isn't counted as anyone listening", async () => {
