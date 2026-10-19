@@ -4187,6 +4187,8 @@ before "Yours". `pnpm test:layout` 15/15 against a fresh build; checked in
 Chrome at 1440x790 and 390x664 (the phone still scrolls inside the dialog, as
 it must with that much text, and is unchanged).
 
+Commit `3936c4f`.
+
 ## 2026-10-19 — The "in orbit" notice can be closed
 
 Advay: the "is in orbit" notice over the top of the sky blocks buttons (the
@@ -4198,3 +4200,5 @@ first, in `layout/desktop-fit.test.ts` (it needs a browser): launch, close the
 first-launch dialog, click the notice's ×, the notice is hidden. Red before
 (no button to click), green after; `pnpm test:layout` 16/16, `pnpm check`
 427/427 against a fresh build.
+
+Commit `3936c4f`.
