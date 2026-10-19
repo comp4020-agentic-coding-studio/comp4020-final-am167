@@ -4141,3 +4141,28 @@ deployed app.
 pass is now a `broadcast type=heard` line.
 
 Commit `551e774`.
+
+## 2026-10-19 — Watching the deployed app's logs
+
+Advay asked for `flyctl logs -a comp4020-final-am167` to be run and
+watched live, first in the background and then in a Terminal window they
+could see too, while they and a few others used the app (02:57 to 03:53
+UTC). This was the first real use of ADR 0025's `broadcast` and
+`snapshot` lines.
+
+The machine cold-started three times and stopped cleanly when idle; up to
+five people had the sky open at once. No errors, warnings or crashes; every
+request answered, the only non-2xx being 422s for refused launches. Seen
+working: launches signed in and anonymous, handles claimed, a boost,
+empty, linked and sworn beacons refused, streams opening and closing with
+the audience count right through fast reloads, and three staged collisions
+landing on their due time, their fragments mostly burning up 30 s later.
+
+Eight things to evaluate later, read from the logs rather than the code,
+are listed in `PLAN.md` under C10: beacons the blocklist misses, with no
+way to report or remove one; markup in beacons refused only by the link
+check; the sky loading twice after a launch; request ids on background
+lines pointing at unrelated requests; conjunctions broadcast again after a
+cold start; the catalogue as the slow page; snapshot counts that look
+capped; and a newcomer's stream getting the staged pair before its
+snapshot. Nothing changed in the app.
