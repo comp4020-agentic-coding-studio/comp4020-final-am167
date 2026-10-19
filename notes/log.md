@@ -4166,3 +4166,5 @@ lines pointing at unrelated requests; conjunctions broadcast again after a
 cold start; the catalogue as the slow page; snapshot counts that look
 capped; and a newcomer's stream getting the staged pair before its
 snapshot. Nothing changed in the app.
+
+Commit `c930c45`.
