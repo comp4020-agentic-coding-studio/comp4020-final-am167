@@ -94,11 +94,11 @@ still picked Sonnet
 
 ## Making the purpose clear
 
-Where I could direct the agent least: a test can say a page scrolls, not
-whether the app means anything. The crit 8 marker noted it had an incentive,
+This was Where I could direct the agent least: a test can say a page scrolls, not
+whether the app means anything. The tutor in crit 8 noted to me that what I had incentivised
 being seen, but nothing shared to lose
 ([`3de1cc6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/3de1cc6)),
-and playing it felt like a Kessler syndrome visualiser. The agent's
+and others playing it noted that it felt like a Kessler syndrome visualiser. The agent's
 diagnosis: it gave the project's why but not a visitor's. I accepted three of its proposed ADRs: beacons heard by people
 ([`e0db217`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/e0db217)),
 a wreck that broadcasts both people's words as static
@@ -128,7 +128,7 @@ history. Both were fixed, and the README says the sky is seeded
 ## Balancing the staged collisions
 
 Most satellites should burn up, but a marker visits for ten minutes, and the
-crit 9 review said they'd likely see no collision
+crit 9 review showed that they'd likely see no collision
 ([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)).
 So when someone watches, the server sends two derelicts at each other
 ([`2dc518c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/2dc518c)).
