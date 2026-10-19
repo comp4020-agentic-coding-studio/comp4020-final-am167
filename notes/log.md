@@ -4168,3 +4168,33 @@ capped; and a newcomer's stream getting the staged pair before its
 snapshot. Nothing changed in the app.
 
 Commit `c930c45`.
+
+## 2026-10-19 — The first-launch dialog scrolled in a laptop window
+
+Advay found the "Your first launch" dialog had its own scrollbar, its
+"Watch it fly" below the fold, and "inYours" run together. The dialog was a
+fixed 38rem wide with the six points in two columns: 758px of content, so any
+window under ~790px tall scrolled it. The layout suite only measured the pages,
+not the dialog, so it never saw it.
+
+Test first: `layout/desktop-fit.test.ts` now launches as a new person at each
+of its three viewports, waits for the dialog to open modal, and fails if the
+dialog's content is taller than its box or "Watch it fly" is off screen. Red at
+1440x790 (4px over) before the fix. Fix: from 64rem wide the dialog widens to
+60rem and lays the points in three columns (now 551px tall at every desktop
+size measured, 1920x1080 down to 1280x650); a `{" "}` puts the space back
+before "Yours". `pnpm test:layout` 15/15 against a fresh build; checked in
+Chrome at 1440x790 and 390x664 (the phone still scrolls inside the dialog, as
+it must with that much text, and is unchanged).
+
+## 2026-10-19 — The "in orbit" notice can be closed
+
+Advay: the "is in orbit" notice over the top of the sky blocks buttons (the
+Sky now panel's text and the Whole sky view) and should be dismissable. It
+faded only after 12 s when it carries "Claim a handle", with no way to close
+it sooner. It now has the same × as the "one of yours met something" notice
+(no cookie: it's only there straight after a launch); the fade stays. Test
+first, in `layout/desktop-fit.test.ts` (it needs a browser): launch, close the
+first-launch dialog, click the notice's ×, the notice is hidden. Red before
+(no button to click), green after; `pnpm test:layout` 16/16, `pnpm check`
+427/427 against a fresh build.

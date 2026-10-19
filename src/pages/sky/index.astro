@@ -116,6 +116,7 @@ const view = launched ? "canberra" : null;
           {!operator && (
             <> <a href="/operator/?back=sky">Claim a handle</a> to keep it on any device.</>
           )}
+          <button type="button" class="notice-close" aria-label="Dismiss" hidden>×</button>
         </p>
       )}
 
@@ -478,7 +479,8 @@ const view = launched ? "canberra" : null;
      stays, so over the bottom left of the scene, clear of the view buttons
      and of a collision as it happens (on a phone, in the page like the
      others) */
-  .sky-page .notice.met {
+  .sky-page .notice.met,
+  .sky-page .notice.launched {
     padding-right: 2.75rem;
   }
 

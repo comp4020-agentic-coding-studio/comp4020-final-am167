@@ -408,6 +408,12 @@ if (notice && getComputedStyle(notice).position === "absolute") {
   else fade();
   notice.addEventListener("transitionend", () => (notice.hidden = true));
 }
+// it can cover the panel and the view buttons meanwhile, so it can be closed
+const close = notice?.querySelector<HTMLButtonElement>(".notice-close");
+if (notice && close) {
+  close.hidden = false;
+  close.addEventListener("click", () => (notice.hidden = true));
+}
 
 // ── what was heard (ADR 0016) ─────────────────────────────────────────────
 

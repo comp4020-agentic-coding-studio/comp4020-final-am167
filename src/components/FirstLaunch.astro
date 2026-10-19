@@ -78,7 +78,7 @@ const climbs = FUEL === 1 ? "one climb" : `${FUEL} climbs`;
     </dl>
 
     <p class="first-launch-where">
-      Both are on its card (click it in the sky) and in
+      Both are on its card (click it in the sky) and in{" "}
       <a href="/catalogue/?show=mine">Yours</a>. What you launch is your mark on
       the sky: its beacon, who heard it, and whatever it hits.
       {!signedIn && <> <a href="/operator/?back=sky">Claim a handle</a> to put your name to it.</>}
@@ -240,6 +240,19 @@ const climbs = FUEL === 1 ? "one climb" : `${FUEL} climbs`;
 
   .first-launch-go:hover {
     background: #ffbb5c;
+  }
+
+  /* on a desktop, wide and in three columns, so it's read whole without a
+     scrollbar even in a short laptop window */
+  @media (min-width: 64rem) {
+    .first-launch {
+      width: min(60rem, calc(100vw - 4rem));
+    }
+
+    .first-launch-points {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.1rem 1.75rem;
+    }
   }
 
   @media (max-width: 36rem) {

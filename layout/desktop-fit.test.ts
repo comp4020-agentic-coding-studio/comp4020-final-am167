@@ -107,3 +107,62 @@ for (const viewport of VIEWPORTS) {
     }
   });
 }
+
+// The first launch's dialog, how the sky works, is read whole: it opens over
+// the sky without a scrollbar of its own, its "Watch it fly" in view.
+async function firstLaunch(viewport: { width: number; height: number }) {
+  const context = await browser.newContext({ viewport });
+  try {
+    const res = await context.request.post(new URL("/", baseUrl).href, {
+      form: { band: "low", callsign: callsign("F"), beacon: "checking the first launch" },
+      headers: { origin: new URL(baseUrl).origin },
+      maxRedirects: 0,
+    });
+    if (res.status() !== 303) throw new Error(`the first launch was refused (${res.status()}); is the sky full?`);
+    const page = await context.newPage();
+    await page.goto(new URL(res.headers().location, baseUrl).href, { waitUntil: "load" });
+    await page.waitForSelector("dialog#first-launch:modal", { timeout: 10_000 });
+    await page.evaluate(() => document.fonts.ready);
+    return await page.evaluate(() => {
+      const dialog = document.getElementById("first-launch")!;
+      const go = dialog.querySelector("button")!.getBoundingClientRect();
+      return {
+        viewport: { width: innerWidth, height: innerHeight },
+        overflow: dialog.scrollHeight - dialog.clientHeight,
+        buttonInView: go.top >= 0 && go.bottom <= innerHeight,
+      };
+    });
+  } finally {
+    await context.close();
+  }
+}
+
+for (const viewport of VIEWPORTS) {
+  it(`the first launch's dialog fits without scrolling at ${viewport.width}x${viewport.height} (${viewport.name})`, async () => {
+    const fit = await firstLaunch(viewport);
+    expect(fit.viewport, "the browser didn't take the viewport").toEqual({ width: viewport.width, height: viewport.height });
+    expect(fit.overflow, `the dialog is ${fit.overflow}px taller than its box`).toBeLessThanOrEqual(0);
+    expect(fit.buttonInView, "Watch it fly is off screen").toBe(true);
+  });
+}
+
+// The "in orbit" notice floats over the sky and can cover its controls, so
+// it can be closed rather than waited out.
+it("the in-orbit notice after a launch can be dismissed", async () => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 790 } });
+  try {
+    const res = await context.request.post(new URL("/", baseUrl).href, {
+      form: { band: "low", callsign: callsign("D"), beacon: "checking the notice closes" },
+      headers: { origin: new URL(baseUrl).origin },
+      maxRedirects: 0,
+    });
+    if (res.status() !== 303) throw new Error(`the launch was refused (${res.status()}); is the sky full?`);
+    const page = await context.newPage();
+    await page.goto(new URL(res.headers().location, baseUrl).href, { waitUntil: "load" });
+    await page.locator("dialog#first-launch:modal .first-launch-go").click({ timeout: 10_000 });
+    await page.locator("#launched-notice .notice-close").click({ timeout: 2000 });
+    expect(await page.locator("#launched-notice").isHidden(), "the notice is still showing").toBe(true);
+  } finally {
+    await context.close();
+  }
+});
