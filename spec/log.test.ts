@@ -217,6 +217,29 @@ describe("launching", async () => {
   });
 });
 
+// The README's "at most 200 satellites up", against the number itself, not
+// the constant: 199 on one shared orbit (going the same way at the same
+// height, they never meet), then one more fits and the next doesn't.
+describe("a full sky", async () => {
+  const { sky, put, db, schema } = await freshServer();
+  for (let i = 0; i < 199; i++) put(`owner-${i}`, 1.3, (i / 199) * 2 * Math.PI, 1);
+  const up = () => db.select().from(schema.objects).all().filter((o) => o.kind === "satellite" && o.fate === "live").length;
+
+  it("takes a launch while there's room for it", () => {
+    const result = sky.launchFrom({ person: ALICE, operator: null }, form({ band: "high", callsign: "LAST IN", beacon: "just made it" }), T + 1_000);
+    expect(result.ok).toBe(true);
+    expect(up()).toBe(200);
+  });
+
+  it("refuses the next once 200 are up, says so, and logs why", () => {
+    const result = sky.launchFrom({ person: BOB, operator: null }, form({ band: "high", callsign: "LOCKED OUT", beacon: "no room" }), T + 2_000);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.errors.form).toMatch(/sky is full: 200 satellites/i);
+    expect(up()).toBe(200);
+    expect(linesOf("launch-refused")[0].fields).toMatchObject({ reason: "sky-full", callsign: "LOCKED OUT" });
+  });
+});
+
 describe("deorbiting and boosting", async () => {
   const { sky, put } = await freshServer();
   const alice = { person: ALICE, operator: null };
