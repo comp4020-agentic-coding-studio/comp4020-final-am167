@@ -267,7 +267,7 @@ _Last updated 2026-10-23 (a second whole-project review against the spec: an ext
     most 200 satellites up", which had no test; the Why page's "real
     people's words", which `PROCESS.md` said was fixed; two broken
     sentences in `PROCESS.md`; "each station" in the README. **For Advay
-    to sort, in his words:**
+    to sort, in their words:**
     - The cost in "Being heard more has a cost" only shows at crit
       density. Measured (12 runs each): in a quiet sky low satellites burn
       up 78% of the time and high ones 34%, and everyone low makes fewer
