@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-23 (a second whole-project review against the spec: an extras test that broke with the clock fixed, the 200 cap tested, the Why page's "real people's words" gone again; the rest listed under C10 for Advay to sort). 2026-10-19 (findings 2 to 8 from the live logs checked: 3 to 6 fixed, 2, 7 and 8 not problems; 1 still open. Earlier: `flyctl logs` watched live; eight findings listed under C10 to evaluate later. Earlier: a `broadcast` line per event sent and a `snapshot` line per stream's opening, ADR 0025 accepted). 2026-10-17 (the CI flake on `main` fixed; `flyctl logs` tried on the real app; README trimmed: SSE named, the no-JavaScript overclaim gone, the extras said; `PROCESS.md` redrafted, CLAUDE.md rules `c89bcbf`). 2026-10-16 (a whole-project review sorted into TODOs and won't-dos, under C10 below; before that, the catalogue pages 25 at a time, with numbered pages and a Rows choice, and its table folds away for the visit so the collisions are a click away). 2026-10-15 (to do: `PROCESS.md` and `README.md` for C10. Earlier: a line per request, and its id on every line inside it, ADR 0024 accepted; errors say who and where. Earlier: listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
+_Last updated 2026-10-23 (`PROCESS.md` marked done, Advay's call. Earlier: a second whole-project review against the spec: an extras test that broke with the clock fixed, the 200 cap tested, the Why page's "real people's words" gone again; the rest listed under C10 for Advay to sort). 2026-10-19 (findings 2 to 8 from the live logs checked: 3 to 6 fixed, 2, 7 and 8 not problems; 1 still open. Earlier: `flyctl logs` watched live; eight findings listed under C10 to evaluate later. Earlier: a `broadcast` line per event sent and a `snapshot` line per stream's opening, ADR 0025 accepted). 2026-10-17 (the CI flake on `main` fixed; `flyctl logs` tried on the real app; README trimmed: SSE named, the no-JavaScript overclaim gone, the extras said; `PROCESS.md` redrafted, CLAUDE.md rules `c89bcbf`). 2026-10-16 (a whole-project review sorted into TODOs and won't-dos, under C10 below; before that, the catalogue pages 25 at a time, with numbered pages and a Rows choice, and its table folds away for the visit so the collisions are a click away). 2026-10-15 (to do: `PROCESS.md` and `README.md` for C10. Earlier: a line per request, and its id on every line inside it, ADR 0024 accepted; errors say who and where. Earlier: listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -243,8 +243,8 @@ _Last updated 2026-10-23 (a second whole-project review against the spec: an ext
   - **Done (2026-10-17):** `PROCESS.md` redrafted to about 1,200 words
     (Advay's cap: 1,100 plus 10%) with the extras and a position on the
     readings (`3ba6956`); three repeated corrections made rules in
-    CLAUDE.md (`c89bcbf`). **To do:** Advay rewrites `PROCESS.md` in their
-    own words.
+    CLAUDE.md (`c89bcbf`). ~~**To do:** Advay rewrites `PROCESS.md` in
+    their own words.~~ Done (Advay, 2026-10-23).
   - **Review of the whole project (2026-10-16), sorted by Advay.** The
     gates pass (`pnpm check` 424, `pnpm test:layout` 12 of 12,
     `pnpm check:evidence`), and multi-user, real-time and persistence held
@@ -283,8 +283,8 @@ _Last updated 2026-10-23 (a second whole-project review against the spec: an ext
     - "What good means here" doesn't say what a good outcome would be,
       and the judged section reports no judgement; the 19 Oct logs could
       count launches per band, deorbits and handles claimed.
-    - `PROCESS.md` has no crit 10 section and is 1,271 words, over the
-      1,210 cap.
+    - ~~`PROCESS.md` has no crit 10 section and is 1,271 words, over the
+      1,210 cap.~~ Done (Advay, 2026-10-23): `PROCESS.md` marked done.
     - Two date-dependent extras tests in a week (`fb18419`, and this one):
       maybe a CLAUDE.md rule.
   - **CI on `main` (2026-10-17):** the 17 Oct run failed in
