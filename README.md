@@ -14,12 +14,12 @@ faster than drag clears it; Hardin (1968) argues such resources are doomed to ov
 Ostrom (1990) found they survive when users can see the resource and what each takes.
 Shirky (2004) says the same of small software: make behaviour visible and let the group
 do the rest. Kessler does no moderation, just a record of what each launch cost. Kazemi
-(2019) says small communities hold through limits; for strangers, the sky's rules are 
+(2019) says small communities hold through limits; for strangers, the sky's rules are
 the limit.
 
 1. **Being heard needs other people.** A beacon is heard only by others with
    the sky open as it passes a station.
-2. **Being heard more has a cost.** Low orbits pass a station every 3 minutes,
+2. **Being heard more has a cost.** Low orbits pass each station every 3 minutes,
    high every 24, so being heard more means flying where it's crowded.
 3. **The sky remembers.** Any object's card shows who launched it and what its
    debris destroyed.

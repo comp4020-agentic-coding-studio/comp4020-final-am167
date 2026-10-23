@@ -94,9 +94,9 @@ still picked Sonnet
 
 ## Making the purpose clear
 
-This was Where I could direct the agent least: a test can say a page scrolls, not
-whether the app means anything. The tutor in crit 8 noted to me that what I had incentivised
-being seen, but nothing shared to lose
+This was where I could direct the agent least: a test can say a page scrolls, not
+whether the app means anything. The tutor in crit 8 noted to me that I had incentivised
+being seen, but left nothing shared to lose
 ([`3de1cc6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/3de1cc6)),
 and others playing it noted that it felt like a Kessler syndrome visualiser. The agent's
 diagnosis: it gave the project's why but not a visitor's. I accepted three of its proposed ADRs: beacons heard by people
