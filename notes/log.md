@@ -4276,7 +4276,11 @@ the deployed app), so it went by what the repo quotes of it and the
   launch, so the server rightly held back a launch the test expected. The
   test now reads the record the way the server does. The second
   date-dependent extras test in a week (`fb18419`). CI on `main` was last
-  green on 19 Oct.
+  green on 19 Oct. Swept hour by hour over 14 days (a scratch copy of the
+  test with its clock moved on an hour at a time, 336 hours): the old test
+  failed 10 of them, all at the same assertion, and the fixed one none.
+  With the server narrowed to read launches only, the fixed test goes red
+  on two of those hours (14 and 45 hours on); restored, green.
 - **`PROCESS.md` said the Why page's "real people's words" was fixed**
   (`3469642`), but the merge `2d8f515` dropped that change and `/why/`
   still said it. The page takes `3469642`'s reviewed wording back.
@@ -4320,3 +4324,5 @@ the deployed app), so it went by what the repo quotes of it and the
 Checks: `pnpm check` green against a fresh build (31 files, 431 tests),
 `pnpm check:evidence` green. The layout test wasn't run: neither the
 launchpad nor the sky changed.
+
+Commit `9096558`.
