@@ -4342,3 +4342,5 @@ fixed as in `9096558`.
 
 `pnpm check` green against a fresh build (31 files, 431 tests),
 `pnpm check:evidence` green.
+
+Commit `6a34288`.
