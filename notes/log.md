@@ -4326,3 +4326,19 @@ Checks: `pnpm check` green against a fresh build (31 files, 431 tests),
 launchpad nor the sky changed.
 
 Commit `9096558`.
+
+## 2026-10-23 — The README's enforced list: owner-only manoeuvres and the server's record
+
+From the review's README finding, at Advay's request: "Enforced, and
+tested" now also lists that only a satellite's owner can boost it or bring
+it down (ADR 0022, `spec/manoeuvre-http.test.ts`), and that the server logs
+who did what, one line per action or refusal (crit 10, `spec/log.test.ts`).
+
+Also tried and dropped, at Advay's word: pinning the server tests' clock to
+a fixed date instead of "ten days from now", with a CLAUDE.md rule
+describing it. Dropped because it wasn't clear what it was for; neither
+the rule nor the change went in. The date-dependent extras test stays
+fixed as in `9096558`.
+
+`pnpm check` green against a fresh build (31 files, 431 tests),
+`pnpm check:evidence` green.

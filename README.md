@@ -36,6 +36,10 @@ Enforced, and tested:
 - "heard by" counts people, not owners or tabs
 - fragments carry every word of both messages, and trace back to operators
 - a restarted server catches up to the same sky
+- only a satellite's owner can boost it or bring it down; the server refuses
+  anyone else
+- the server logs who did what, one line per action or refusal, so its logs
+  alone tell people apart
 
 Judged, not tested:
 
