@@ -124,7 +124,15 @@ describe("the extras, on the server", () => {
     // a redeploy that changes the schedule: what's due from the latest thing
     // in the record on is the new schedule's, and nothing before it is
     // filled in (it was the old schedule's, and people may have watched it)
-    const latest = Math.max(...second.db.select().from(second.schema.objects).all().map((o) => o.launchedAt));
+    // the latest thing the record shows happening, as the server reads it
+    // (extrasDue): a launch, a collision, a manoeuvre or a beacon heard
+    const { db, schema } = second;
+    const latest = Math.max(
+      ...db.select().from(schema.objects).all().map((o) => o.launchedAt),
+      ...db.select().from(schema.collisions).all().map((c) => c.at),
+      ...db.select().from(schema.manoeuvres).all().map((m) => m.at),
+      ...db.select().from(schema.transmissions).all().map((t) => t.at),
+    );
     const third = await server(first.path, { EXTRAS_PER_HOUR: "3" });
     third.sky.settle(T + 5 * HOUR);
     expect(third.extras().filter((r) => r.launchedAt <= latest).map(asRow)).toEqual(rows.filter((r) => r.launchedAt <= latest).map(asRow));

@@ -4255,3 +4255,92 @@ left alone. Four were real, three weren't.
 `pnpm check` 429/429 and `pnpm test:layout` 16/16 against a fresh build.
 
 Commit `8a52a97`.
+
+## 2026-10-23 — Whole project reviewed against the spec: PROCESS.md, README, "good"
+
+Advay asked for an adversarial review of the whole project against the
+spec, focused on `PROCESS.md`, `README.md` and "what good means", then for
+fixes and a PR reporting every finding. The brief itself couldn't be
+re-read (the cloud session's network policy blocks the course site and
+the deployed app), so it went by what the repo quotes of it and the
+2026-10-17 review, against a local build.
+
+**Fixed:**
+
+- **`pnpm check` went red with no code change.** `spec/extras-server.test.ts`
+  "launches nothing twice across a restart …" failed on every run for an
+  hour (the test's clock is the current hour, ten days on). The test took
+  "the latest thing in the record" from launches only. The server
+  (`extrasDue`) also counts collisions, manoeuvres and heard beacons, and
+  that hour's schedule had an extra's deorbit just after the test's person
+  launch, so the server rightly held back a launch the test expected. The
+  test now reads the record the way the server does. The second
+  date-dependent extras test in a week (`fb18419`). CI on `main` was last
+  green on 19 Oct. Swept hour by hour over 14 days (a scratch copy of the
+  test with its clock moved on an hour at a time, 336 hours): the old test
+  failed 10 of them, all at the same assertion, and the fixed one none.
+  With the server narrowed to read launches only, the fixed test goes red
+  on two of those hours (14 and 45 hours on); restored, green.
+- **`PROCESS.md` said the Why page's "real people's words" was fixed**
+  (`3469642`), but the merge `2d8f515` dropped that change and `/why/`
+  still said it. The page takes `3469642`'s reviewed wording back.
+- **The README lists "at most 200 satellites up" as tested; nothing
+  tested it.** `spec/log.test.ts`, "a full sky": 199 up on one shared
+  orbit (they never meet), one more is taken, the next is refused with
+  "The sky is full: 200 satellites" and a `launch-refused
+  reason=sky-full` line. Checked against 200, not the constant. Per the
+  rule, red with the check removed (`expected true to be false`) and red
+  with the cap moved to 201; restored, green.
+- Two sentences from `2be559d` in `PROCESS.md` that didn't parse ("This
+  was Where", "noted to me that what I had incentivised being seen"),
+  fixed with the fewest words changed. The README's "pass a station every
+  3 minutes" is now "each station" (three stations, so some station every
+  minute or so), and a trailing space is gone.
+
+**Found, for Advay to sort** (also in `PLAN.md` under C10):
+
+- **"Being heard more has a cost" only holds at crit density.**
+  `scripts/balance/`, 12 runs each, extras at 0.6 an hour, with a scratch
+  copy of `run.ts` that can give every launch one band (`ONLY_BAND`):
+  `node scripts/balance/index.ts 12 0.6 quiet|crit`. In a quiet sky low
+  satellites burn up 78% of the time, mid 57%, high 34%; everyone low
+  gives 0.44 collisions an hour (66% burn up), everyone high 0.75 (29%).
+  At a crit, everyone low 6.1, everyone high 3.9, and passes with a turn
+  on air 82% against 99.8%; random bands burn up 26% low, 32% high.
+  Watched (`… 8 0.6 watched`): 6.25 collisions an hour, 5.56 staged, and
+  every newcomer saw one within ten minutes.
+- **The good argument's visibility has little to show.** A launch
+  without a handle is recorded as "launched without a handle". Nobody can
+  reply, report or sanction (live-log finding 1). Ostrom's monitoring is
+  one of eight design principles. Kazemi is cited beside "no moderation".
+  The extras shape the record a visitor reads.
+- **"What good means here" names no outcome, and "Judged, not tested"
+  reports no judgement.** The 19 Oct logs could count launches per band.
+- **`PROCESS.md` has no crit 10 section** (still to write since
+  `408634c`) and is 1,271 words against the 1,210 cap.
+- **The README's enforced list leaves out** owner-only manoeuvres and
+  the server's record of who did what, both tested.
+
+Checks: `pnpm check` green against a fresh build (31 files, 431 tests),
+`pnpm check:evidence` green. The layout test wasn't run: neither the
+launchpad nor the sky changed.
+
+Commit `9096558`.
+
+## 2026-10-23 — The README's enforced list: owner-only manoeuvres and the server's record
+
+From the review's README finding, at Advay's request: "Enforced, and
+tested" now also lists that only a satellite's owner can boost it or bring
+it down (ADR 0022, `spec/manoeuvre-http.test.ts`), and that the server logs
+who did what, one line per action or refusal (crit 10, `spec/log.test.ts`).
+
+Also tried and dropped, at Advay's word: pinning the server tests' clock to
+a fixed date instead of "ten days from now", with a CLAUDE.md rule
+describing it. Dropped because it wasn't clear what it was for; neither
+the rule nor the change went in. The date-dependent extras test stays
+fixed as in `9096558`.
+
+`pnpm check` green against a fresh build (31 files, 431 tests),
+`pnpm check:evidence` green.
+
+Commit `6a34288`.

@@ -6,7 +6,7 @@ this up: read this file, then `notes/log.md`, before planning or building.
 
 ## Status and next steps
 
-_Last updated 2026-10-19 (findings 2 to 8 from the live logs checked: 3 to 6 fixed, 2, 7 and 8 not problems; 1 still open. Earlier: `flyctl logs` watched live; eight findings listed under C10 to evaluate later. Earlier: a `broadcast` line per event sent and a `snapshot` line per stream's opening, ADR 0025 accepted). 2026-10-17 (the CI flake on `main` fixed; `flyctl logs` tried on the real app; README trimmed: SSE named, the no-JavaScript overclaim gone, the extras said; `PROCESS.md` redrafted, CLAUDE.md rules `c89bcbf`). 2026-10-16 (a whole-project review sorted into TODOs and won't-dos, under C10 below; before that, the catalogue pages 25 at a time, with numbered pages and a Rows choice, and its table folds away for the visit so the collisions are a click away). 2026-10-15 (to do: `PROCESS.md` and `README.md` for C10. Earlier: a line per request, and its id on every line inside it, ADR 0024 accepted; errors say who and where. Earlier: listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
+_Last updated 2026-10-23 (`PROCESS.md` marked done, Advay's call. Earlier: a second whole-project review against the spec: an extras test that broke with the clock fixed, the 200 cap tested, the Why page's "real people's words" gone again; the rest listed under C10 for Advay to sort). 2026-10-19 (findings 2 to 8 from the live logs checked: 3 to 6 fixed, 2, 7 and 8 not problems; 1 still open. Earlier: `flyctl logs` watched live; eight findings listed under C10 to evaluate later. Earlier: a `broadcast` line per event sent and a `snapshot` line per stream's opening, ADR 0025 accepted). 2026-10-17 (the CI flake on `main` fixed; `flyctl logs` tried on the real app; README trimmed: SSE named, the no-JavaScript overclaim gone, the extras said; `PROCESS.md` redrafted, CLAUDE.md rules `c89bcbf`). 2026-10-16 (a whole-project review sorted into TODOs and won't-dos, under C10 below; before that, the catalogue pages 25 at a time, with numbered pages and a Rows choice, and its table folds away for the visit so the collisions are a click away). 2026-10-15 (to do: `PROCESS.md` and `README.md` for C10. Earlier: a line per request, and its id on every line inside it, ADR 0024 accepted; errors say who and where. Earlier: listening logged: `listen-open` and `listen-close`; a sky left for another page no longer keeps listening). 2026-10-14: (ADR 0023 accepted: the server's record of who did what. Earlier the same day: C10's logging merged, one stdout line per thing a person does or is refused, and per thing the server does. 2026-10-13: ADR 0022 accepted, who may see and change what; conjunction alerts and dodging dropped: won't do; extras merged, invented people seed the sky, ADR 0021)._
 
 - **C8, done:** idea chosen; the decisions below agreed with Advay; person,
   persistence and real-time settled ("Foundations"), each with a decision
@@ -192,9 +192,10 @@ _Last updated 2026-10-19 (findings 2 to 8 from the live logs checked: 3 to 6 fix
   air (96.5%); at a crit 29% (31%) and 84% (87%). `EXTRA_CAP` or
   `PER_HOUR` is the dial if being heard less is too much. At the merge
   Advay dropped the PR's README bullet ("An empty sky") and its Why page
-  rewording, so the README doesn't yet say the sky is seeded and the Why
-  page still says "real people's words": both wait for the README rewrite
-  below, in his words. C10's evidence must leave the extras out
+  rewording, so the README didn't yet say the sky is seeded and the Why
+  page still said "real people's words". The README has said it since
+  2026-10-17; the Why page took the PR's wording back on 2026-10-23,
+  since `PROCESS.md` says it was fixed. C10's evidence must leave the extras out
   (`isExtra`), and C10's log lines will show the extras' launches and
   manoeuvres alongside people's (their owner is `extra:…`).
 - **C10 (week 11; crit 10, "Fly by instruments"), the logging built
@@ -242,8 +243,8 @@ _Last updated 2026-10-19 (findings 2 to 8 from the live logs checked: 3 to 6 fix
   - **Done (2026-10-17):** `PROCESS.md` redrafted to about 1,200 words
     (Advay's cap: 1,100 plus 10%) with the extras and a position on the
     readings (`3ba6956`); three repeated corrections made rules in
-    CLAUDE.md (`c89bcbf`). **To do:** Advay rewrites `PROCESS.md` in their
-    own words.
+    CLAUDE.md (`c89bcbf`). ~~**To do:** Advay rewrites `PROCESS.md` in
+    their own words.~~ Done (Advay, 2026-10-23).
   - **Review of the whole project (2026-10-16), sorted by Advay.** The
     gates pass (`pnpm check` 424, `pnpm test:layout` 12 of 12,
     `pnpm check:evidence`), and multi-user, real-time and persistence held
@@ -258,6 +259,34 @@ _Last updated 2026-10-19 (findings 2 to 8 from the live logs checked: 3 to 6 fix
     - **Won't fix:** the README's "Kessler does no moderation" beside the
       word blocklist and link filter in `src/lib/launch.ts`; and "launch
       counts per band will show it", with no count made yet.
+  - **Review of the whole project (2026-10-23), against the spec, focused
+    on `PROCESS.md`, the README and "good"** (`notes/log.md`). Fixed: an
+    extras test that went red on some hours of the clock (its "latest
+    thing in the record" counted launches only; the server also counts
+    manoeuvres, collisions and heard beacons); the README's tested "at
+    most 200 satellites up", which had no test; the Why page's "real
+    people's words", which `PROCESS.md` said was fixed; two broken
+    sentences in `PROCESS.md`; "each station" in the README. **For Advay
+    to sort, in their words:**
+    - The cost in "Being heard more has a cost" only shows at crit
+      density. Measured (12 runs each): in a quiet sky low satellites burn
+      up 78% of the time and high ones 34%, and everyone low makes fewer
+      collisions than everyone high (0.44 against 0.75 an hour). At a
+      crit, everyone low makes 6.1 to everyone high's 3.9, and passes with
+      a turn on air fall from 99.8% to 82%. A watcher's collisions are
+      nine in ten staged.
+    - The good argument's visibility has little to show: a launch without
+      a handle is recorded as "launched without a handle"; nobody can
+      reply, report or sanction (live-log finding 1); Ostrom's monitoring
+      is one of eight design principles; Kazemi is cited beside "no
+      moderation"; the extras shape the record a visitor reads.
+    - "What good means here" doesn't say what a good outcome would be,
+      and the judged section reports no judgement; the 19 Oct logs could
+      count launches per band, deorbits and handles claimed.
+    - ~~`PROCESS.md` has no crit 10 section and is 1,271 words, over the
+      1,210 cap.~~ Done (Advay, 2026-10-23): `PROCESS.md` marked done.
+    - Two date-dependent extras tests in a week (`fb18419`, and this one):
+      maybe a CLAUDE.md rule.
   - **CI on `main` (2026-10-17):** the 17 Oct run failed in
     `spec/manoeuvre-http.test.ts` (sign-out, then sign-in on another
     device) because another test's satellite collided with this one
