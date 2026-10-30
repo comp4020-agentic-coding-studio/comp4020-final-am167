@@ -4405,3 +4405,5 @@ Also: a run of 32 failures after the removal was my scratch database full
 fresh database: `pnpm check` green (31 files, 431 tests),
 `pnpm check:evidence` green. The layout test wasn't rerun: the sky is back
 to `HEAD`.
+
+Commit `c0fb864`.
