@@ -32,3 +32,4 @@ be edited until it's accepted.
 | [0023](0023-the-servers-record-of-who-did-what.md) | The server's record of who did what: one plain stdout line per thing a person or the server does | accepted; page views, errors and the line's shape superseded by 0024; heard beacons by 0025 |
 | [0024](0024-a-line-per-request-tagged-with-its-id.md) | A line per request, and a request id on every line inside it | accepted |
 | [0025](0025-a-line-per-broadcast-and-per-snapshot.md) | A line per broadcast, and per snapshot a stream opens with | accepted |
+| [0026](0026-the-sky-as-a-radio.md) | The sky as a radio, off until you turn it on | rejected; built, heard, removed |

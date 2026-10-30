@@ -4344,3 +4344,64 @@ fixed as in `9096558`.
 `pnpm check:evidence` green.
 
 Commit `6a34288`.
+
+## 2026-10-31 — The sky as a radio: built, heard, redesigned, scrapped (ADR 0026, rejected)
+
+Advay asked for ideas to add now the app is basically done; I read about 90
+other final-project READMEs in the course org for comparison and shortlisted
+seven. Advay picked "sky radio", with one rule: **off by default, turned on
+only by the person**.
+
+**First version.** A Sound button in the Beacons box, served hidden and
+`aria-pressed="false"`, shown by the script; no `AudioContext` until it's
+pressed, nothing stored, so every page load starts silent. A beacon coming
+on air was its callsign in Morse on a pure tone per station (600, 700 and
+820 Hz); fragments overhead a bandpassed hiss; a collision a noise burst and
+a 70→35 Hz thump. TDD: `spec/radio.test.ts` (Morse, fit in a turn, static
+cap, off until pressed, nothing in local or session storage or cookies) and
+a served-page test in `spec/sky.test.ts`. Each rule broken in turn and
+watched go red. One break failed for the wrong reason: Node has no
+global `localStorage`, so writing to it threw before anything was stored.
+Redone through the page's own window; then red.
+
+**Found in Chrome:** with the radio on, 64 callsigns keyed in 25 s. The
+station rows themselves swap who's on air every 250 to 500 ms in a crowded
+sky: `turnAt` (`src/lib/airtime.ts`) takes `time % total`, and `total`
+changes whenever anything enters or leaves a station's window. Paced the
+radio per station; **the on-screen flicker is pre-existing and still open**.
+
+**Advay listened: "spooky and disturbing".** Advay asked for several
+adversarial reviewers. Three, on Opus, each fresh: sound design, a
+first-time visitor with an eye on accessibility, and a marker weighing scope. They agreed:
+the clear sky already sounded bad, so debris had nothing to spoil. The tones
+clashed (between scale steps), nobody can read Morse, a chime almost every
+second is chatter, the hiss was tiring and didn't match the screen, the
+collision was a startle (loudest, instant, sub-bass) and nothing stopped it
+clipping. The scope reviewer: time-box it to half a day or drop it for the
+sky-health number; it earns nothing unless the README ties it to the
+argument. Declined: one reviewer's "remember it for the tab", against
+Advay's rule.
+
+**Redesign** (Advay: "Redesign it"): a two or three note chime per callsign
+from one D major pentatonic scale, a register per station; a station at
+most every 6 s, chimes 1.5 s apart, the same callsign not again for 15 s;
+fragments dulling the chimes (lowpass 2500 to 700 Hz) and crackling over
+them (to 8 clicks a second); a collision as a soft knock and the two chimes
+falling together, at most one a second; a compressor and a 0.35 master;
+the station's row lit while its chime rang; the note under Beacons saying
+what the sounds were while on. Tests rewritten first; every rule broken and
+watched go red. Measured in Chrome over 30 s: a chime about every 3 s, peak
+0.58 before the master. `pnpm check` green (450 tests), layout green.
+
+**Scrapped** (Advay, after hearing it: "not liking this sound stuff - lets
+scrap it"). Code, tests and the README line removed; ADR 0026 kept as
+**rejected**, with what was tried and why. Tests could show the sound kept
+its rules; only listening could show whether it was worth hearing, and it
+wasn't. Not added to `PROCESS.md`: nothing it changed stayed in the app or
+the harness.
+
+Also: a run of 32 failures after the removal was my scratch database full
+(200 up after many runs; launches refused with 422), not the code. A
+fresh database: `pnpm check` green (31 files, 431 tests),
+`pnpm check:evidence` green. The layout test wasn't rerun: the sky is back
+to `HEAD`.
