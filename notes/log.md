@@ -4504,3 +4504,5 @@ Removed the second copy in each section and changed nothing else.
 `pnpm install --frozen-lockfile` now reports the lockfile up to date, and
 `pnpm build` no longer rewrites it. `pnpm check` green (431 tests, 0
 errors, 0 warnings) against a fresh build on the pinned versions.
+
+Commit `37df5a2`.
