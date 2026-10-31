@@ -4407,3 +4407,67 @@ fresh database: `pnpm check` green (31 files, 431 tests),
 to `HEAD`.
 
 Commit `c0fb864`.
+
+## 2026-10-31 — The launchpad, decluttered
+
+Advay: the launchpad felt crowded; keep it minimal, keep what matters and
+the quote, and still say what this is. In `src/pages/index.astro`:
+
+- The intro's two paragraphs are one (what you do, then the cost). The
+  quote stays, and the big orange "New here?" box is now a quiet text link
+  beside "What's Kessler syndrome?", so the Launch button is the only loud
+  thing on the page.
+- Each band is one line, with its columns lined up like a table: name, how
+  often it orbits, how soon it burns up. The three hints ("Heard most
+  often", "A middle course", "Heard least often") became one rule beside
+  "Altitude": "Lower: heard more often, burns up sooner." On a phone, the
+  burn-up drops under the orbit.
+- The stations' question lost its filled box (a thin rule remains). The
+  handle line is shorter ("to keep your satellites on any device"), and so
+  is the notice listing yours in orbit.
+
+**Adversarial review** (fresh Opus reviewer, read as a first-time
+visitor). Acted on: the 140-character limit had gone from the beacon's
+help, and the counter is script-only, so it's back. "Its name" didn't say
+whose, so it's now "Shown beside your satellite". The lede now says who
+hears it ("everyone watching the sky"). The handle line names the real
+benefit (any device). The "New here?" link is ink with an amber arrow, so
+it reads over the phone's sunset and doesn't compete with the quote. The
+orbit period is back to full ink. Not taken: dropping the hero's
+"What's Kessler syndrome?" link (a spec test requires the launchpad to link
+there); rewording the stations' question (ADR 0018's wording, Advay's
+call); moving the beacon help above the field on a phone (it was already
+there).
+
+![Before: two paragraphs, a boxed explainer and three-line bands](screenshots/2026-10-31-launchpad-crowded-before.png)
+![After: one paragraph, the quote, quiet links and one-line bands](screenshots/2026-10-31-launchpad-decluttered-after.png)
+
+`pnpm test:layout` 16 of 16 and `pnpm check` green (431 tests, 0
+warnings), both against a fresh build. Checked by eye at 1920x1080, 1440x790
+and iPhone 14.
+
+**Second review, of the final version** (fresh Opus reviewer, asked for a
+verdict): "mostly worth it". It found the page more minimal, not just
+rearranged: Launch is now the only loud thing, and the form is about 100px
+shorter on a desktop. Problems it found:
+
+- Cutting "every launch crowds it" left the quote's "costs everyone a
+  little" without its setup.
+- The intro says "your line" and the form says "Beacon".
+- "Another is one more thing…" has no noun.
+- The stations' question and its checkbox are still the most confusing
+  part of the page.
+
+Acted on at Advay's word:
+
+- The intro names the beacon ("Say one thing to everyone here: your
+  beacon") and puts the crowding back ("every launch crowds a shared
+  sky").
+- The notice says "Another launch is another beacon heard, and one more
+  thing everyone shares the sky with", which gives the benefit and the
+  cost.
+
+The stations' question is unchanged (ADR 0018). The "after" screenshot
+above is this version. `pnpm test:layout` 16 of 16 and `pnpm check` green
+(431 tests, 0 warnings) against a fresh build. Checked by eye at 1920x1080
+(new visitor and just launched) and iPhone 14.

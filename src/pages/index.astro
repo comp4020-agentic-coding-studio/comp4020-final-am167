@@ -45,16 +45,11 @@ const full = skyIsFull();
 const names = (list: string[]) =>
   list.length < 2 ? list.join("") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
 const bands = Object.entries(BANDS) as [Band, (typeof BANDS)[Band]][];
-const hint: Record<Band, string> = {
-  low: "Heard most often.",
-  mid: "A middle course.",
-  high: "Heard least often.",
-};
 // everything falls (ADR 0007): the lower, the sooner, and where in the band
 // a launch lands decides how soon
 const life = (band: Band) => {
   const { shortest, longest } = lifetimeRange(band);
-  return `Burns up in ${lasting(shortest, longest)}.`;
+  return `Burns up in ${lasting(shortest, longest)}`;
 };
 // the stations' question today (ADR 0018), and which day's this form shows
 const today = dayOf(Date.now());
@@ -103,21 +98,17 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     <section class="intro">
       <h1>Kessler</h1>
       <p class="lede">
-        Say one thing to everyone who's here. Your line goes up on a satellite,
-        and whoever has the sky open hears it each time it passes over a ground
-        station.
+        Say one thing to everyone here: your beacon. It rides a satellite, and
+        everyone watching the sky hears it each time it passes a ground
+        station. But every launch crowds a shared sky, and when two satellites
+        collide, their words break into static over everyone else's.
       </p>
-      <p class="lede">
-        But the sky is shared, and every launch crowds it. When two satellites
-        collide, their words break into each other and keep broadcasting as
-        static, over everyone else's.
+      <p class="ask">What's worth saying, if saying it costs everyone a little?</p>
+      <!-- the ways in, quiet: the Launch button is the one loud thing here -->
+      <p class="ways-in">
+        <a class="explainer" href="/why/">New here? What this is, and why <span class="arrow" aria-hidden="true">→</span></a>
+        <a class="explainer-more" href="/kessler/">What's Kessler syndrome?</a>
       </p>
-      <p class="lede ask">What's worth saying, if saying it costs everyone a little?</p>
-      <a class="explainer" href="/why/">
-        <span class="explainer-kicker">New here?</span>
-        <span>What this is, and why <span aria-hidden="true">→</span></span>
-      </a>
-      <a class="explainer-more" href="/kessler/">What's Kessler syndrome?</a>
     </section>
 
     <section class="console" aria-labelledby="launch-title">
@@ -131,8 +122,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
             <p class="notice">
               {mine.length === 1 ? "Yours in orbit: " : `Yours in orbit (${mine.length}): `}
               <strong>{names(mine.map((o) => o.callsign ?? "unnamed"))}</strong>. Another
-              launch is another beacon heard, and one more thing for everyone to share the
-              sky with. <a href="/sky/">Watch the sky</a>
+              launch is another beacon heard, and one more thing everyone shares the sky with. <a href="/sky/">Watch the sky</a>
             </p>
           )}
 
@@ -150,13 +140,13 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       <form method="post" action="/" novalidate data-launch>
         <fieldset disabled={wait > 0 || full}>
           <fieldset class="bands" aria-describedby={describe("band")}>
-            <legend>Altitude</legend>
+            <legend><span>Altitude</span> <span class="help">Lower: heard more often, burns up sooner.</span></legend>
             {bands.map(([band, b]) => (
               <label class="band">
                 <input type="radio" name="band" value={band} checked={values.band === band} />
                 <span class="band-name">{b.label}</span>
-                <span class="band-period">round the planet every {every(b.period)}</span>
-                <span class="band-hint">{hint[band]} <span class="band-life">{life(band)}</span></span>
+                <span class="band-period">Orbits every {every(b.period)}</span>
+                <span class="band-life">{life(band)}</span>
               </label>
             ))}
             <p class="field-error" id="band-error" data-error="band">{errors.band}</p>
@@ -176,7 +166,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
               aria-describedby={describe("callsign", "callsign-help")}
             />
             <p class="help" id="callsign-help">
-              Up to {CALLSIGN_MAX} letters or numbers, shown beside your satellite.
+              Shown beside your satellite. Up to {CALLSIGN_MAX} letters or numbers.
             </p>
             <p class="field-error" id="callsign-error" data-error="callsign">{errors.callsign}</p>
           </div>
@@ -225,7 +215,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
       ) : (
         <p class="launch-as">
           Launching without a handle. <a href="/operator/?back=launchpad">Claim one</a> to keep
-          your satellites on any device, and your name on what they do.
+          your satellites on any device.
         </p>
       )}
     </section>
@@ -692,77 +682,43 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     max-width: 32rem;
   }
 
-  .lede + .lede {
-    color: var(--ink-dim);
-  }
-
   /* the question it leaves you with */
-  .lede.ask {
-    color: var(--amber);
+  .ask {
+    margin: 0 0 1.25rem;
+    font-size: var(--step-1);
     font-style: italic;
+    color: var(--amber);
   }
 
-  /* the second way in: quieter than the first, but dark behind it like the
-     first, so it reads over the afterglow */
-  .explainer-more {
-    display: block;
-    width: fit-content;
-    margin-top: 0.6rem;
-    padding: 0.3rem 0.65rem;
-    border: 1px solid rgb(242 165 65 / 0.45);
-    border-radius: 4px;
-    background: rgb(6 11 24 / 0.78);
+  /* the ways in: two quiet links, so the Launch button stays the one loud
+     thing on the page */
+  .ways-in {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.5rem;
+    margin: 0;
+    font-size: var(--step-0);
+  }
+
+  .ways-in a {
     color: var(--ink);
-    font-size: var(--step--1);
     text-decoration-color: rgb(242 165 65 / 0.6);
-    text-underline-offset: 0.2em;
+    text-underline-offset: 0.25em;
   }
 
-  .explainer-more:hover {
-    color: var(--amber);
-    text-decoration-color: currentColor;
-  }
-
-  /* the way into the explainer, for anyone who doesn't know the name */
-  .explainer {
-    display: inline-grid;
-    gap: 0.15rem;
-    margin-top: 0.75rem;
-    padding: 0.8rem 1.4rem 0.9rem;
-    border: 2px solid var(--amber);
-    border-radius: 6px;
-    /* dark behind the amber, so it reads over the afterglow too */
-    background: linear-gradient(rgb(242 165 65 / 0.16), rgb(242 165 65 / 0.16)), rgb(6 11 24 / 0.85);
-    box-shadow: 0 0 1.75rem rgb(242 165 65 / 0.35);
-    color: var(--amber);
-    font-size: var(--step-2);
-    font-weight: 800;
-    font-variation-settings: "wdth" 112;
-    line-height: 1.15;
-    text-decoration: none;
-    text-shadow: none;
-    transition: background 0.2s, box-shadow 0.2s;
-  }
-
-  .explainer:hover {
-    background: linear-gradient(rgb(242 165 65 / 0.3), rgb(242 165 65 / 0.3)), rgb(6 11 24 / 0.85);
-    box-shadow: 0 0 2.5rem rgb(242 165 65 / 0.5);
-    color: #ffbb5c;
-  }
-
-  .explainer-kicker {
-    color: var(--ink);
-    font-size: var(--step--1);
+  /* ink, not amber, so the question above stays the one accent and it
+     reads over the afterglow on a phone */
+  .ways-in .explainer {
     font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
   }
 
-  @media (max-width: 30rem) {
-    .explainer {
-      font-size: var(--step-1);
-      padding: 0.7rem 1rem 0.8rem;
-    }
+  .ways-in .arrow {
+    color: var(--amber);
+  }
+
+  .ways-in a:hover {
+    color: #ffbb5c;
+    text-decoration-color: currentColor;
   }
 
   .console {
@@ -804,19 +760,39 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     margin-bottom: 0.4rem;
   }
 
+  /* the altitude's rule beside its name, as each field's is */
+  legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0 0.75rem;
+    width: 100%;
+  }
+
+  legend .help {
+    font-weight: 400;
+  }
+
+  /* one line a band, its columns lined up down the three like a table */
   .bands {
     display: grid;
-    gap: 0.5rem;
+    grid-template-columns: auto auto auto 1fr;
+    gap: 0.4rem;
     margin-bottom: 1rem;
   }
 
-  /* two lines a band: the name and how often it passes, then what that means */
+  .bands > .field-error {
+    grid-column: 1 / -1;
+  }
+
   .band {
+    grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: auto 1fr auto;
-    column-gap: 0.75rem;
-    align-items: baseline;
-    padding: 0.5rem 0.75rem;
+    grid-template-columns: subgrid;
+    column-gap: 1rem;
+    align-items: center;
+    padding: 0.45rem 0.75rem;
     border: 1px solid var(--grid);
     border-radius: 4px;
     cursor: pointer;
@@ -828,32 +804,57 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   }
 
   .band input {
-    grid-row: span 2;
     accent-color: var(--amber);
     margin: 0;
     width: 1.1rem;
     height: 1.1rem;
-    align-self: center;
   }
 
   .band-name {
     font-weight: 700;
+    min-width: 2.5rem;
   }
 
-  .band-period {
-    font-size: var(--step--1);
-    color: var(--ink);
-    text-align: right;
-  }
-
-  .band-hint {
-    grid-column: 2 / 4;
-  }
-
-  .band-hint,
+  .band-period,
+  .band-life,
   .help {
     font-size: var(--step--1);
     color: var(--ink-dim);
+  }
+
+  /* what you're choosing by */
+  .band-period {
+    color: var(--ink);
+  }
+
+  .band-life {
+    text-align: right;
+  }
+
+  /* too narrow for one line: how long it lasts goes under how often it
+     passes */
+  @container (max-width: 29.99rem) {
+    .bands {
+      grid-template-columns: auto auto 1fr;
+    }
+
+    .band {
+      row-gap: 0.1rem;
+    }
+
+    .band input {
+      grid-row: span 2;
+    }
+
+    .band-period {
+      grid-column: 3;
+      text-align: right;
+    }
+
+    .band-life {
+      grid-column: 2 / -1;
+      text-align: left;
+    }
   }
 
   .field {
@@ -883,9 +884,8 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
   /* the stations' question, above the beacon */
   .today {
     margin: 0 0 0.6rem;
-    padding: 0.45rem 0.75rem 0.5rem;
-    border-left: 3px solid var(--amber);
-    background: rgb(242 165 65 / 0.08);
+    padding: 0.1rem 0 0.1rem 0.75rem;
+    border-left: 2px solid var(--amber);
     line-height: 1.35;
   }
 
@@ -1251,8 +1251,7 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     }
   }
 
-  /* and on a short laptop screen, the spacing tightens (each band keeps
-     both its lines) */
+  /* and on a short laptop screen, the spacing tightens */
   @media (min-width: 52.01rem) and (max-height: 56rem) {
     .console button[type="submit"] {
       padding: 0.6rem 1rem;
@@ -1279,10 +1278,6 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     .band {
       padding: 0.3rem 0.75rem;
       line-height: 1.3;
-    }
-
-    .today {
-      padding: 0.3rem 0.75rem 0.35rem;
     }
 
     .bands,
