@@ -4491,3 +4491,5 @@ against a fresh build. Checked by eye at 1920x1080 and iPhone 14. No test
 added: a style tweak. Found on the way: the committed `pnpm-lock.yaml` is
 broken (duplicated mapping key at line 2100, likely from the Dependabot
 merges), so pnpm ignores it and re-resolves on every install. Not fixed here.
+
+Commit `3b33f93`.
