@@ -4471,3 +4471,5 @@ The stations' question is unchanged (ADR 0018). The "after" screenshot
 above is this version. `pnpm test:layout` 16 of 16 and `pnpm check` green
 (431 tests, 0 warnings) against a fresh build. Checked by eye at 1920x1080
 (new visitor and just launched) and iPhone 14.
+
+Commit `15495a2`.
