@@ -4473,3 +4473,21 @@ above is this version. `pnpm test:layout` 16 of 16 and `pnpm check` green
 (new visitor and just launched) and iPhone 14.
 
 Commit `15495a2`.
+
+## 2026-10-31: the wordmark off the launchpad, and a moon tried and dropped
+
+Advay asked whether the small "Kessler" wordmark at the top left should go
+on the launchpad. It should: the page's own heading says "Kessler" just
+below it, and the wordmark only links back to this same page. It's now
+removed on `/` only (`display: none`), with the nav pushed right so it sits
+where it does on other pages. On a phone the nav moves up into the empty row.
+
+A moon in the launchpad's 3D sky (a lit sphere with a soft halo above the
+rocket) was built and screenshotted at 1920x1080, then scrapped at Advay's
+call: it didn't fit the scene. Nothing from it was kept.
+
+`pnpm test:layout` 16 of 16 and `pnpm check` green (431 tests, 0 errors)
+against a fresh build. Checked by eye at 1920x1080 and iPhone 14. No test
+added: a style tweak. Found on the way: the committed `pnpm-lock.yaml` is
+broken (duplicated mapping key at line 2100, likely from the Dependabot
+merges), so pnpm ignores it and re-resolves on every install. Not fixed here.

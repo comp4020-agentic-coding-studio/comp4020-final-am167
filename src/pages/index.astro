@@ -1030,6 +1030,15 @@ const describe = (field: keyof LaunchErrors, help?: string) =>
     cursor: not-allowed;
   }
 
+  /* the heading already says Kessler, and this is where the wordmark goes:
+     dropped here, with the nav kept to the right where it sits elsewhere */
+  :global(body.launchpad .wordmark) {
+    display: none;
+  }
+  :global(body.launchpad .site-nav) {
+    margin-left: auto;
+  }
+
   /* The scene: a fixed canvas behind the page, fading in once drawn. The
      drawn rocket and ground above stay for when there's no WebGL. */
   .pad-view {
