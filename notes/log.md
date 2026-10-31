@@ -4493,3 +4493,14 @@ broken (duplicated mapping key at line 2100, likely from the Dependabot
 merges), so pnpm ignores it and re-resolves on every install. Not fixed here.
 
 Commit `3b33f93`.
+
+## 2026-10-31: the lockfile repaired
+
+`pnpm-lock.yaml` had `source-map-js@1.2.2` twice, under both `packages:` and
+`snapshots:`, left by the Dependabot bump (`a9d2c0c`, then `c600acc`).
+pnpm called the file broken ("duplicated mapping key"), ignored it and
+re-resolved every dependency on each install, so builds weren't pinned.
+Removed the second copy in each section and changed nothing else.
+`pnpm install --frozen-lockfile` now reports the lockfile up to date, and
+`pnpm build` no longer rewrites it. `pnpm check` green (431 tests, 0
+errors, 0 warnings) against a fresh build on the pinned versions.
