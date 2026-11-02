@@ -81,7 +81,8 @@ caused every collision from then on. Restoring a day-old snapshot would have
 lost six real launches, so instead I had the agent trace each collision and
 fragment back to a test launch, rehearse the cleanup on a copy, and only then
 run it on production. That lesson is now enforced: the spec rejects any
-`fly.dev` address, and CLAUDE.md explains why.
+`fly.dev` address, and CLAUDE.md explains why
+([`21de098`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/21de098)).
 
 **Three failures I'd fixed one at a time** until each became a rule
 ([`c89bcbf`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/c89bcbf)):
