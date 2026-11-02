@@ -4506,3 +4506,46 @@ Removed the second copy in each section and changed nothing else.
 errors, 0 warnings) against a fresh build on the pinned versions.
 
 Commit `37df5a2`.
+
+## 2026-11-03: the spec suite run against the live app, and the sky cleaned
+
+A pre-deadline preflight ran `pnpm check` with `APP_URL` at the live
+`fly.dev` URL, as the course's preflight skill suggests, then twice more
+while chasing one failure. That failure was the passphrase-throttle test
+(`spec/operator.test.ts`): it poses as two addresses with `fly-client-ip`,
+which Fly's proxy overwrites, so live both "people" are one and the owner
+is locked out. The app is right; the test can only run off Fly. Gated with
+`it.skipIf` on a `*.fly.dev` host.
+
+The three runs were the real damage. The suite launches hundreds of
+satellites, and the one shared CPU worked through the pile for about 20
+minutes after the runs gave up, so every page took 4 to 12 s (`/` timed out
+at 30 s) while 124 other students' apps answered in about 0.05 s. A copy
+of the live database served locally answered in 7 ms, so it was the
+backlog, not the data or the code. The runs also started a cascade: by the
+time it was found, every collision since 20:50 UTC (330) traced back to a
+test satellite, and 321 of the 340 fragments in orbit were theirs. No real
+person's satellite was lost; one invented person's (MISCHIEF-19), 5
+derelicts and 7 old fragments were.
+
+Cleaned surgically (Advay's call, over restoring the 1 Nov volume snapshot,
+which would have lost 6 real launches): a one-off script found the 324 test
+satellites (launched 20:53 to 21:15 UTC by nobody seen before) and the 64
+test operators, followed every collision and fragment downstream of them,
+deleted those rows, and set what their collisions destroyed back to live.
+Rehearsed on a local copy first (idempotent, integrity check and every
+reference check clean, pages under 10 ms), then run live after a backup to
+`/data/pre-cleanup.db`: 1113 objects and 373 collisions removed, 16
+objects restored, then the machine restarted so the server replans its
+collisions from the clean data. Live after: integrity ok, nothing dangling,
+no test callsigns, 10 satellites, 11 derelicts and 26 fragments in orbit,
+pages about 0.12 s.
+
+Lesson for the harness: the spec suite writes to whatever it points at, so
+it must never be aimed at the live app. Now enforced: `spec/global-setup.ts`
+refuses a `*.fly.dev` `APP_URL` unless `SPEC_AGAINST_LIVE=yes`, and
+`CLAUDE.md` says never to set it. Tried against the live URL: it refused
+before sending a request (the live log shows no launch from the run).
+`pnpm check` green against a fresh local build (431 of 431, the throttle
+test included, since it only skips on Fly), and `pnpm check:evidence`
+green.

@@ -37,6 +37,13 @@ The spec suite checks a **running** app over HTTP at `APP_URL` (default
 after a change before running it, or you're testing stale output. CI builds the
 Dockerfile image and points the suite at that.
 
+**Never point the spec suite at the live app**, whatever a skill suggests.
+It launches hundreds of satellites into what it tests; run against
+`*.fly.dev` once, it buried the real sky in test debris and stalled the
+machine for twenty minutes. `spec/global-setup.ts` refuses a `fly.dev`
+`APP_URL`; don't set its override. To check the deployed app, read it
+(`curl`, `pnpm test:layout`, the browser), never write to it.
+
 `spec/README.md`, `PROCESS.md` and `reflections/README.md` say what they are
 for.
 

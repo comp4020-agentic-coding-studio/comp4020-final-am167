@@ -10,6 +10,9 @@ const baseUrl = inject("baseUrl");
 const doc = (html: string) => new JSDOM(html).window.document;
 const handle = () => `op_${Math.random().toString(36).slice(2, 10)}`;
 const PASS = "correct horse battery";
+// Fly's proxy overwrites fly-client-ip with the real caller, so a test
+// can't pose as two addresses against the deployed app
+const behindFly = new URL(baseUrl).hostname.endsWith(".fly.dev");
 
 const claim = (s: Session, h: string, passphrase = PASS) => post(s, "/operator/", { action: "claim", handle: h, passphrase });
 const signIn = (s: Session, h: string, passphrase = PASS) => post(s, "/operator/", { action: "sign-in", handle: h, passphrase });
@@ -115,7 +118,7 @@ describe("operators", () => {
     expect(await yours(a, name)).toBe(true);
   });
 
-  it("slows wrong passphrases from one place without locking the owner out from another", async () => {
+  it.skipIf(behindFly)("slows wrong passphrases from one place without locking the owner out from another", async () => {
     const h = handle();
     await claim(new Session(baseUrl), h);
     // Fly puts the visitor's address in this header
