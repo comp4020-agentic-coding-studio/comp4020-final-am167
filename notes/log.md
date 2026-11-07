@@ -4581,6 +4581,8 @@ cookieless launch bypass, the missing crit 10 section, the authorship
 finding, the flicker bug as recorded in `PLAN.md`, and the staged live sky.
 Each is marked `advay: wont fix` in `FINDINGS.md`.
 
+Commit `d63ea99`.
+
 ## 2026-11-07: four fixes from the review
 
 Advay chose four of the review's majors to fix and marked the room
@@ -4623,3 +4625,5 @@ filling the 200 cap (`critic-room-fills-cap-legitimately`) won't fix.
 Checks against a fresh build on a scratch database: `pnpm check` green
 (31 files, 432 tests, 0 warnings), `pnpm check:evidence` green,
 `pnpm test:layout` 16/16.
+
+Commit `d63ea99`.

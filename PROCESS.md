@@ -27,7 +27,8 @@ reviewers, each blind to the others, attacked one part of the project each
 against the spec, and verifiers tried to refute what they found. It wrote
 everything to a findings document, which I went through and marked won't-fix
 or fix; this is how I found the date-dependent tests and that CLAUDE.md had
-no rules from the README.
+no rules from the README
+([`d63ea99`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/d63ea99)).
 
 ## Corrections that became the harness
 
