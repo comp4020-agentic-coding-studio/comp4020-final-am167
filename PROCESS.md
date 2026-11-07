@@ -4,33 +4,28 @@
 
 Kessler is a shared sky anyone can launch into. Your satellite carries up to
 140 characters, heard by whoever has the sky open as it passes one of three
-ground stations. People crowd the low band to be heard more, and crowding
+ground stations. People typically crowd the low band to be heard more, and crowding
 causes collisions: both people's words break into static that takes airtime
-from everyone. Nothing resets, and the record keeps who caused what. What's
+from everyone. Nothing resets, and the record keeps who caused what. So: what's
 worth saying, if saying it costs everyone a little?
 
 ## The stack
 
-| Choice | Over | Because |
-| --- | --- | --- |
-| Astro on the server, SQLite via Drizzle, server-sent events (kept from crit 7) | SvelteKit, Phoenix LiveView, WebSockets | Both frameworks were new to me three days before crit 8, and updates only flow out from the server ([`183d624`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/183d624), ADRs 0001, 0004) |
-| Positions from the clock | A simulation ticking every second | Fly stops an idle server; on waking it replays what it slept through, exactly ([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)) |
-| Three.js visuals over flat orbits | The full 3D globe the agent suggested | I wanted a sky, not a diagram; a globe meant rewriting the orbit logic ([`5c41ccd`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/5c41ccd)) |
+I built the app with Astro on the server, SQLite via Drizzle, and server-sent events (kept from crit 7), over SvelteKit or Phoenix LiveView and WebSockets. Both frameworks were new to me three days before crit 8, and since updates only flow from the server to the client, SSE was all I needed ([`183d624`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/183d624), ADRs 0001, 0004). I compute satellite positions from the clock instead of running a simulation that ticks every second, because Fly stops an idle server and, on waking, it can replay exactly what it slept through ([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)). For visuals, I used Three.js and passed on the full 3D globe the agent suggested: I wanted a sky, not a diagram, and a globe would have meant rewriting the orbit logic ([`5c41ccd`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/5c41ccd)).
 
 ## The workflow
 
-Sessions start fresh, so memory lives in files: `PLAN.md` holds what's agreed
+`PLAN.md` holds discussions between me and the agent, what's agreed
 and next, and each decision is an ADR, superseded rather than edited
 ([`10c86a5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/10c86a5)).
 For each decision the agent laid out options without recommending one, and I
 picked
 ([`9247b01`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/9247b01)).
 
-Big changes ran overnight in a worktree and came back as a pull request, each
-design change a proposed ADR
+Big changes ran overnight in a worktree and came back as a pull request
 ([PR #7](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/7)).
-Subagents only review, since assignment 2's parallel drafters contradicted
-each other and stalled.
+Subagents only review: in assignment 2, parallel drafters contradicted each
+other and stalled.
 
 ## Corrections that became the harness
 
@@ -61,15 +56,14 @@ I thought it looked worse, so they went back to rows with tighter spacing
 ([`59480dd`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/59480dd)).
 The test holds the constraint; whether it looks right is still my call.
 
-**What one session knew and the next didn't.** After an agent killed
-another's server, agents only kill servers they started
-([`c943797`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/c943797));
-after log entries kept missing the hashes this document cites, every entry
-gets one
-([`a52b08b`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/a52b08b)).
-Critical reviews had moved to Opus after I stopped a Sonnet one on the object
-card, but only one agent's memory held that, so a fresh session still picked
-Sonnet
+![The launchpad at 1440x790 just after a launch, with the bands side by side: each note breaks mid-phrase, so the three read as ragged paragraphs rather than a choice](notes/screenshots/2026-10-08-launchpad-fits-1440x790.png)
+
+![The same screen after the bands went back to rows: one line per band, and it still fits](notes/screenshots/2026-11-07-launchpad-bands-as-rows-59480dd.png)
+
+**What one session knew and the next didn't.** Critical reviews moved to
+Opus after I stopped a Sonnet one on the object card, but only one agent's
+memory held that, so a fresh session still picked Sonnet. Rules that live in
+memory don't carry over, so it went into CLAUDE.md
 ([`e3f9cb5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/e3f9cb5)).
 
 **The suite aimed at the live sky.** Before final submission I had the agent
