@@ -4551,3 +4551,75 @@ test included, since it only skips on Fly), and `pnpm check:evidence`
 green.
 
 Commit `21de098`.
+
+## 2026-11-07: an adversarial review of the whole project against the spec
+
+Asked for a deep adversarial review of everything against the published
+spec, `PROCESS.md` included, and whether it's "actually good". Run as one
+workflow of 22 Opus agents on `c1e5cd7`: nine reviewers (fixed
+requirements, robustness, the README against the brief, `PROCESS.md`, the
+other process evidence, the spec suite, first-visitor UX, server
+correctness, and whether it's good), a verifier per dimension that tried
+to refute each finding, a completeness critic, and three judges, one per
+criterion. Writes went only to scratch databases on local servers; the
+live app was only read.
+
+110 findings stand (23 major, 46 minor, 41 nits; 2 refuted); all three
+judges gave a D. The engineering holds (real-time under 50 ms across
+viewports, restart catch-up correct, 431 tests green). The marks are lost
+in `PROCESS.md` (over length, no crit 10, mostly agent-drafted text), in
+CLAUDE.md carrying no rules from the README's argument, in a judged
+section with no judgements, in a cookieless bypass of the launch gap, in
+the station flicker, and in a live sky that is mostly staged static
+between invented people. Everything, with evidence and suggested fixes, is
+in `FINDINGS.md`. Nothing fixed yet.
+
+Triage, same day: every finding about word count running over is won't
+fix (`PROCESS.md` at 1,277 to 1,394 against 900 to 1,100, the README at 606
+by `wc` against 600, and `check:evidence` not counting either), as are the
+cookieless launch bypass, the missing crit 10 section, the authorship
+finding, the flicker bug as recorded in `PLAN.md`, and the staged live sky.
+Each is marked `advay: wont fix` in `FINDINGS.md`.
+
+## 2026-11-07: four fixes from the review
+
+Advay chose four of the review's majors to fix and marked the room
+filling the 200 cap (`critic-room-fills-cap-legitimately`) won't fix.
+
+- **Date-dependent extras tests.** Reproduced with a preloaded clock shift:
+  `spec/log.test.ts` "logs their manoeuvres as an extra's" failed at
+  9 Nov 14:00Z and 10 Nov 03:00Z, and `spec/extras-server.test.ts` "ends
+  up with the same sky…" at 14 Nov and 23 Nov 13:00Z. Neither was the app:
+  the first settled two days in one jump, and a server that skips ahead
+  fills in only the last day of extras (`EXTRA_BACKFILL`), so on those
+  dates every manoeuvre fell in the skipped day; it now settles a day at a
+  time. The second picked twelve hours with no extra's launch due; it now
+  starts where one is due and compares against the count before. Swept the
+  three extras files at 64 clock shifts, every 8 h over three weeks: 0
+  failures. Both old tests red again at their dates with the fix stashed;
+  "logs their manoeuvres" red with `manoeuvreExtra`'s `logMove` removed;
+  restored.
+- **Product rules in CLAUDE.md.** A new section, one rule per README
+  principle and "chose not to build" item, each naming the spec test that
+  holds it. "Nothing resets" has no direct test, and says so.
+- **The README's judged section** now gives a method and a result for each
+  item. Fresh balance runs, 12 each, extras 0.6/h: `node
+  scripts/balance/index.ts 12 0.6 watched` gives 6.11 collisions an hour,
+  5.64 staged, every newcomer saw one; `quiet` 0.64/h, `crit` 3.15/h.
+  `byBand` is the share of people's satellites that end without a
+  collision (quiet: low 81%, mid 56%, high 45%), so the 23 Oct entry's
+  "low burn up 78%" reads the other way for principle 2 than PLAN.md put
+  it: quietly, high collides more. Left out of the README. Word count kept
+  flat (606 to 605) by trimming the opening and the extras bullet.
+- **First-sky jargon.** The beacons note now says what static and
+  derelicts are; "a derelict, echoing X" is "a dead satellite, carrying
+  X's last words"; "The wreck says" is "Its fragments carry". New
+  `spec/sky.test.ts` test for the note and an updated `spec/story.test.ts`
+  couplet, both seen red before the change. "Derelict" itself stays: about
+  fifteen tested strings use it.
+- `PROCESS.md`'s workflow section gains a few lines on the deep review and
+  the findings document.
+
+Checks against a fresh build on a scratch database: `pnpm check` green
+(31 files, 432 tests, 0 warnings), `pnpm check:evidence` green,
+`pnpm test:layout` 16/16.

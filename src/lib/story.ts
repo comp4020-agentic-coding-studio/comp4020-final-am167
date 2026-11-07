@@ -116,7 +116,7 @@ export const titleOf = (o: { id: number; kind: Kind; callsign: string | null }) 
 export function couplet(parties: readonly [StoryParty, StoryParty]): { callsign: string; beacon: string }[] {
   return parties.flatMap((p) => {
     if (p.kind === "satellite" && p.callsign && p.beacon) return [{ callsign: p.callsign, beacon: p.beacon }];
-    if (p.kind === "derelict" && p.words) return [{ callsign: `a derelict, echoing ${p.echoOf ?? "an old line"}`, beacon: p.words }];
+    if (p.kind === "derelict" && p.words) return [{ callsign: p.echoOf ? `a dead satellite, carrying ${p.echoOf}'s last words` : "a dead satellite, carrying old words", beacon: p.words }];
     return [];
   });
 }

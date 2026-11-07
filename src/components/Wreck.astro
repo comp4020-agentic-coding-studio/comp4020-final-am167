@@ -13,7 +13,7 @@ const silent = pieces.filter((p) => !p.up).length;
 ---
 {pieces.length > 0 && (
   <p class="wreck">
-    <span class="wreck-label">The wreck says</span>{" "}
+    <span class="wreck-label">Its fragments carry</span>{" "}
     {pieces.map((piece, i) => (
       <>{i > 0 && <span class="wreck-between" aria-hidden="true"> / </span>}<span class:list={["wreck-piece", { silent: !piece.up }]}>{piece.words}</span></>
     ))}

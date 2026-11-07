@@ -643,7 +643,7 @@ function wreckOf(pieces: WreckPiece[]): HTMLElement[] {
   line.className = "wreck";
   const label = document.createElement("span");
   label.className = "wreck-label";
-  label.textContent = "The wreck says";
+  label.textContent = "Its fragments carry";
   line.append(label, " ");
   pieces.forEach((piece, i) => {
     if (i > 0) {

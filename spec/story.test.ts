@@ -111,7 +111,7 @@ describe("telling a collision", () => {
     const echoing: StoryParty = { ...derelict, words: "I was here for a while", echoOf: "LANTERN" };
     expect(couplet([alpha, echoing])).toEqual([
       { callsign: "ALPHA", beacon: "hello from alpha" },
-      { callsign: "a derelict, echoing LANTERN", beacon: "I was here for a while" },
+      { callsign: "a dead satellite, carrying LANTERN's last words", beacon: "I was here for a while" },
     ]);
   });
 });

@@ -104,6 +104,15 @@ describe("the sky page", () => {
     for (const row of rows) expect(row.querySelector("[aria-live]")).not.toBeNull();
   });
 
+  // the 2026-11-07 review: a first visitor met "derelict" and "static" in
+  // the station rows and collision news with nothing saying what they are
+  it("says what a derelict and static are before the station rows use them", async () => {
+    const { page } = await skyPage();
+    const note = page.querySelector(".station .station-note")?.textContent ?? "";
+    expect(note).toMatch(/derelicts? (is|are) (a )?dead satellites?/i);
+    expect(note).toMatch(/static is/i);
+  });
+
   // the user's review, 2026-10-08: the page got crowded, so its boxes fold
   it("serves its three boxes open, each with a hidden button to fold it", async () => {
     const { page } = await skyPage();

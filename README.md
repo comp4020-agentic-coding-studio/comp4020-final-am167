@@ -4,8 +4,8 @@ One sky, shared by everyone who visits. You launch a satellite carrying a
 message of up to 140 characters, its beacon, and whoever has the sky open hears
 it as it passes over one of three ground stations. Crowding the low band to be
 heard more causes collisions, which turn both messages into static that takes
-airtime from everyone. Nothing resets, and the record keeps who caused what. So what's
-worth saying, if saying it costs everyone a little?
+airtime from everyone. Nothing resets; the record keeps who caused what. So what's
+worth saying, if saying it costs everyone?
 
 ## What good means here
 
@@ -43,10 +43,11 @@ Enforced, and tested:
 
 Judged, not tested:
 
-- **Whether it makes anyone think.** I judge by playing; crits tell me more.
-- **Whether people crowd low.** Launch counts per band will show it.
-- **Whether collisions feel earned.** Only watching tells me; most are still
-  staged.
+- **Whether it makes anyone think.** Judged at crits: it mattered once
+  collisions cost people their words.
+- **Whether people crowd low.** Not yet judged; the logs hold each band.
+- **Whether collisions feel earned.** No: measured over 12 runs, a watcher
+  sees about six an hour, nine in ten staged.
 
 ## What I chose not to build
 
@@ -54,10 +55,9 @@ Judged, not tested:
   cost: two browsers are two people.
 - **One satellite each.** The commons is tested by how much each person takes,
   so one person can crowd everyone.
-- **An empty sky.** A quiet sky would be empty, so invented people, the
-  extras, launch about 18 a day. Nothing on the page marks them; they never
-  listen, so "heard by" is still only people, and they hold back while
-  people launch.
+- **An empty sky.** Invented people, the extras, launch about 18 a day.
+  Nothing marks them; they never listen, so "heard by" is still only
+  people, and they hold back while people launch.
 - **Staged collisions between people.** Staging uses derelicts, so the server
   never destroys someone's satellite on purpose.
 

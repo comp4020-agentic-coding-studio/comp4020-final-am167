@@ -26,6 +26,41 @@ context, options, decision, consequences). Read them before changing the
 stack, storage or data model. An accepted record is never edited; to change
 one, write a new record that supersedes it.
 
+## Product rules
+
+`README.md` argues what good means here; these are the rules that follow from
+it, each with the spec test that holds it. Don't change one without changing
+the README and its test with it.
+
+- **Heard by counts people only.** Never the owner, a second tab, or an
+  extra (extras have no session, so they never listen).
+  `spec/heard-server.test.ts` ("doesn't count its owner", "counts people,
+  not their tabs"); `spec/manoeuvre-http.test.ts` ("won't take a made-up
+  cookie, such as an extra's owner").
+- **Being heard more costs.** Low passes a station every 3 minutes, high every
+  24, so being heard more means flying where it's crowded. `spec/decay.test.ts`
+  ("comes round slowly enough to read a beacon"). Whether people do crowd low
+  is judged, not tested (README).
+- **The sky remembers.** Every object's card says who launched it; debris
+  traces back through its collisions to operators, and a wreck carries every
+  word of both beacons. `spec/history.test.ts`, `spec/story.test.ts`,
+  `spec/collision-server.test.ts` ("breaks both beacons into the fragments").
+- **Nothing resets.** No code path deletes objects or collisions, and a
+  stopped server catches up to the same sky rather than starting over.
+  `spec/extras-server.test.ts` ("ends up with the same sky whether it ran all
+  along or caught up after a stop"), `spec/decay-server.test.ts`. No test
+  forbids a reset outright; don't add one.
+- **Staging only uses derelicts.** The server never destroys a person's
+  satellite on purpose. `spec/collision-server.test.ts` ("puts two
+  derelicts on a head-on course").
+- **Extras give way to people.** None launch in an hour people launched four
+  in, and none in a half-full sky; they never take a handle a person holds.
+  `spec/extras-server.test.ts` ("makes room for people", "leaves a handle a
+  person claimed first theirs").
+- **Limits are the server's.** A minute between launches, 200 up, and only an
+  owner boosts or deorbits; each refusal is logged. `spec/launch.test.ts`,
+  `spec/log.test.ts` ("a full sky"), `spec/manoeuvre-server.test.ts`.
+
 ## The checks
 
 `pnpm check` (typecheck + the spec suite) is what CI runs before it deploys.

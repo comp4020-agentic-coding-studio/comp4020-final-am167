@@ -507,6 +507,10 @@ describe("the extras", async () => {
   });
 
   it("logs their manoeuvres as an extra's", () => {
+    // a day at a time: a server that skips ahead more than EXTRA_BACKFILL
+    // (a day) fills in only the last day, so one jump of two would skip
+    // whatever was due in the first
+    sky.settle(day + DAY);
     sky.settle(day + 2 * DAY);
     const moves = lines().filter((l) => l.event === "deorbit" || l.event === "boost");
     expect(moves.length).toBeGreaterThan(0);

@@ -145,17 +145,22 @@ describe("the extras, on the server", () => {
   });
 
   it("ends up with the same sky whether it ran all along or caught up after a stop", async () => {
+    // a start with launches due in the twelve hours after it, so the stopped
+    // server has something to catch up (some twelve hours have none)
+    let start = T;
+    while (launchesIn(start, start + 12 * HOUR).length === 0) start += HOUR;
     const along = await freshServer();
     const stopped = await freshServer();
-    along.sky.settle(T);
-    stopped.sky.settle(T);
-    for (let t = T; t <= T + 12 * HOUR; t += 30 * 60_000) along.sky.settle(t);
-    stopped.sky.settle(T + 12 * HOUR);
+    along.sky.settle(start);
+    stopped.sky.settle(start);
+    const before = along.extras().length;
+    for (let t = start; t <= start + 12 * HOUR; t += 30 * 60_000) along.sky.settle(t);
+    stopped.sky.settle(start + 12 * HOUR);
     const all = (server: typeof along) => server.db.select().from(server.schema.objects).orderBy(server.schema.objects.id).all();
     expect(all(stopped)).toEqual(all(along));
     expect(stopped.db.select().from(stopped.schema.collisions).all()).toEqual(along.db.select().from(along.schema.collisions).all());
     expect(stopped.db.select().from(stopped.schema.manoeuvres).all()).toEqual(along.db.select().from(along.schema.manoeuvres).all());
-    expect(along.extras().length).toBeGreaterThan(launchesIn(T - DAY, T).length);
+    expect(along.extras().length).toBeGreaterThan(before);
   });
 
   it("fills in nothing behind a sky people have used: a first deploy starts from the latest thing in the record", async () => {
