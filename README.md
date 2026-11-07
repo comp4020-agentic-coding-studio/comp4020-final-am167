@@ -66,11 +66,11 @@ Judged, not tested:
 - D. J. Kessler and B. G. Cour-Palais, "Collision frequency of artificial
   satellites: the creation of a debris belt", *Journal of Geophysical
   Research*, 83(A6), 2637–2646, 1978.
-- G. Hardin, "The tragedy of the commons", *Science*, 162(3859), 1243–1248,
-  1968.
+- G. Hardin, "The tragedy of the commons", *Science*, 162(3859),
+  1243–1248, 1968.
 - E. Ostrom, *Governing the Commons: The Evolution of Institutions for
   Collective Action*, Cambridge University Press, 1990.
-- C. Shirky, "Situated software", *Clay Shirky's Writings About the Internet*,
-  2004. <https://gwern.net/doc/technology/2004-03-30-shirky-situatedsoftware.html>
+- C. Shirky, "Situated software", *Clay Shirky's Writings About the
+  Internet*, 2004. <https://gwern.net/doc/technology/2004-03-30-shirky-situatedsoftware.html>
 - D. Kazemi, *Run Your Own Social: How to run a small social network site for
   your friends*, 2019. <https://runyourown.social/>

@@ -4,20 +4,20 @@
 
 Kessler is a shared sky anyone can launch into. Your satellite carries up to
 140 characters, heard by whoever has the sky open as it passes one of three
-ground stations. People typically crowd the low band to be heard more, and crowding
+ground stations. The design bets people will crowd the low band to be heard more, and crowding
 causes collisions: both people's words break into static that takes airtime
 from everyone. Nothing resets, and the record keeps who caused what. So: what's
 worth saying, if saying it costs everyone a little?
 
 ## The stack
 
-I built the app with Astro on the server, SQLite via Drizzle, and server-sent events (kept from crit 7), over SvelteKit or Phoenix LiveView and WebSockets. Both frameworks were new to me three days before crit 8, and since updates only flow from the server to the client, SSE was all I needed ([`183d624`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/183d624), ADRs 0001, 0004). I compute satellite positions from the clock instead of running a simulation that ticks every second, because Fly stops an idle server and, on waking, it can replay exactly what it slept through ([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)). For visuals, I used Three.js and passed on the full 3D globe the agent suggested: I wanted a sky, not a diagram, and a globe would have meant rewriting the orbit logic ([`5c41ccd`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/5c41ccd)).
+I built the app with Astro on the server, SQLite via Drizzle, and server-sent events (kept from crit 7), over SvelteKit or Phoenix LiveView and WebSockets. Both frameworks were new to me three days before crit 8, and since updates only flow from the server to the client, SSE was all I needed ([`183d624`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/183d624), ADRs 0001, 0004). I compute satellite positions from the clock instead of running a simulation that ticks every second, because Fly stops an idle server and, on waking, it can replay exactly what it slept through ([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)). For visuals, I used Three.js and passed on the full 3D globe the agent suggested: I wanted a sky, not a diagram, and a globe would have meant rewriting the orbit logic ([`f8f7003`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/f8f7003), ADR 0005).
 
 ## The workflow
 
 `PLAN.md` holds discussions between me and the agent, what's agreed
 and next, and each decision is an ADR, superseded rather than edited
-([`10c86a5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/10c86a5)).
+([`183d624`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/183d624)).
 For each decision the agent laid out options without recommending one, and I
 picked
 ([`9247b01`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/9247b01)).
@@ -61,7 +61,7 @@ The test holds the constraint; whether it looks right is still my call.
 
 ![The launchpad at 1440x790 just after a launch, with the bands side by side: each note breaks mid-phrase, so the three read as ragged paragraphs rather than a choice](notes/screenshots/2026-10-08-launchpad-fits-1440x790.png)
 
-![The same screen after the bands went back to rows: one line per band, and it still fits](notes/screenshots/2026-11-07-launchpad-bands-as-rows-59480dd.png)
+![The same screen after the bands went back to rows: two lines per band, each note whole, and it still fits (re-shot at 59480dd)](notes/screenshots/2026-11-07-launchpad-bands-as-rows-59480dd.png)
 
 **What one session knew and the next didn't.** Critical reviews moved to
 Opus after I stopped a Sonnet one on the object card, but only one agent's
@@ -70,15 +70,15 @@ memory don't carry over, so it went into CLAUDE.md
 ([`e3f9cb5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/e3f9cb5)).
 
 **The suite aimed at the live sky.** Before final submission I had the agent
-run the course’s preflight skill, which runs `pnpm check`. The agent pointed it at the
-deployed app instead of a local build, and nothing in the harness warned that
+run the course's preflight skill, which runs `pnpm check`. The skill suggested the
+deployed app's URL and the agent followed it, three times, instead of using a local build, and nothing in the harness warned that
 the suite launches hundreds of test satellites into whatever it targets. The
 live server stalled for twenty minutes, and the resulting debris cascade
 caused every collision from then on. Restoring a day-old snapshot would have
 lost six real launches, so instead I had the agent trace each collision and
 fragment back to a test launch, rehearse the cleanup on a copy, and only then
 run it on production. That lesson is now enforced: the spec rejects any
-`fly.dev` address, and CLAUDE.md explains why
+`fly.dev` address unless explicitly overridden, and CLAUDE.md explains why
 ([`21de098`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/21de098)).
 
 **Three failures I'd fixed one at a time** until each became a rule
@@ -134,13 +134,13 @@ like anyone
 ADR 0021). That raises a question of honesty: the review found the Why page still
 promised "real people's words", and a first deploy rewrote real people's
 history. Both were fixed; the README says the sky is seeded
-([`3469642`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/3469642)).
+([`3469642`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/3469642), re-landed in [`9096558`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/9096558)).
 
 ## Balancing the staged collisions
 
 Most satellites should burn up, but whoever marks it visits for ten minutes,
-and the crit 9 review showed they'd likely see no collision
-([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)).
+and an agent review in crit 9 showed they'd likely see no collision
+([`44487ac`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/44487ac)).
 So when someone watches, the server sends two derelicts at each other
 ([`2dc518c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/2dc518c)).
 Each fix after that overshot, tests green throughout:

@@ -5,7 +5,7 @@ persists, deploying to Fly.io. The deployed app is what gets marked, not this
 repo.
 
 Stack (same as crit 7): a server-rendered Astro app, SQLite via Drizzle, SSE for
-live updates. Not installed yet; `/comp4020:stack` sets up the Astro default.
+live updates.
 
 Read the
 [final project spec](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/assessments/final-project/)
@@ -15,7 +15,7 @@ has the rest.
 
 ## The plan
 
-The app is **Kessler** (working title): a shared orbit where people launch
+The app is **Kessler**: a shared orbit where people launch
 satellites to be seen and collisions cascade into debris. `PLAN.md` holds the
 agreed decisions, status, next steps and open questions; read it, then
 `notes/log.md`, before planning or building. Update its status section when a
@@ -126,7 +126,8 @@ status.
   repo public, `flyctl deploy`, pushing to `main` once public) unless I
   explicitly say so.
 - Work directly on `main`; avoid git worktrees unless an automated session's
-  tooling requires one.
+  tooling requires one. Overnight and cloud sessions are that case: they work
+  on a branch and come back as a pull request for me to review.
 - Don't spawn subagents except for adversarial review; they stall. Do
   independent pieces one after another, then `pnpm check` once at the end.
   Review subagents run on Opus. If a review is

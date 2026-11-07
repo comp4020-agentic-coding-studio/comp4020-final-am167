@@ -4627,3 +4627,36 @@ Checks against a fresh build on a scratch database: `pnpm check` green
 `pnpm test:layout` 16/16.
 
 Commit `d63ea99`.
+
+## 2026-11-07: the review's cheap text fixes
+
+Advay picked seven of the deep review's minor and nit findings (FINDINGS.md)
+to fix; "no moderation" was left as it is.
+
+- **README sources.** Two Sources lines started with `1968.` and `2004.`,
+  so /readme/ rendered them as numbered lists (`<ol start="1968">`).
+  Re-wrapped; /readme/ now has no `<ol start`. Word count unchanged (605).
+- **PROCESS.md.** "People typically crowd the low band" is now "The design
+  bets people will crowd the low band", which matches the README's judged
+  list. Citations re-pointed: the globe to `f8f7003` (ADR 0005), the ADR
+  never-edit rule to `183d624`, the crit 9 no-collision review to `44487ac`
+  (an agent review, not the crit), and the Why-page fix now also cites
+  `9096558`, where it re-landed. The second screenshot's caption said "one
+  line per band" but shows two; now says so, and that it was re-shot at
+  `59480dd`. The incident paragraph says the preflight skill suggested the
+  live URL, and that the guard can be overridden; one curly apostrophe made
+  straight.
+- **The c1e5cd7 change was never logged.** That commit added the launchpad
+  screenshots to PROCESS.md and reworded its opening (Advay). Commit `c1e5cd7`.
+- **Why page.** "two people's words" (twice) is now "two satellites'
+  words", and a new paragraph says invented regulars launch too, unmarked,
+  and never count as hearing. New `spec/question.test.ts` test: /why/ says
+  "invented" and never "two people's words" or "real people's words". Seen
+  red against the old build (no "invented"), green after.
+- **CLAUDE.md.** Dropped "Not installed yet…" and "(working title)"; the
+  worktree rule now says overnight and cloud sessions are the exception and
+  come back as pull requests, which is what the history shows.
+
+Checks against a fresh build on a scratch database: `pnpm check` green
+(31 files, 433 tests, 0 errors, 0 warnings), `pnpm check:evidence` green
+(31 cited commits), `pnpm test:layout` 16/16.

@@ -43,6 +43,17 @@ describe("the launchpad", () => {
       expect(text, String(point)).toMatch(point);
     }
   });
+
+  // The sky is seeded with invented launchers (ADR 0021), so the page that
+  // says what Kessler is mustn't pass every word off as a person's. This
+  // regressed once when a merge dropped the fix (3469642, 9096558).
+  it("says some launchers are invented, and doesn't call every collision people's", async () => {
+    const why = await new Session(baseUrl).get("/why/");
+    const text = doc(await why.text()).querySelector("main")!.textContent!.replace(/\s+/g, " ");
+    expect(text).toMatch(/invented/i);
+    expect(text).not.toMatch(/two people's words/i);
+    expect(text).not.toMatch(/real people's words/i);
+  });
 });
 
 describe("a launch answering the question", () => {
