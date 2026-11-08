@@ -11,7 +11,7 @@ worth saying, if saying it costs everyone a little?
 
 ## The stack
 
-I built the app with Astro on the server, SQLite via Drizzle, and server-sent events (kept from crit 7), over SvelteKit or Phoenix LiveView and WebSockets. Both frameworks were new to me three days before crit 8, and since updates only flow from the server to the client, SSE was all I needed ([`183d624`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/183d624), ADRs 0001, 0004). I compute satellite positions from the clock instead of running a simulation that ticks every second, because Fly stops an idle server and, on waking, it can replay exactly what it slept through ([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)). For visuals, I used Three.js and passed on the full 3D globe the agent suggested: I wanted a sky, not a diagram, and a globe would have meant rewriting the orbit logic ([`f8f7003`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/f8f7003), ADR 0005).
+I built the app with Astro on the server, SQLite via Drizzle, and server-sent events (kept from crit 7), over SvelteKit or Phoenix LiveView and WebSockets: updates only flow server to client, so SSE was enough ([`183d624`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/183d624), ADRs 0001, 0004). I compute satellite positions from the clock instead of running a simulation that ticks every second, because Fly stops an idle server and, on waking, it can replay exactly what it slept through ([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)). For visuals, I used Three.js and passed on the full 3D globe the agent suggested: I wanted a sky, not a diagram, and a globe would have meant rewriting the orbit logic ([`f8f7003`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/f8f7003), ADR 0005).
 
 ## The workflow
 
@@ -24,9 +24,8 @@ picked
 
 Before the deadline I ran a deep adversarial review:
 reviewers, each blind to the others, attacked one part of the project each
-against the spec, and verifiers tried to refute what they found. It wrote
-everything to a findings document, which I went through and marked won't-fix
-or fix; this is how I found the date-dependent tests and that CLAUDE.md had
+against the spec, and verifiers tried to refute what they found. I triaged
+its findings into fix or won't-fix; this is how I found the date-dependent tests and that CLAUDE.md had
 no rules from the README
 ([`d63ea99`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/d63ea99)).
 
@@ -40,8 +39,6 @@ most rules since came from a correction I'd made more than once.
 agents kept bringing scrolling back: each fix tuned the page to that day's
 content, and the next feature undid it
 ([`69e92a0`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/69e92a0), [`455789e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/455789e), [`67b29a9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/67b29a9)).
-One change even accepted a 75px scroll because the page already scrolled 62px
-([`248469e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/248469e)).
 Repeating myself wasn't holding, so the rule became a check. I threw the
 first attempt away: it hid parts at runtime until the page fit, and put a
 Chrome test into `pnpm check` though CI has no Chrome
@@ -53,9 +50,9 @@ launch, failing on any scroll or off-screen control, so hiding the overflow
 can't pass. It failed 5 of 12 at first, and CLAUDE.md requires it
 after any change to either page
 ([`8aa68f3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/8aa68f3)).
-The fix put the altitude bands side by side
+The first fix put the bands side by side
 ([`ade7d43`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/ade7d43));
-I thought it looked worse, so they went back to rows with tighter spacing
+I thought it looked worse, so they went back to rows
 ([`59480dd`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/59480dd)).
 The test holds the constraint; whether it looks right is still my call.
 
@@ -63,21 +60,14 @@ The test holds the constraint; whether it looks right is still my call.
 
 ![The same screen after the bands went back to rows: two lines per band, each note whole, and it still fits (re-shot at 59480dd)](notes/screenshots/2026-11-07-launchpad-bands-as-rows-59480dd.png)
 
-**What one session knew and the next didn't.** Critical reviews moved to
-Opus after I stopped a Sonnet one on the object card, but only one agent's
-memory held that, so a fresh session still picked Sonnet. Rules that live in
-memory don't carry over, so it went into CLAUDE.md
-([`e3f9cb5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/e3f9cb5)).
-
 **The suite aimed at the live sky.** Before final submission I had the agent
 run the course's preflight skill, which runs `pnpm check`. The skill suggested the
 deployed app's URL and the agent followed it, three times, instead of using a local build, and nothing in the harness warned that
 the suite launches hundreds of test satellites into whatever it targets. The
 live server stalled for twenty minutes, and the resulting debris cascade
-caused every collision from then on. Restoring a day-old snapshot would have
-lost six real launches, so instead I had the agent trace each collision and
-fragment back to a test launch, rehearse the cleanup on a copy, and only then
-run it on production. That lesson is now enforced: the spec rejects any
+caused every collision from then on. I had the agent trace every collision
+back to a test launch and remove them, rather than restore a snapshot and lose
+real launches. That lesson is now enforced: the spec rejects any
 `fly.dev` address unless explicitly overridden, and CLAUDE.md explains why
 ([`21de098`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/21de098)).
 
@@ -115,9 +105,8 @@ a wreck that broadcasts both people's words as static
 ([`fd0a0df`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/fd0a0df)),
 and a daily question from the stations
 ([`248469e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/248469e)).
-I rejected aiming a reply launch at someone, which would make collisions a
-choice, and matching collisions by meaning, which would have the server
-judging what people wrote.
+I rejected reply launches and meaning-matched collisions, which would make
+collisions a choice or a judgement.
 
 A review found parts only for show: an "answering today's question" box
 ticked by default linked strangers who never meant to answer, and fake
