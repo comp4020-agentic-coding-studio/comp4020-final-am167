@@ -11,7 +11,7 @@ worth saying, if saying it costs everyone a little?
 
 ## The stack
 
-I built the app with Astro on the server, SQLite via Drizzle, and server-sent events (kept from crit 7), over SvelteKit or Phoenix LiveView and WebSockets: updates only flow server to client, so SSE was enough ([`183d624`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/183d624), ADRs 0001, 0004). I compute satellite positions from the clock instead of running a simulation that ticks every second, because Fly stops an idle server and, on waking, it can replay exactly what it slept through ([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)). For visuals, I used Three.js and passed on the full 3D globe the agent suggested: I wanted a sky, not a diagram, and a globe would have meant rewriting the orbit logic ([`f8f7003`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/f8f7003), ADR 0005).
+I kept crit 7's stack, Astro on the server, SQLite via Drizzle and server-sent events: updates only flow server to client, so SSE was enough ([`183d624`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/183d624), ADRs 0001, 0004). Positions come from the clock, not a ticking simulation, so when Fly wakes an idle server it replays exactly what it slept through ([`41f32ef`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/41f32ef)). I passed on the 3D globe the agent suggested for a Three.js sky: I wanted a sky, not a diagram ([`f8f7003`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/f8f7003), ADR 0005).
 
 ## The workflow
 
@@ -23,8 +23,7 @@ picked
 ([`9247b01`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/9247b01)).
 
 Before the deadline I ran a deep adversarial review:
-reviewers, each blind to the others, attacked one part of the project each
-against the spec, and verifiers tried to refute what they found. I triaged
+reviewers, blind to each other, each attacked one part against the spec, and verifiers tried to refute what they found. I triaged
 its findings into fix or won't-fix; this is how I found the date-dependent tests and that CLAUDE.md had
 no rules from the README
 ([`d63ea99`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/d63ea99)).
@@ -39,16 +38,14 @@ most rules since came from a correction I'd made more than once.
 agents kept bringing scrolling back: each fix tuned the page to that day's
 content, and the next feature undid it
 ([`69e92a0`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/69e92a0), [`455789e`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/455789e), [`67b29a9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/67b29a9)).
-Repeating myself wasn't holding, so the rule became a check. I threw the
-first attempt away: it hid parts at runtime until the page fit, and put a
-Chrome test into `pnpm check` though CI has no Chrome
+Repeating myself wasn't holding, so the rule became a check. I threw away
+the first attempt, which hid parts at runtime until the page fit
 ([PR #6](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/6)).
 The rebuild
 ([PR #8](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/pull/8))
-is `pnpm test:layout`: Chrome at three desktop sizes, before and after a
-launch, failing on any scroll or off-screen control, so hiding the overflow
-can't pass. It failed 5 of 12 at first, and CLAUDE.md requires it
-after any change to either page
+is `pnpm test:layout`: Chrome at three desktop sizes fails on any scroll or
+off-screen control, so hiding the overflow can't pass, and CLAUDE.md requires
+it after any change to either page
 ([`8aa68f3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/8aa68f3)).
 The first fix put the bands side by side
 ([`ade7d43`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/ade7d43));
@@ -97,9 +94,8 @@ This was where I could direct the agent least: a test can say a page scrolls,
 not whether the app means anything. In crit 8 the tutor pointed out I'd given
 people a reason to be seen but nothing shared to lose
 ([`3de1cc6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/3de1cc6)),
-and players said it felt like a Kessler syndrome visualiser. The agent's
-diagnosis: the app said why the project existed, not why a visitor should
-care. I accepted three of its proposed ADRs: beacons heard by people
+and players said it felt like a Kessler syndrome visualiser. I accepted three
+of the agent's proposed ADRs: beacons heard by people
 ([`e0db217`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/e0db217)),
 a wreck that broadcasts both people's words as static
 ([`fd0a0df`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/fd0a0df)),
@@ -113,16 +109,16 @@ ticked by default linked strangers who never meant to answer, and fake
 connections inflated "heard" counts. Both were fixed
 ([`1472389`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/1472389),
 [`262e2b4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/262e2b4)).
-I refused its idea of staging collisions between two people's satellites,
-which would mean the server destroying someone's on purpose
+I refused its idea of staging collisions between people's satellites: the
+server would be destroying someone's on purpose
 ([`72a17dd`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/72a17dd)).
 
 A quiet sky was empty, so invented regulars and visitors now launch
 like anyone
 ([`df4014c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/df4014c),
-ADR 0021). That raises a question of honesty: the review found the Why page still
-promised "real people's words", and a first deploy rewrote real people's
-history. Both were fixed; the README says the sky is seeded
+ADR 0021). The review found the Why page still promised "real people's
+words", and a first deploy rewrote real history. Both were fixed; the README
+says the sky is seeded
 ([`3469642`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/3469642), re-landed in [`9096558`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/9096558)).
 
 ## Balancing the staged collisions
@@ -132,8 +128,8 @@ and an agent review in crit 9 showed they'd likely see no collision
 ([`44487ac`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/44487ac)).
 So when someone watches, the server sends two derelicts at each other
 ([`2dc518c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-am167/commit/2dc518c)).
-Each fix after that overshot, tests green throughout:
-nothing was broken, it just felt wrong.
+Each fix after that overshot, with tests green: nothing broken, it just felt
+wrong.
 
 | Round | Found | Changed |
 | --- | --- | --- |
